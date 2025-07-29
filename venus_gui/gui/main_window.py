@@ -1,30 +1,45 @@
 from PySide6.QtWidgets import (
-    QMainWindow, QApplication
+    QMainWindow, QApplication, QWidget, QGridLayout
 )
 from lib_shared.venus_core import debug
 from __version__ import VENUS_APP_NAME, VENUS_GUI_VERSION
 from gui.menu_bar import MenuBar
+from gui.basic_table_view import TableView
+from gui.setup_signals import SetupSignals
 
 class VenusMainWindow(QMainWindow):
     def __init__(self, is_debug: bool = False):
         super().__init__()
-        self.is_debug = is_debug
-        self.primary_screen = QApplication.primaryScreen()
+        self.__is_debug = is_debug
+        self.__primary_screen = QApplication.primaryScreen()
+
+        self.__central_widget = QWidget()
+        self.__grid_layout = QGridLayout()
+        self.__central_widget.setLayout(self.__grid_layout)
+        self.setCentralWidget(self.__central_widget)
+
+        self.__table_view = TableView()
+        self.__app_menu_bar = MenuBar(main_window = self)
+        self.__setup_signals = SetupSignals()
          
     def __debug_time(self, screen_w: int, screen_h: int) -> None:
-        debug("Found primary_screen as: {}", self.primary_screen)
+        debug("Found primary_screen as: {}", self.__primary_screen)
         debug("Current screen width: {}", screen_w)
         debug("Current screen heigt: {}", screen_h)
 
     def __setup_gui(self) -> None:
-        MenuBar(main_window = self).show_menu_bar()
+        self.__app_menu_bar.show_menu_bar(is_debug = self.__is_debug)
+        self.__table_view.show_basic_view(self.__grid_layout)
 
+    def __set_signals(self) -> None:
+        self.__setup_signals.set_open_file_signals(self.__table_view, self.__app_menu_bar)
+     
     def __center_window(self) -> None:
-        if not self.primary_screen:
+        if not self.__primary_screen:
             debug("Could not find primary_screen. Maybe it's None")
             return
         
-        screen = self.primary_screen.availableGeometry()
+        screen = self.__primary_screen.availableGeometry()
         window = self.geometry()
 
         window_width = window.width()
@@ -36,7 +51,7 @@ class VenusMainWindow(QMainWindow):
         x_loc = (screen_width - window_width) // 2
         y_loc = (screen_height - window_height) // 2
 
-        if self.is_debug:
+        if self.__is_debug:
             self.__debug_time(screen_w = screen_width, screen_h = screen_height)
 
         self.move(x_loc, y_loc)
@@ -46,4 +61,5 @@ class VenusMainWindow(QMainWindow):
         self.setWindowTitle(f"{VENUS_APP_NAME} | v{VENUS_GUI_VERSION}")
         self.__center_window()
         self.__setup_gui()
+        self.__set_signals()
         self.show()

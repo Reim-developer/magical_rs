@@ -6,7 +6,7 @@ use pyo3::{
     wrap_pyfunction,
 };
 use utils::logging::debug;
-use utils::path::get_user_home;
+use utils::path::{get_abs_path, get_user_home, write_to_temp_file};
 
 pub mod utils {
     pub mod logging;
@@ -19,5 +19,8 @@ pub mod utils {
 pub fn venus_core(module: &Bound<PyModule>) -> PyResult<()> {
     module.add_function(wrap_pyfunction!(debug, module)?)?;
     module.add_function(wrap_pyfunction!(get_user_home, module)?)?;
+    module.add_function(wrap_pyfunction!(write_to_temp_file, module)?)?;
+    module.add_function(wrap_pyfunction!(get_abs_path, module)?)?;
+
     Ok(())
 }

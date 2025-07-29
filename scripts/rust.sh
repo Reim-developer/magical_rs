@@ -10,7 +10,7 @@ function build() {
     local dyn_lib="target/debug/libvenus_core.so" # Linux shared-lib
 
     cd ..
-    if ! command -v "$cargo" >/dev/null 2&1; then 
+    if ! command -v "$cargo" >/dev/null 2>&1; then 
         echo "Fatal error: Could not find $cargo."
         exit 1
     fi 

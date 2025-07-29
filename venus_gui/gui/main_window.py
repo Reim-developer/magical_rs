@@ -3,14 +3,13 @@ from PySide6.QtWidgets import (
 )
 from lib_shared.venus_core import debug
 from __version__ import VENUS_APP_NAME, VENUS_GUI_VERSION
-from gui.menu_bar import MenuBar
-from gui.basic_table_view import TableView
-from gui.setup_signals import SetupSignals
+from gui.open_file import OpenFile
 
 class VenusMainWindow(QMainWindow):
-    def __init__(self, is_debug: bool = False):
+    def __init__(self, is_debug: bool = False, is_verbose: bool = False):
         super().__init__()
         self.__is_debug = is_debug
+        self.__is_verbose = is_verbose
         self.__primary_screen = QApplication.primaryScreen()
 
         self.__central_widget = QWidget()
@@ -18,22 +17,19 @@ class VenusMainWindow(QMainWindow):
         self.__central_widget.setLayout(self.__grid_layout)
         self.setCentralWidget(self.__central_widget)
 
-        self.__table_view = TableView()
-        self.__app_menu_bar = MenuBar(main_window = self)
-        self.__setup_signals = SetupSignals()
-         
     def __debug_time(self, screen_w: int, screen_h: int) -> None:
         debug("Found primary_screen as: {}", self.__primary_screen)
         debug("Current screen width: {}", screen_w)
         debug("Current screen heigt: {}", screen_h)
 
     def __setup_gui(self) -> None:
-        self.__app_menu_bar.show_menu_bar(is_debug = self.__is_debug)
-        self.__table_view.show_basic_view(self.__grid_layout)
+        OpenFile() \
+        .   set_parent(self) \
+        .   set_open_file_button() \
+        .   set_layout(self.__grid_layout) \
+        .   set_event_listnener() \
+        .   if_enable_debug(is_debug = self.__is_debug)
 
-    def __set_signals(self) -> None:
-        self.__setup_signals.set_open_file_signals(self.__table_view, self.__app_menu_bar)
-     
     def __center_window(self) -> None:
         if not self.__primary_screen:
             debug("Could not find primary_screen. Maybe it's None")
@@ -61,5 +57,4 @@ class VenusMainWindow(QMainWindow):
         self.setWindowTitle(f"{VENUS_APP_NAME} | v{VENUS_GUI_VERSION}")
         self.__center_window()
         self.__setup_gui()
-        self.__set_signals()
         self.show()

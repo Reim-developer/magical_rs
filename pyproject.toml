@@ -1,0 +1,13 @@
+[project]
+readme.file = "readme.md"
+name = "Venus"
+version = "0.0.1"
+description = """
+A mordern, cross-platform, portable, and fast 
+Python GUI Application with Rust backend, 
+for show your file information, metadata, and more.
+"""
+authors = [{ name = "Reim-developer", email = "mavis.ngoc.nguyen@gmail.com" }]
+license.file = "LICENSE"
+requires-python = ">=3.10"
+dependencies = ["PySide6"]

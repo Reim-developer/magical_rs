@@ -7,7 +7,7 @@ use pyo3::{
 };
 use utils::etc::open_browser;
 use utils::logging::debug;
-use utils::path::{get_abs_path, get_user_home, write_to_temp_file};
+use utils::path::{get_abs_path, get_user_home, is_file_exists, read_file, write_to_temp_file};
 
 pub mod utils {
     pub mod etc;
@@ -24,6 +24,8 @@ pub fn venus_core(module: &Bound<PyModule>) -> PyResult<()> {
     module.add_function(wrap_pyfunction!(write_to_temp_file, module)?)?;
     module.add_function(wrap_pyfunction!(get_abs_path, module)?)?;
     module.add_function(wrap_pyfunction!(open_browser, module)?)?;
+    module.add_function(wrap_pyfunction!(is_file_exists, module)?)?;
+    module.add_function(wrap_pyfunction!(read_file, module)?)?;
 
     Ok(())
 }

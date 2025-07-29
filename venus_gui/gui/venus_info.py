@@ -40,7 +40,7 @@ class VenusAbout:
         return self
     
     def set_layout(self, grid_layout: QGridLayout) -> Self:
-        grid_layout.addWidget(self.__button, 0, 1)
+        grid_layout.addWidget(self.__button, 3, 1)
 
         return self 
     
@@ -50,9 +50,13 @@ class VenusAbout:
     def __show_info_dialog(self) -> None:
         self.info_dialog = InfoDialog(self.__main_window)
 
+        if self.__main_window:
+            self.__main_window.hide()
+
         self.info_dialog \
         .   enable_if_debug(self.__is_debug) \
         .   enable_if_verbose(self.__verbose) \
         .   set_dialog_gui() \
         .   show_dialog()
+
     

@@ -1,0 +1,7 @@
+target
+__pycache__
+.vscode
+.venv
+*.so
+*.dll
+*.dylib

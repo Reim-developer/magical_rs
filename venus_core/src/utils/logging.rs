@@ -34,8 +34,8 @@ fn fmt_string(fmt_str: &str, args: &mut Vec<String>) -> Result<String, PyErr> {
     Ok(output)
 }
 
-fn stdout_str(text: &str) -> PyResult<()> {
-    writeln!(stdout().lock(), "{text}")?;
+fn stdout_debug_str(text: &str) -> PyResult<()> {
+    writeln!(stdout().lock(), "[DEBUG] {text}")?;
     stdout().lock().flush()?;
 
     Ok(())
@@ -68,7 +68,7 @@ pub fn debug(fmt_str: &str, args: &Bound<PyTuple>) -> Result<(), PyErr> {
         return Err(PyValueError::new_err("Could not format string."));
     };
 
-    if let Err(error) = stdout_str(&fmt_text) {
+    if let Err(error) = stdout_debug_str(&fmt_text) {
         return Err(PyValueError::new_err(format!(
             "Could not stdout to terminal with error: {error}."
         )));

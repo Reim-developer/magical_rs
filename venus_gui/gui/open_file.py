@@ -21,7 +21,7 @@ class OpenFile:
         return self
     
     def set_layout(self, layout: QGridLayout) -> Self:
-        layout.addWidget(self.__button, 0, 0)
+        layout.addWidget(self.__button, 3, 0)
 
         return self
     

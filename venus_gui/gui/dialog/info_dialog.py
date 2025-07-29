@@ -3,16 +3,16 @@ from PySide6.QtWidgets import (
     QDialog, QMainWindow, QGridLayout, QLabel,
     QPushButton, QApplication, QMessageBox
 )
-from PySide6.QtCore import QTimer
+from PySide6.QtCore import QTimer, QEvent
 from lib_shared.venus_core import debug
 from __version__ import VENUS_APP_NAME, VENUS_CORE_VERSION, VENUS_GUI_VERSION, VENUS_LICENSE
 from sys import version
 from lib_shared.venus_core import open_browser
 
-class InfoDialog:
+class InfoDialog(QDialog):
     def __init__(self, main_window: Optional[QMainWindow]) -> None:
+        super().__init__(main_window)
         self.__main_window: Optional[QMainWindow] = main_window
-        self.__dialog = QDialog(self.__main_window)
         self.__debug = False
         self.__verbose = False
 
@@ -24,13 +24,13 @@ class InfoDialog:
         self.__MIN_H = 300
         self.__WIN_TITLE = "About"
 
-        self.__dialog_layout = QGridLayout(self.__dialog)
+        self.__dialog_layout = QGridLayout(self)
 
-        self.__app_basic_info_label = QLabel(parent = self.__dialog)
-        self.__copy_info_button = QPushButton(parent = self.__dialog)
-        self.__source_code_button = QPushButton(parent = self.__dialog)
-        self.__open_issue_button = QPushButton(parent = self.__dialog)
-        self.__pull_request_button = QPushButton(parent = self.__dialog)
+        self.__app_basic_info_label = QLabel(parent = self)
+        self.__copy_info_button = QPushButton(parent = self)
+        self.__source_code_button = QPushButton(parent = self)
+        self.__open_issue_button = QPushButton(parent = self)
+        self.__pull_request_button = QPushButton(parent = self)
 
     def enable_if_debug(self, is_debug: bool) -> Self:
         self.__debug = is_debug
@@ -72,9 +72,9 @@ class InfoDialog:
 
        
     def set_dialog_gui(self) -> Self:
-        self.__dialog.setWindowTitle(self.__WIN_TITLE)
-        self.__dialog.resize(self.__MIN_W, self.__MIN_H)
-        self.__dialog.setModal(True)
+        self.setWindowTitle(self.__WIN_TITLE)
+        self.resize(self.__MIN_W, self.__MIN_H)
+        self.setModal(True)
 
         if self.__debug:
             debug("In Window: {}", self.__WIN_TITLE)
@@ -85,7 +85,7 @@ class InfoDialog:
     
     def show_dialog(self) -> None:
         self.__setup_gui_components()
-        self.__dialog.exec()
+        self.exec()
 
 
     def __on_copy_information(self, info: str) -> None:
@@ -103,7 +103,12 @@ class InfoDialog:
             verbose_msg = f"With error: {error}"
 
             QMessageBox.critical(
-                self.__dialog,
+                self,
                 "Critical Error",
                 f"Could not open your browser\n{verbose_msg if self.__verbose else ''}"
             )
+
+    def closeEvent(self, event: QEvent) -> None:
+        if self.__main_window:
+            event.accept()
+            self.__main_window.show()

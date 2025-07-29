@@ -5,6 +5,8 @@ from lib_shared.venus_core import debug
 from __version__ import VENUS_APP_NAME, VENUS_GUI_VERSION
 from gui.open_file import OpenFile
 from gui.venus_info import VenusAbout
+from gui.open_recent import OpenRecentFile
+from gui.tab_state import TabStateManager
 
 class VenusMainWindow(QMainWindow):
     def __init__(self, is_debug: bool = False, is_verbose: bool = False):
@@ -17,6 +19,9 @@ class VenusMainWindow(QMainWindow):
         self.__grid_layout = QGridLayout()
         self.__central_widget.setLayout(self.__grid_layout)
         self.setCentralWidget(self.__central_widget)
+
+        self.__table_state = TabStateManager()
+        self.__tab_view = self.__table_state.get_tab_view()
 
     def __debug_time(self, screen_w: int, screen_h: int) -> None:
         debug("Found primary_screen as: {}", self.__primary_screen)
@@ -39,9 +44,24 @@ class VenusMainWindow(QMainWindow):
         .   set_layout(self.__grid_layout) \
         .   set_clicked_event()
 
+        OpenRecentFile() \
+        .   if_enable_debug(self.__is_debug) \
+        .   if_enable_verbose(self.__is_verbose) \
+        .   set_widget_parent(self) \
+        .   setup_layout(self.__grid_layout) \
+        .   with_tab_state(self.__table_state) \
+        .   setup_open_recent_button() \
+        .   setup_clicked_event()
+
+
+        self.__tab_view \
+        .   set_parent(self) \
+        .   set_tab_layout() \
+        .   set_tab_view(self.__grid_layout)
 
     def __center_window(self) -> None:
         if not self.__primary_screen:
+            debug("In: {}", self)
             debug("Could not find primary_screen. Maybe it's None")
             return
         

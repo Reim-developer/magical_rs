@@ -4,6 +4,7 @@ from PySide6.QtWidgets import (
 from lib_shared.venus_core import debug
 from __version__ import VENUS_APP_NAME, VENUS_GUI_VERSION
 from gui.open_file import OpenFile
+from gui.venus_info import VenusAbout
 
 class VenusMainWindow(QMainWindow):
     def __init__(self, is_debug: bool = False, is_verbose: bool = False):
@@ -29,6 +30,15 @@ class VenusMainWindow(QMainWindow):
         .   set_layout(self.__grid_layout) \
         .   set_event_listnener() \
         .   if_enable_debug(is_debug = self.__is_debug)
+
+        VenusAbout() \
+        .   enable_if_debug(self.__is_debug) \
+        .   enable_if_verbose(self.__is_verbose) \
+        .   set_parent(self) \
+        .   set_about_button() \
+        .   set_layout(self.__grid_layout) \
+        .   set_clicked_event()
+
 
     def __center_window(self) -> None:
         if not self.__primary_screen:

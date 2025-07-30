@@ -1,12 +1,15 @@
 from typing import Optional, Self
 from PySide6.QtWidgets import (
-    QMainWindow, QPushButton, QGridLayout, QMessageBox,
-    QLabel
+    QMainWindow, QPushButton, QGridLayout,
 )
 from lib_shared.venus_core import (
-    debug, get_user_home, is_file_exists, read_file
+    debug, get_user_home, 
 )
 from gui.tab_state import TabStateManager
+from functional.open_recent import (
+    fn_file_exists, fn_get_path_from_tmp_file,
+    fn_if_file_not_exists
+)
 
 class OpenRecentFile:
     def __init__(self) -> None:
@@ -16,6 +19,7 @@ class OpenRecentFile:
         self.__button = QPushButton(parent = self.__main_window)
 
         self.__tab_state: Optional[TabStateManager] = None
+        self.__grid_layout: Optional[QGridLayout] = None
 
         self.__OPEN_RECENT_TEXT = "Open Recent File"
         self.__VENUS_TEMP_FILE = ".venus.tmp"
@@ -41,7 +45,10 @@ class OpenRecentFile:
         return self
     
     def setup_layout(self, grid_layout: QGridLayout) -> Self:
-        grid_layout.addWidget(self.__button, 2, 0)
+        self.__grid_layout = grid_layout
+
+        if self.__grid_layout:
+            self.__grid_layout.addWidget(self.__button, 2, 0)
 
         return self 
 
@@ -74,46 +81,41 @@ class OpenRecentFile:
         user_home = get_user_home()
         tmp_file_path = f"{user_home}/{self.__VENUS_TEMP_FILE}"
 
-        if not is_file_exists(tmp_file_path):
-            QMessageBox.warning(
-                self.__main_window,
-                "Warning",
-                f"Venus's temp file: {self.__VENUS_TEMP_FILE} doens't exists\n" \
-                "Cannot open recent file."
-            )
+        tmp_file_exists = fn_file_exists(tmp_file_path)
+        is_exists = fn_if_file_not_exists(
+            path = tmp_file_path, fn = tmp_file_exists,
+            main_window = self.__main_window
+        )
 
-            return
+        if not is_exists: return
+    
+        try_get_recent_file = fn_get_path_from_tmp_file(
+            file_path = tmp_file_path, main_window = self.__main_window,
+            verbose = self.__verbose
+        )
 
-        try:
-            recent_file = read_file(tmp_file_path)
+        recent_file_path = try_get_recent_file()
+        recent_file_exists = fn_file_exists(recent_file_path.strip())
 
-        except Exception as error:
-            full_error = f"Full error message: {error}"
+        is_recent_file_exists = fn_if_file_not_exists(
+            path = recent_file_path,
+            fn = recent_file_exists,
+            main_window = self.__main_window
+        )
 
-            QMessageBox.critical(
-                self.__main_window,
-                "Critical Error",
-                f"Could not read Venus's temp file: {tmp_file_path}\n" \
-                f"{full_error if self.__verbose else ''}"
-            )
-            return
-        
-        if not is_file_exists(recent_file.strip()):
-            QMessageBox.warning(
-                self.__main_window,
-                "Warning",
-                f"The file: {recent_file} doens't not exists."
-            )
-
-            if self.__is_debug:
-                debug("Recent file not found detect in: {}", self)
-                debug("Recent file: {}", recent_file)
-            return
+        if not is_recent_file_exists: return
 
         if self.__tab_state:
             tab_view = self.__tab_state.get_tab_view()
-            basic_info_layout = tab_view.get_basic_info_layout()
+            self.__basic_info_layout = tab_view.get_basic_info_layout()
 
-            if basic_info_layout:
-                self.__clear_layout(basic_info_layout)
-                basic_info_layout.addWidget(QLabel(f"{recent_file}"), 0, 0)
+            if self.__basic_info_layout:
+                self.__clear_layout(self.__basic_info_layout)
+
+                data: list[list[str]] = [
+                    [f"{recent_file_path}", "test_2", "test_3", "test_4"]
+                ]
+
+                header: list[str] = ["Full Path:", "Name", "Type", "Size"]
+                tab_view.show_basic_information_table(data, header)
+                

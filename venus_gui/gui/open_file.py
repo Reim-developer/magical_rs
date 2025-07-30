@@ -41,4 +41,4 @@ class OpenFile:
         .   with_parent(self.__main_window if self.__main_window else None) \
         .   show_file_dialog() \
         .   write_file_choose_path() \
-        .   finnaly_if_enable_debug(self.__debug_mode)
+        .   if_enable_debug(self.__debug_mode)

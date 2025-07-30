@@ -1,5 +1,5 @@
 from typing import Callable, Optional, overload
-from lib_shared.venus_core import is_file_exists, read_file
+from lib_shared.venus_core import FilePath
 from PySide6.QtWidgets import QMessageBox, QMainWindow
 
 def __show_warning_dialog(main_window: Optional[QMainWindow], msg: str, title: str = "") -> None:
@@ -13,7 +13,7 @@ def __handle_read_tmp_file(
             file_path: str, main_window: Optional[QMainWindow],
             verbose: bool) -> str:
     try:
-        recent_file = read_file(file_path)
+        recent_file = FilePath.new_with_path(file_path = file_path).read_file()
         return recent_file
 
     except Exception as error:
@@ -42,8 +42,8 @@ def fn_show_warning_dialog(main_window: Optional[QMainWindow], msg: str) -> Call
 
     return fn
 
-def fn_file_exists(file_path: str) -> Callable[[], bool]:
-    return lambda: is_file_exists(file_path)
+def fn_file_exists(file_path_: str) -> Callable[[], bool]:
+    return lambda: FilePath.new_with_path(file_path = file_path_).is_file_exists()
 
 
 @overload

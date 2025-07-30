@@ -4,6 +4,8 @@ from PySide6.QtWidgets import (
     QLabel
 )
 
+from gui.table_view import TableView
+
 class TabView:
     def __init__(self) -> None:
         self.__main_window: Optional[QMainWindow] = None
@@ -16,6 +18,7 @@ class TabView:
         self.__metadata_info_layout = QGridLayout(self.__metadata_info_tab)
 
         self.__NOTHING_MSG = "Nothing to show. Open file to start."
+        self.__is_debug = False
 
     def set_parent(self, main_window: QMainWindow) -> Self:
         self.__main_window = main_window
@@ -33,7 +36,14 @@ class TabView:
         self.__tab_widget.addTab(self.__metadata_info_tab, "Metadata")
         layout.addWidget(self.__tab_widget, 0, 0, 1, 2)
 
-        return self 
+        return self
+    
+    def show_basic_information_table(self, data: list[list[str]], header: list[str]) -> None:
+        TableView() \
+        .   if_enable_debug(self.__is_debug) \
+        .   set_parent(self.__main_window if self.__main_window else None) \
+        .   set_layout(self.__basic_info_layout) \
+        .   set_table_view(data, header)
     
     def get_basic_info_layout(self) -> QGridLayout:
 

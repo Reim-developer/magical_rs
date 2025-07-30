@@ -1,8 +1,9 @@
-from PySide6.QtWidgets import QFileDialog, QMainWindow, QMessageBox
+from PySide6.QtWidgets import QFileDialog, QMainWindow
 from typing import Optional, Self
 from lib_shared.venus_core import (
-    get_user_home, debug, get_abs_path, write_to_temp_file
+    get_user_home, debug, FilePath
 )
+from functional.dialog_show import DialogType, WithDialogData
 
 class FileDialog:
     def __init__(self) -> None:
@@ -32,28 +33,30 @@ class FileDialog:
     
     def write_file_choose_path(self) -> Self:
         if self.__file_choose:
-            abs_path = get_abs_path(self.__file_choose)
+            abs_path = FilePath.new_with_path(file_path = self.__file_choose).get_abs_path()
             user_home = get_user_home()
 
             if abs_path and user_home:
+                
                 temp_file = f"{user_home}/{self.__TEMP_FILE}"
-
                 try:
-                    write_to_temp_file(temp_file, self.__file_choose)
+                    FilePath.new_with_path(file_path = temp_file) \
+                    .   write_to_temp_file(self.__file_choose)
 
                 except Exception as error:
-                    error_msg: str = f"Full error message: {error}"
-
-                    QMessageBox.critical(
-                        self.__main_window if self.__main_window else None,
-                        "Critical Error:",
-                        f"Could not write to {temp_file}\n" +
-                        f"{error_msg if self.__verbose else ''}"
+                    error_dialog = ( 
+                        WithDialogData() 
+                        .   with_parent(self.__main_window) 
+                        .   with_message(f"Could not write to: {temp_file}\n") 
+                        .   if_use_verbose(self.__verbose, error) 
+                        .   with_dialog_type(DialogType.CRITICAL) 
+                        .   fn_show_dialog()
                     )
-
+                    error_dialog()
+                
         return self
     
-    def finnaly_if_enable_debug(self, is_debug: bool) -> None:
+    def if_enable_debug(self, is_debug: bool) -> None:
         self.__debug = is_debug
 
         if self.__debug:

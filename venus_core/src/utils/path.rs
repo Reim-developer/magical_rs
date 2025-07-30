@@ -1,4 +1,5 @@
-use pyo3::{PyResult, exceptions::PyIOError, pyfunction};
+use pyo3::prelude::*;
+use pyo3::{PyResult, exceptions::PyIOError, pyclass, pyfunction};
 use std::{
     env,
     fs::File,
@@ -31,72 +32,87 @@ fn write_to_file(file_path: &str, content: &str) -> PyResult<()> {
     Ok(())
 }
 
-#[pyfunction]
-/// # Errors
-/// Will be convert to Python Exception
-pub fn write_to_temp_file(file_path: &str, content: &str) -> PyResult<()> {
-    let file_temp = Path::new(file_path);
-
-    if !file_temp.exists() {
-        write_to_file(file_path, content)?;
-    }
-
-    if file_temp.exists() {
-        fs::remove_file(file_temp).map_err(|error| {
-            PyIOError::new_err(format!(
-                "Could not remove file {file_path} with error: {error}"
-            ))
-        })?;
-
-        write_to_file(file_path, content)?;
-    }
-
-    Ok(())
-}
-
-#[pyfunction]
-#[must_use]
-pub fn get_abs_path(file_path: &str) -> Option<String> {
-    path::absolute(file_path).map_or(None, |file_str| {
-        Some(file_str.to_string_lossy().to_string())
-    })
-}
-
 fn read_file_to_string(file_path: &str) -> Result<String, io::Error> {
     let content = fs::read_to_string(file_path)?;
 
     Ok(content)
 }
 
-#[pyfunction]
-/// Read the file, then return `String`
-///
-/// # Errors
-/// Will be convert to Python Exception.
-pub fn read_file(file_path: &str) -> PyResult<String> {
-    let content_str = read_file_to_string(file_path).map_err(|error| {
-        PyIOError::new_err(format!(
-            "Could not read the file: {file_path}, with error: {error}"
-        ))
-    })?;
-
-    Ok(content_str)
+#[pyclass]
+pub struct FilePath {
+    pub file_path: String,
 }
 
-#[pyfunction]
-#[must_use]
-pub fn is_file_exists(file_path: &str) -> bool {
-    Path::new(file_path).exists()
+#[pymethods]
+impl FilePath {
+    #[staticmethod]
+    #[must_use]
+    pub fn new_with_path(file_path: &str) -> Self {
+        Self {
+            file_path: file_path.to_string(),
+        }
+    }
+
+    /// # Errors
+    /// Will be convert to Python Exception
+    pub fn write_to_temp_file(&self, content: &str) -> PyResult<()> {
+        let file_temp = Path::new(&self.file_path);
+
+        if !file_temp.exists() {
+            write_to_file(&self.file_path, content)?;
+        }
+
+        if file_temp.exists() {
+            fs::remove_file(file_temp).map_err(|error| {
+                PyIOError::new_err(format!(
+                    "Could not remove file {} with error: {error}",
+                    &self.file_path
+                ))
+            })?;
+
+            write_to_file(&self.file_path, content)?;
+        }
+
+        Ok(())
+    }
+
+    #[must_use]
+    pub fn get_abs_path(&self) -> Option<String> {
+        path::absolute(&self.file_path).map_or(None, |file_str| {
+            Some(file_str.to_string_lossy().to_string())
+        })
+    }
+
+    /// Read the file, then return `String`
+    ///
+    /// # Errors
+    /// Will be convert to Python Exception.
+    pub fn read_file(&self) -> PyResult<String> {
+        let content_str = read_file_to_string(&self.file_path).map_err(|error| {
+            PyIOError::new_err(format!(
+                "Could not read the file: {}, with error: {error}",
+                &self.file_path
+            ))
+        })?;
+
+        Ok(content_str)
+    }
+
+    #[must_use]
+    pub fn is_file_exists(&self) -> bool {
+        Path::new(&self.file_path).exists()
+    }
 }
 
 #[test]
 fn test_is_file_exists() {
-    assert!(is_file_exists("Cargo.toml"));
+    assert!(FilePath::new_with_path("Cargo.toml").is_file_exists());
 }
 
 #[test]
 fn test_get_abs_path() {
-    assert!(get_abs_path("Cargo.toml").is_some());
+    let abs_path = FilePath::new_with_path("Cargo.toml").get_abs_path();
+    assert!(abs_path.is_some());
 }
 
 #[test]
@@ -106,7 +122,7 @@ fn test_get_user_home() {
 
 #[test]
 fn test_read_file() {
-    let file_path = get_abs_path("Cargo.toml").unwrap();
+    let file_path = FilePath::new_with_path("Cargo.toml").read_file().unwrap();
 
     assert!(!read_file_to_string(&file_path).unwrap().is_empty());
     assert!(read_file_to_string(&file_path).is_ok());

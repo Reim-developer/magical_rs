@@ -83,7 +83,7 @@ class VenusMainWindow(QMainWindow):
         self.move(x_loc, y_loc)
 
     def show_gui(self) -> None:
-        self.resize(600, 600)
+        self.resize(800, 600)
         self.setWindowTitle(f"{VENUS_APP_NAME} | v{VENUS_GUI_VERSION}")
         self.__center_window()
         self.__setup_gui()

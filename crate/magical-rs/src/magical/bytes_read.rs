@@ -54,12 +54,12 @@ pub const TAR_MAX_BYTES_READ: usize = max_bytes(TAR_OFFSETS, b"ustar");
 /// ```
 /// # Note
 /// - This function assumes that `SIGNATURE_KIND` contains signature definedtions,
-/// (e.g., magic numbers) with associalted `max_bytes_read` value indicating how many
-/// initial bytes of a file must be read to validate each signature.
+///   (e.g., magic numbers) with associalted `max_bytes_read` value indicating how many
+///   initial bytes of a file must be read to validate each signature.
 ///
 /// # Panics
 /// - This function **does not** panic, even if `SIGNATURE_KIND` is empty. Thanks to
-/// `unwrap_or(DEFAULT_MAX_BYTES_READ)`
+///   `unwrap_or(DEFAULT_MAX_BYTES_READ)`
 ///
 /// # Why This Matters
 ///
@@ -80,6 +80,7 @@ pub const TAR_MAX_BYTES_READ: usize = max_bytes(TAR_OFFSETS, b"ustar");
 ///
 /// The minimum number of bytes to read from the start of a file to ensure
 /// all signature checks (including high-offset ones) can succeed.
+#[must_use]
 pub fn with_bytes_read() -> usize {
     SIGNATURE_KIND
         .iter()

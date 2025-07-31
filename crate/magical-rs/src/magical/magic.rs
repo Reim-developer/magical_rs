@@ -121,6 +121,6 @@ impl FileKind {
                     })
                 })
             })
-            .map_or(FileKind::Unknown, |magic| magic.kind)
+            .map_or(Self::Unknown, |magic| magic.kind)
     }
 }

@@ -43,6 +43,10 @@
 
 pub mod magical {
     pub mod bytes_read;
+    pub mod ext_fn {
+        pub mod webp;
+    }
     pub mod magic;
+    pub mod match_rules;
     pub mod signatures;
 }

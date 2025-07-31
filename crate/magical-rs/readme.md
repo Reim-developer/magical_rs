@@ -55,6 +55,9 @@ No external tools. No bloated dependencies. Just fast, reliable file type detect
 | Creative Voice File (VOC)         | `Creative Voice File\0` at offset 0                              |
 | AU Audio File Format              | `.snd` header: `2E 73 6E 64` at offset 0                         |
 | OpenGL Iris Performer (IV)        | Rare; may use `InfiniteReality` or IRIX-based header             |
+| Noodlesoft Hazel                  | `HZLR` or `HZL` magic; used in Hazel file manager archives       |
+| VBScript Encoded (VBE)            | Starts with `#@~^` (`23 40 7E 5E`); obfuscated VBScript          |
+| WebP                              | `RIFFxxxxWEBP` container; `file_size` field must be >= 4         |
 | Unknown                           | Fallback when no signature matches                               |
 
 ---

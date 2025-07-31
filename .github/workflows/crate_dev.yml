@@ -1,0 +1,40 @@
+name: Test the crate before merge/push.
+
+on:
+    push:
+        branches: [ "master"]
+      
+    pull_request:
+        branches: ["master"]
+
+env:
+  CARGO_TERM_COLOR: always
+    
+jobs:
+    build:
+        runs-on: ubuntu-latest
+
+        steps:
+        - name: Checkout code
+          uses: actions/checkout@v4
+
+        - name: Install Rust
+          shell: bash
+          run: |
+            curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
+            echo "$HOME/.cargo/bin:$PATH" >> $GITHUB_PATH
+        
+        - name: Add Rust component
+          shell: bash
+          run: |
+            rustup component add clippy
+        
+        - name: Test lib
+          shell: bash
+          run: |
+            make test-lib
+
+        - name: Linter check
+          shell: bash
+          run: |
+            make check-lib

@@ -3,7 +3,7 @@ from PySide6.QtWidgets import (
     QMainWindow, QPushButton, QGridLayout,
 )
 from lib_shared.venus_core import (
-    debug, get_user_home, 
+    FilePath, debug, get_user_home, 
 )
 from gui.tab_state import TabStateManager
 from functional.open_recent import (
@@ -111,11 +111,15 @@ class OpenRecentFile:
 
             if self.__basic_info_layout:
                 self.__clear_layout(self.__basic_info_layout)
+                file_info = FilePath.new_with_path(recent_file_path)
+                file_size = file_info.get_file_size()
+                file_name = file_info.get_file_name()
 
                 data: list[list[str]] = [
-                    [f"{recent_file_path}", "test_2", "test_3", "test_4"]
+                    [f"{recent_file_path}", f"{file_name if file_name else 'Unknown'}", 
+                    "test_3", f"{file_size} Bytes"]
                 ]
 
-                header: list[str] = ["Full Path:", "Name", "Type", "Size"]
+                header: list[str] = ["File Path", "File Name", "File Type", "File Size"]
                 tab_view.show_basic_information_table(data, header)
                 

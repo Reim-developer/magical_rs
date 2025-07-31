@@ -3,8 +3,11 @@ name = "venus_core"
 version = "0.0.1"
 edition = "2024"
 
+[workspace]
+members = ["."]
+
 [lib]
-crate-type = ["cdylib"]
+crate-type = ["cdylib", "lib"]
 
 [dependencies]
 pyo3 = { version = "0.25.1", features = ["extension-module"] }

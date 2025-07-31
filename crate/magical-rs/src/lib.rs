@@ -20,15 +20,21 @@
 //! - If you read only 2048 bytes, those files will be misclassified as `Unknown`.
 //!
 //! **Correct usage:**
-//! ```rust
-//! let max_bytes = magical_rs::with_bytes_read(); // ← Auto-calculated safe size
-//! let header = read_file_header("file.iso", max_bytes)?;
+//! ```no_run
+//! use magical_rs::magical::bytes_read::{with_bytes_read, read_file_header,  DEFAULT_MAX_BYTES_READ};
+//! use magical_rs::magical::magic::FileKind;
+//!
+//! let max_bytes = with_bytes_read(); // ← Auto-calculated safe size
+//!
+//! let header = read_file_header("file.iso", max_bytes).unwrap();
 //! let kind = FileKind::match_types(&header);
 //! ```
 //!
 //! **Avoid:**
-//! ```rust
-//! let header = read_file_header("file.iso", DEFAULT_MAX_BYTES_READ)?; // ← Will fail to detect!
+//! ```no_run
+//! use magical_rs::magical::bytes_read::{with_bytes_read, read_file_header, DEFAULT_MAX_BYTES_READ};
+//!
+//! let header = read_file_header("file.iso", DEFAULT_MAX_BYTES_READ).unwrap(); // ← Will fail to detect!
 //! ```
 //!
 //! See [`with_bytes_read()`] for details.

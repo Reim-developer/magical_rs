@@ -38,8 +38,7 @@ fn test_mime_type() {
     for &(signature, ref file_kind) in FILE_KIND {
         assert!(
             !signature.is_empty(),
-            "Empty signature detect in : {:?}",
-            file_kind
+            "Empty signature detect in : {file_kind:?}",
         );
     }
 }

@@ -25,6 +25,30 @@ const XML_SIGNATURE: &[u8] = &[0x3C, 0x3F, 0x78, 0x6D, 0x6C, 0x20];
 const ICO_SIGNATURE: &[u8] = &[0x00, 0x00, 0x01, 0x00];
 const WASM_SIGNATURE: &[u8] = &[0x00, 0x61, 0x73, 0x6D];
 const DEB_SIGNATURE: &[u8] = &[0x21, 0x3C, 0x61, 0x72, 0x63, 0x68, 0x3E, 0x0A];
+const SCRIPT_EXECUTE_SIGNATURE: &[u8] = &[0x23, 0x21];
+const RAR_SIGNATURE: &[&[u8]] = &[
+    &[0x52, 0x61, 0x72, 0x21, 0x1A, 0x07, 0x00],
+    &[0x52, 0x61, 0x72, 0x21, 0x1A, 0x07, 0x01, 0x00],
+];
+const ELF_SIGNATURE: &[u8] = &[0x7F, 0x45, 0x4C, 0x46];
+const OGG_SIGNATURE: &[u8] = &[0x4F, 0x67, 0x67, 0x53];
+const _8BPS_SIGNATURE: &[u8] = &[0x38, 0x42, 0x50, 0x53];
+const BLENDER_SIGNATURE: &[u8] = &[0x42, 0x4C, 0x45, 0x4E, 0x44, 0x45, 0x52];
+const TRUE_TYPE_FONT_SIGNATURE: &[u8] = &[0x00, 0x01, 0x00, 0x00, 0x00];
+const OPEN_TYPE_FONT_SIGNATURE: &[u8] = &[0x4F, 0x54, 0x54, 0x4F];
+const MODULEFILE_FOR_ENVIRONMENT_MODULES_SIGNATURE: &[u8] =
+    &[0x23, 0x25, 0x4D, 0x6F, 0x64, 0x75, 0x6C, 0x65];
+const WINDOW_IMAGING_FORMAT_SIGNATURE: &[u8] = &[
+    0x4D, 0x53, 0x57, 0x49, 0x4D, 0x00, 0x00, 0x00, 0xD0, 0x00, 0x00, 0x00, 0x00,
+];
+const SLOB_SIGNATURE: &[u8] = &[0x21, 0x2D, 0x31, 0x53, 0x4C, 0x4F, 0x42, 0x1F];
+const SERIALIZED_JAVA_DATA_SIGNATURE: &[u8] = &[0xAC, 0xED];
+const CREATIVE_VOICE_FILE_SIGNATURE: &[u8] = &[
+    0x43, 0x72, 0x65, 0x61, 0x74, 0x69, 0x69, 0x76, 0x65, 0x20, 0x56, 0x6F, 0x69, 0x63, 0x65, 0x20,
+    0x46, 0x69, 0x6C, 0x65, 0x1A, 0x1A, 0x00,
+];
+const AU_AUDIO_FILE_FORMAT_SIGNATURE: &[u8] = &[0x2E, 0x73, 0x6E, 0x64];
+const OPENGL_IRIS_PERFORMER_SIGNATURE: &[u8] = &[0xDB, 0x0A, 0xCE, 0x00];
 
 pub struct Magic {
     pub signatures: &'static [&'static [u8]],
@@ -135,5 +159,95 @@ pub static SIGNATURE_KIND: &[Magic] = &[
         offsets: &[DEFAULT_OFFSET],
         max_bytes_read: DEFAULT_MAX_BYTES_READ,
         kind: FileKind::Deb,
+    },
+    Magic {
+        signatures: &[SCRIPT_EXECUTE_SIGNATURE],
+        offsets: &[DEFAULT_OFFSET],
+        max_bytes_read: DEFAULT_MAX_BYTES_READ,
+        kind: FileKind::ScriptExecute,
+    },
+    Magic {
+        signatures: RAR_SIGNATURE,
+        offsets: &[DEFAULT_OFFSET],
+        max_bytes_read: DEFAULT_MAX_BYTES_READ,
+        kind: FileKind::RAR,
+    },
+    Magic {
+        signatures: &[ELF_SIGNATURE],
+        offsets: &[DEFAULT_OFFSET],
+        max_bytes_read: DEFAULT_MAX_BYTES_READ,
+        kind: FileKind::ELF,
+    },
+    Magic {
+        signatures: &[OGG_SIGNATURE],
+        offsets: &[DEFAULT_OFFSET],
+        max_bytes_read: DEFAULT_MAX_BYTES_READ,
+        kind: FileKind::OGG,
+    },
+    Magic {
+        signatures: &[_8BPS_SIGNATURE],
+        offsets: &[DEFAULT_OFFSET],
+        max_bytes_read: DEFAULT_MAX_BYTES_READ,
+        kind: FileKind::_8BPS,
+    },
+    Magic {
+        signatures: &[BLENDER_SIGNATURE],
+        offsets: &[DEFAULT_OFFSET],
+        max_bytes_read: DEFAULT_MAX_BYTES_READ,
+        kind: FileKind::BLENDER,
+    },
+    Magic {
+        signatures: &[TRUE_TYPE_FONT_SIGNATURE],
+        offsets: &[DEFAULT_OFFSET],
+        max_bytes_read: DEFAULT_MAX_BYTES_READ,
+        kind: FileKind::TrueTypeFont,
+    },
+    Magic {
+        signatures: &[OPEN_TYPE_FONT_SIGNATURE],
+        offsets: &[DEFAULT_OFFSET],
+        max_bytes_read: DEFAULT_MAX_BYTES_READ,
+        kind: FileKind::OpenTypeFont,
+    },
+    Magic {
+        signatures: &[MODULEFILE_FOR_ENVIRONMENT_MODULES_SIGNATURE],
+        offsets: &[DEFAULT_OFFSET],
+        max_bytes_read: DEFAULT_MAX_BYTES_READ,
+        kind: FileKind::ModuleForEvenvironmentModules,
+    },
+    Magic {
+        signatures: &[WINDOW_IMAGING_FORMAT_SIGNATURE],
+        offsets: &[DEFAULT_OFFSET],
+        max_bytes_read: DEFAULT_MAX_BYTES_READ,
+        kind: FileKind::WindowImagingFormat,
+    },
+    Magic {
+        signatures: &[SLOB_SIGNATURE],
+        offsets: &[DEFAULT_OFFSET],
+        max_bytes_read: DEFAULT_MAX_BYTES_READ,
+        kind: FileKind::Slob,
+    },
+    Magic {
+        signatures: &[SERIALIZED_JAVA_DATA_SIGNATURE],
+        offsets: &[DEFAULT_OFFSET],
+        max_bytes_read: DEFAULT_MAX_BYTES_READ,
+        kind: FileKind::SerializedJavaData,
+    },
+    Magic {
+        signatures: &[CREATIVE_VOICE_FILE_SIGNATURE],
+        offsets: &[DEFAULT_OFFSET],
+        max_bytes_read: DEFAULT_MAX_BYTES_READ,
+        kind: FileKind::CreativeVoiceFile,
+    },
+    Magic {
+        signatures: &[AU_AUDIO_FILE_FORMAT_SIGNATURE],
+        offsets: &[DEFAULT_OFFSET],
+        max_bytes_read: DEFAULT_MAX_BYTES_READ,
+        kind: FileKind::AuAudioFileFormat,
+    },
+    Magic {
+        signatures: &[OPENGL_IRIS_PERFORMER_SIGNATURE],
+        offsets: &[DEFAULT_OFFSET],
+        max_bytes_read: DEFAULT_MAX_BYTES_READ,
+        kind: FileKind::OpenGLIrisPerformer,
     },
 ];

@@ -15,6 +15,12 @@ pub mod utils {
     pub mod path;
 }
 
+pub mod mime_types {
+    pub mod extension;
+    pub mod file_mime;
+    pub mod magic_bytes;
+}
+
 #[pymodule]
 /// # Errors
 /// Add function failed.

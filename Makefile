@@ -16,6 +16,12 @@ run-dev:
 	@$(MAKE) build-core
 	@$(MAKE) dev-gui
 
+test-lib:
+	@$(MAKE) -C crate/magical-rs test
+
+check-lib:
+	@$(MAKE) -C crate/magical-rs linter
+
 pre-push:
 	@$(MAKE) test-core
 

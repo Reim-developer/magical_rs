@@ -1,0 +1,17 @@
+[package]
+name = "magical_rs"
+description = "This crate detects file types by matching magic bytes (signatures) at specific offsets."
+version = "0.0.1"
+edition = "2024"
+license-file = "LICENSE"
+keywords = ["detect-file", "no-dependency", "foss", "magic"]
+categories = ["utils", "development", "files"]
+include = ["LICENSE", "tests", "src/**/*.rs"]
+authors = ["Reim-developer", "contact.kaxtr@gmail.com"]
+readme = "readme.md"
+repository = "https://github.com/reim-developer/venus"
+
+[lib]
+crate-type = ["lib"]
+
+[dependencies]

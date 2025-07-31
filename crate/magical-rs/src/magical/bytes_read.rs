@@ -67,9 +67,11 @@ pub const TAR_MAX_BYTES_READ: usize = max_bytes(TAR_OFFSETS, b"ustar");
 /// If you read fewer bytes than required, those formats will not be detected.
 ///
 /// Always use this function to determine the read size:
-/// ```rust
+/// ```no_run
+/// use magical_rs::magical::bytes_read::{with_bytes_read, read_file_header};
+///
 /// let max_bytes = with_bytes_read();
-/// let header = read_file_header("file.iso", max_bytes)?;
+/// let header = read_file_header("file.iso", max_bytes).unwrap();
 /// ```
 ///
 /// Never assume `2048` or `4096` is enough.

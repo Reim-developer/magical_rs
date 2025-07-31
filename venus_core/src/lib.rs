@@ -16,9 +16,11 @@ pub mod utils {
 }
 
 pub mod mime_types {
+    pub mod bytes_read;
     pub mod extension;
     pub mod file_mime;
-    pub mod magic_bytes;
+    pub mod magic;
+    pub mod signatures;
 }
 
 #[pymodule]

@@ -1,7 +1,7 @@
 .PHONY: target
 
 test:
-	@cargo test
+	@cargo test --features no_std
 
 linter:
 	@cargo clippy \

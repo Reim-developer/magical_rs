@@ -1,7 +1,7 @@
 .PHONY: target
 
 test:
-	@cargo test --features no_std
+	@cargo test
 
 linter:
 	@cargo clippy \
@@ -11,3 +11,6 @@ linter:
     -D clippy::pedantic \
     -D clippy::nursery \
     -D clippy::perf
+
+test-nostd:
+	@cargo test --features no_std

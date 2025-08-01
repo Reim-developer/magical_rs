@@ -71,6 +71,7 @@ pub struct MagicCustom<K> {
 }
 
 impl<K: Clone> MagicCustom<K> {
+    #[must_use]
     #[inline]
     fn matches_custom(&self, bytes: &[u8]) -> bool {
         match &self.rules {

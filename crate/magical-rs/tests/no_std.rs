@@ -1,18 +1,17 @@
 #![no_std]
-
 #[test]
 #[cfg(feature = "no_std")]
 fn test_no_std() {
-    use magical_rs::magical::no_std::no_std_bytes_read::DEFAULT_MAX_BYTES_READ;
-    use magical_rs::magical::no_std::nostd_magic::NoStdFileKind;
+    use magical_rs::magical::bytes_read::DEFAULT_MAX_BYTES_READ;
+    use magical_rs::magical::magic::FileKind;
 
     const PNG_BYTES: &[u8] = &[
         0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, 0x00, 0x00, 0x00, 0x0D,
     ];
-    let result = NoStdFileKind::no_std_match_with_max_read_rule(PNG_BYTES, DEFAULT_MAX_BYTES_READ);
+    let result = FileKind::no_std_match_with_max_read_rule(PNG_BYTES, DEFAULT_MAX_BYTES_READ);
 
-    assert_eq!(result, NoStdFileKind::Png);
-    assert_ne!(result, NoStdFileKind::Unknown);
+    assert_eq!(result, FileKind::Png);
+    assert_ne!(result, FileKind::Unknown);
 }
 
 #[test]

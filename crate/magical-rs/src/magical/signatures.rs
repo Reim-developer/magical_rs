@@ -53,6 +53,26 @@ const AU_AUDIO_FILE_FORMAT_SIGNATURE: &[u8] = &[0x2E, 0x73, 0x6E, 0x64];
 const OPENGL_IRIS_PERFORMER_SIGNATURE: &[u8] = &[0xDB, 0x0A, 0xCE, 0x00];
 const NOODLESOFT_HAZEL_SIGNATURE: &[u8] = &[0x48, 0x5A, 0x4C, 0x52, 0x00, 0x00, 0x00, 0x18];
 const VB_SCRIPT_ENCODED_SIGNATURE: &[u8] = &[0x23, 0x40, 0x7E, 0x5E];
+const APPLE_ICON_IMAGE_SIGNATURE: &[u8] = &[0x69, 0x63, 0x6E, 0x73];
+const GIF_SIGNATURE: &[&[u8]] = &[
+    &[0x47, 0x49, 0x46, 0x38, 0x37, 0x61],
+    &[0x47, 0x49, 0x46, 0x38, 0x39, 0x61],
+];
+const JPEG_2000_SIGNATURE: &[&[u8]] = &[
+    &[
+        0x00, 0x00, 0x00, 0xC, 0xA, 0x6A, 0x50, 0x20, 0x20, 0x0D, 0x0A, 0x87, 0x0A,
+    ],
+    &[0xFF, 0x4F, 0xFF, 0x51],
+];
+const PDF_SIGNATURE: &[u8] = &[0x25, 0x50, 0x44, 0x46, 0x2D];
+const APPLE_DISK_IMAGE_SIGNATURE: &[u8] = &[0x6B, 0x6F, 0x6C, 0x79];
+const CABINET_SIGNATURE: &[u8] = &[0x4D, 0x53, 0x43, 0x46];
+const MATROSKA_MEDIA_CONTAINER_SIGNATURE: &[u8] = &[0x1A, 0x45, 0xDF, 0xA3];
+const RICHTEXT_FORMAT_SIGNATURE: &[u8] = &[0x7B, 0x5C, 0x72, 0x74, 0x66, 0x31];
+const PHOTOCAP_TEMPLATE_SIGNATURE: &[u8] = &[0x78, 0x56, 0x34];
+const ACE_COMPRESSED_SIGNATURE: &[u8] = &[0x2A, 0x2A, 0x41, 0x43, 0x45, 0x2A, 0x2A];
+const FLASH_VIDEO_SIGNATURE: &[u8] = &[0x46, 0x4C, 0x56];
+
 pub struct Magic {
     pub signatures: &'static [&'static [u8]],
     pub offsets: &'static [usize],
@@ -63,6 +83,7 @@ pub struct Magic {
 
 impl Magic {
     #[must_use]
+    #[inline]
     pub fn matches(&self, bytes: &[u8]) -> bool {
         match &self.rules {
             MatchRules::Default => self.signatures.iter().any(|&signature| {
@@ -322,5 +343,82 @@ pub static SIGNATURE_KIND: &[Magic] = &[
         max_bytes_read: DEFAULT_MAX_BYTES_READ,
         kind: FileKind::WEBP,
         rules: MatchRules::WithFn(is_webp),
+    },
+    Magic {
+        signatures: &[APPLE_ICON_IMAGE_SIGNATURE],
+        offsets: &[DEFAULT_OFFSET],
+        max_bytes_read: DEFAULT_MAX_BYTES_READ,
+        kind: FileKind::AppleIconImage,
+        rules: MatchRules::Default,
+    },
+    Magic {
+        signatures: GIF_SIGNATURE,
+        offsets: &[DEFAULT_OFFSET],
+        max_bytes_read: DEFAULT_MAX_BYTES_READ,
+        kind: FileKind::GIF,
+        rules: MatchRules::Default,
+    },
+    Magic {
+        signatures: JPEG_2000_SIGNATURE,
+        offsets: &[DEFAULT_OFFSET],
+        max_bytes_read: DEFAULT_MAX_BYTES_READ,
+        kind: FileKind::JPEG2000,
+        rules: MatchRules::Default,
+    },
+    Magic {
+        signatures: &[PDF_SIGNATURE],
+        offsets: &[DEFAULT_OFFSET],
+        max_bytes_read: DEFAULT_MAX_BYTES_READ,
+        kind: FileKind::PDF,
+        rules: MatchRules::Default,
+    },
+    Magic {
+        signatures: &[APPLE_DISK_IMAGE_SIGNATURE],
+        offsets: &[DEFAULT_OFFSET],
+        max_bytes_read: DEFAULT_MAX_BYTES_READ,
+        kind: FileKind::AppleDiskImage,
+        rules: MatchRules::Default,
+    },
+    Magic {
+        signatures: &[CABINET_SIGNATURE],
+        offsets: &[DEFAULT_OFFSET],
+        max_bytes_read: DEFAULT_MAX_BYTES_READ,
+        kind: FileKind::Cabinet,
+        rules: MatchRules::Default,
+    },
+    Magic {
+        signatures: &[MATROSKA_MEDIA_CONTAINER_SIGNATURE],
+        offsets: &[DEFAULT_OFFSET],
+        max_bytes_read: DEFAULT_MAX_BYTES_READ,
+        kind: FileKind::MatroskaMediaContainer,
+        rules: MatchRules::Default,
+    },
+    Magic {
+        signatures: &[RICHTEXT_FORMAT_SIGNATURE],
+        offsets: &[DEFAULT_OFFSET],
+        max_bytes_read: DEFAULT_MAX_BYTES_READ,
+        kind: FileKind::RichTextFormat,
+        rules: MatchRules::Default,
+    },
+    Magic {
+        signatures: &[PHOTOCAP_TEMPLATE_SIGNATURE],
+        offsets: &[DEFAULT_OFFSET],
+        max_bytes_read: DEFAULT_MAX_BYTES_READ,
+        kind: FileKind::PhotoCapTemplate,
+        rules: MatchRules::Default,
+    },
+    Magic {
+        signatures: &[ACE_COMPRESSED_SIGNATURE],
+        offsets: &[DEFAULT_OFFSET],
+        max_bytes_read: DEFAULT_MAX_BYTES_READ,
+        kind: FileKind::AceCompressed,
+        rules: MatchRules::Default,
+    },
+    Magic {
+        signatures: &[FLASH_VIDEO_SIGNATURE],
+        offsets: &[DEFAULT_OFFSET],
+        max_bytes_read: DEFAULT_MAX_BYTES_READ,
+        kind: FileKind::FlashVideo,
+        rules: MatchRules::Default,
     },
 ];

@@ -37,6 +37,17 @@ pub enum FileKind {
     NoodlesoftHazel,
     VBScriptEncoded,
     WEBP,
+    AppleIconImage,
+    GIF,
+    JPEG2000,
+    PDF,
+    AppleDiskImage,
+    Cabinet,
+    MatroskaMediaContainer,
+    RichTextFormat,
+    PhotoCapTemplate,
+    AceCompressed,
+    FlashVideo,
     Unknown,
 }
 

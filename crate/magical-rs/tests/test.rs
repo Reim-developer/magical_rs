@@ -1,4 +1,5 @@
 #[test]
+#[cfg(not(feature = "no_std"))]
 fn test_iso_detect() {
     use magical_rs::magical::bytes_read::DEFAULT_MAX_BYTES_READ;
     use magical_rs::magical::{
@@ -20,6 +21,7 @@ fn test_iso_detect() {
 }
 
 #[test]
+#[cfg(not(feature = "no_std"))]
 fn test_png_detect() {
     use magical_rs::magical::{
         bytes_read::{read_file_header, with_bytes_read},
@@ -35,6 +37,7 @@ fn test_png_detect() {
 }
 
 #[test]
+#[cfg(not(feature = "no_std"))]
 fn test_class_detect() {
     use magical_rs::magical::{
         bytes_read::{read_file_header, with_bytes_read},
@@ -50,6 +53,7 @@ fn test_class_detect() {
 }
 
 #[test]
+#[cfg(not(feature = "no_std"))]
 fn test_webp_detect() {
     use magical_rs::magical::{
         bytes_read::{read_file_header, with_bytes_read},

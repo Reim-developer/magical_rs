@@ -18,38 +18,48 @@
 //! [`DEFAULT_MAX_BYTES_READ`]: https://docs.rs/magical_rs/0.0.4/magical_rs/magical/bytes_read/constant.DEFAULT_MAX_BYTES_READ.html
 //!
 //! ```no_run
-//! use magical_rs::magical::bytes_read::DEFAULT_MAX_BYTES_READ;
-//! use magical_rs::magical::{
-//!         bytes_read::{read_file_header, with_bytes_read},
-//!         magic::FileKind,
-//! };
+//! # #[cfg(not(feature = "no_std"))]
+//! # use magical_rs::magical::bytes_read::DEFAULT_MAX_BYTES_READ;
+//! # #[cfg(not(feature = "no_std"))]
+//! # use magical_rs::magical::{
+//! #        bytes_read::{read_file_header, with_bytes_read},
+//! #        magic::FileKind,
+//! # };
 //!
-//! let png_file = "example.png";
-//! let header_bytes = read_file_header(png_file, DEFAULT_MAX_BYTES_READ).unwrap();
+//! # #[cfg(not(feature = "no_std"))]
+//! # let png_file = "example.png";
+//! # #[cfg(not(feature = "no_std"))]
+//! # let header_bytes = read_file_header(png_file, DEFAULT_MAX_BYTES_READ).unwrap();
 //!
-//! assert_eq!(FileKind::match_types(&header_bytes), FileKind::Png);
-//! assert_ne!(FileKind::match_types(&header_bytes), FileKind::Unknown);
+//! # #[cfg(not(feature = "no_std"))]
+//! # assert_eq!(FileKind::match_types(&header_bytes), FileKind::Png);
+//! # #[cfg(not(feature = "no_std"))]
+//! # assert_ne!(FileKind::match_types(&header_bytes), FileKind::Unknown);
 //! ```
 //!
 //! ---
 //!
 //! * Use with [`with_bytes_read`]:
 //! ```no_run
-//! use magical_rs::magical::bytes_read::DEFAULT_MAX_BYTES_READ;
-//! use magical_rs::magical::{
-//!     bytes_read::{read_file_header, with_bytes_read},
-//!     magic::FileKind,
-//! };
-//!
-//! let iso_file = "example.iso";
-//! let bytes_max = with_bytes_read();
-//! let wrong_max = DEFAULT_MAX_BYTES_READ;
-//!
-//! let header_bytes = read_file_header(iso_file, bytes_max).unwrap();
-//!
-//! assert_eq!(FileKind::match_types(&header_bytes), FileKind::ISO);
-//! assert_ne!(FileKind::match_types(&header_bytes), FileKind::Unknown);
-//!
+//! # #[cfg(not(feature = "no_std"))]
+//! # use magical_rs::magical::bytes_read::DEFAULT_MAX_BYTES_READ;
+//! # #[cfg(not(feature = "no_std"))]
+//! # use magical_rs::magical::{
+//! #    bytes_read::{read_file_header, with_bytes_read},
+//! #    magic::FileKind,
+//! # };
+//! # #[cfg(not(feature = "no_std"))]
+//! # let iso_file = "example.iso";
+//! # #[cfg(not(feature = "no_std"))]
+//! # let bytes_max = with_bytes_read();
+//! # #[cfg(not(feature = "no_std"))]
+//! # let wrong_max = DEFAULT_MAX_BYTES_READ;
+//! # #[cfg(not(feature = "no_std"))]
+//! # let header_bytes = read_file_header(iso_file, bytes_max).unwrap();
+//! # #[cfg(not(feature = "no_std"))]   
+//! # assert_eq!(FileKind::match_types(&header_bytes), FileKind::ISO);
+//! # #[cfg(not(feature = "no_std"))]
+//! # assert_ne!(FileKind::match_types(&header_bytes), FileKind::Unknown);
 //! ```
 //! ---
 //!
@@ -71,22 +81,29 @@
 //!
 //! * **Correct usage:**
 //! ```no_run
-//! use magical_rs::magical::bytes_read::{with_bytes_read, read_file_header,  DEFAULT_MAX_BYTES_READ};
-//! use magical_rs::magical::magic::FileKind;
-//!
-//! let max_bytes = with_bytes_read(); // ← Auto-calculated safe size
-//!
-//! let header = read_file_header("file.iso", max_bytes).unwrap();
-//! let kind = FileKind::match_types(&header);
+//! # # [cfg(not(feature = "no_std"))]
+//! # use magical_rs::magical::bytes_read::{with_bytes_read, read_file_header,  DEFAULT_MAX_BYTES_READ};
+//! # #[cfg(not(feature = "no_std"))]
+//! # use magical_rs::magical::magic::FileKind;
+//! #  
+//! # #[cfg(not(feature = "no_std"))]
+//! # let max_bytes = with_bytes_read(); // ← Auto-calculated safe size
+//! #
+//! # #[cfg(not(feature = "no_std"))]
+//! # let header = read_file_header("file.iso", max_bytes).unwrap();
+//! # #[cfg(not(feature = "no_std"))]
+//! # let kind = FileKind::match_types(&header);
 //! ```
 //!
 //! ---
 //!
 //! * **Avoid:**
 //! ```no_run
-//! use magical_rs::magical::bytes_read::{with_bytes_read, read_file_header, DEFAULT_MAX_BYTES_READ};
+//! #[cfg(not(feature = "no_std"))]
+//! # use magical_rs::magical::bytes_read::{with_bytes_read, read_file_header, DEFAULT_MAX_BYTES_READ};
 //!
-//! let header = read_file_header("file.iso", DEFAULT_MAX_BYTES_READ).unwrap(); // ← Will fail to detect!
+//! #[cfg(not(feature = "no_std"))]
+//! # let header = read_file_header("file.iso", DEFAULT_MAX_BYTES_READ).unwrap(); // ← Will fail to detect!
 //! ```
 //! ---
 //!
@@ -97,23 +114,16 @@
 //! [`magical_rs`]: https://docs.rs/magical_rs/0.0.4/magical_rs
 //!
 #![deny(clippy::pedantic, clippy::all, clippy::nursery, clippy::perf)]
-
+#![cfg_attr(feature = "no_std", no_std)]
 pub mod magical {
     pub mod bytes_read;
+
     pub mod ext_fn {
         pub mod webp;
     }
+
     pub mod magic;
     pub mod magic_custom;
     pub mod match_rules;
     pub mod signatures;
-
-    #[cfg(feature = "no_std")]
-    pub mod no_std {
-        pub mod no_std_bytes_read;
-        pub mod no_std_match_rules;
-        pub mod nostd_magic;
-        pub mod nostd_magic_custom;
-        pub mod nostd_signature;
-    }
 }

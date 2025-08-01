@@ -15,6 +15,7 @@ No external tools. No bloated dependencies. Just fast, reliable file type detect
   - [Supported File Types](#supported-file-types)
   - [How to Install](#how-to-install)
   - [Example](#example)
+  - [No Std Features:](#no-std-features)
   - [License](#license)
 
 ---
@@ -134,6 +135,74 @@ let header_bytes = read_file_header(iso_file, bytes_max).unwrap();
 
 assert_eq!(FileKind::match_types(&header_bytes), FileKind::ISO);
 assert_ne!(FileKind::match_types(&header_bytes), FileKind::Unknown);
+```
+
+---
+## No Std Features:
+
+* `magical_rs` is designed to be **`no_std`-friendly** out of the box. While the default build includes `std` for convenience (e.g., file I/O utilities), the core detection logic is built on zero-allocation, `&[u8]`-based matching — making it fully compatible with embedded systems, kernels, WASM, and other constrained environments.
+
+- **Zero dependency on `std`**: The core signature matching engine uses only `core`.
+- **No heap allocation**: All rules are `&'static`, and matching is done via slicing and comparison.
+- **`const fn`-friendly utilities**: Helper functions like `no_std_max_bytes` can be evaluated at compile time.
+- **Extensible without `Vec` or `Box`**: Use `MagicCustom<K>` with `&'static` data for custom detection logic.
+
+* To use `magical_rs` in a `no_std` context
+```toml
+[dependencies.magical_rs]
+version = "0.0.6"
+default-features = false
+```
+
+---
+
+**Example:**
+* With `DEFAULT_MAX_BYTES_READ`:
+
+```rust
+#![no_std]
+use magical_rs::magical::no_std::no_std_bytes_read::DEFAULT_MAX_BYTES_READ;
+use magical_rs::magical::no_std::nostd_magic::NoStdFileKind;
+
+const PNG_BYTES: &[u8] = &[
+  0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, 0x00, 0x00, 0x00, 0x0D,
+];
+let result = NoStdFileKind::no_std_match_with_max_read_rule(PNG_BYTES, DEFAULT_MAX_BYTES_READ);
+
+assert_eq!(result, NoStdFileKind::Png);
+assert_ne!(result, NoStdFileKind::Unknown);
+```
+
+---
+
+* With customize signature:
+```rust
+#![no_std]
+use magical_rs::magical::magic_custom::{CustomMatchRules, MagicCustom, match_types_custom};
+
+#[derive(Debug, Clone, Copy, PartialEq)]
+  enum ShoujuFile {
+  MahouShouju,
+  Unknown,
+}
+
+fn is_shoujo_girl(bytes: &[u8]) -> bool {
+  bytes.starts_with(b"MagicalGirl")
+}
+
+static SHOUJO_RULE: MagicCustom<ShoujuFile> = MagicCustom {
+  signatures: &[],
+  offsets: &[],
+  max_bytes_read: 2048,
+  kind: ShoujuFile::MahouShouju,
+  rules: CustomMatchRules::WithFn(is_shoujo_girl),
+};
+
+let magical_girl = b"MagicalGirl";
+let result = match_types_custom(magical_girl, &[SHOUJO_RULE], ShoujuFile::Unknown);
+
+assert_eq!(result, ShoujuFile::MahouShouju);
+assert_ne!(result, ShoujuFile::Unknown);
 ```
 
 ## License

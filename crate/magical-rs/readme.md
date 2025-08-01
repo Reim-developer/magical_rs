@@ -1,10 +1,11 @@
 # magical_rs
 
-> **Detect file types by magic bytes — zero dependencies, pure Rust.**
+**A zero-dependency, no_std-friendly Rust crate that detects file types with surgical precision by matching magic bytes at exact offsets — including deep-offset formats like ISO and TAR. Built for speed, safety, and extensibility.**
 
 `magical_rs` is a lightweight, dependency-free Rust crate that detects file types by matching **magic bytes (signatures)** at specific offsets — including tricky formats like `.iso` with signatures **32KB into the file**.
 
 No external tools. No bloated dependencies. Just fast, reliable file type detection.
+
 
 ---
 
@@ -15,7 +16,7 @@ No external tools. No bloated dependencies. Just fast, reliable file type detect
   - [Supported File Types](#supported-file-types)
   - [How to Install](#how-to-install)
   - [Example](#example)
-  - [No Std Features:](#no-std-features)
+  - [No Std Features](#no-std-features)
   - [License](#license)
 
 ---
@@ -138,7 +139,8 @@ assert_ne!(FileKind::match_types(&header_bytes), FileKind::Unknown);
 ```
 
 ---
-## No Std Features:
+
+## No Std Features
 
 * `magical_rs` is designed to be **`no_std`-friendly** out of the box. While the default build includes `std` for convenience (e.g., file I/O utilities), the core detection logic is built on zero-allocation, `&[u8]`-based matching — making it fully compatible with embedded systems, kernels, WASM, and other constrained environments.
 

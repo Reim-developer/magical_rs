@@ -104,6 +104,16 @@ pub mod magical {
         pub mod webp;
     }
     pub mod magic;
+    pub mod magic_custom;
     pub mod match_rules;
     pub mod signatures;
+
+    #[cfg(feature = "no_std")]
+    pub mod no_std {
+        pub mod no_std_bytes_read;
+        pub mod no_std_match_rules;
+        pub mod nostd_magic;
+        pub mod nostd_magic_custom;
+        pub mod nostd_signature;
+    }
 }

@@ -1,10 +1,21 @@
-# magical_rs 🪄
+# magical_rs
 
 > **Detect file types by magic bytes — zero dependencies, pure Rust.**
 
 `magical_rs` is a lightweight, dependency-free Rust crate that detects file types by matching **magic bytes (signatures)** at specific offsets — including tricky formats like `.iso` with signatures **32KB into the file**.
 
 No external tools. No bloated dependencies. Just fast, reliable file type detection.
+
+---
+
+## Table of Contents:
+- [magical\_rs](#magical_rs)
+  - [Table of Contents:](#table-of-contents)
+  - [Features](#features)
+  - [Supported File Types](#supported-file-types)
+  - [How to Install](#how-to-install)
+  - [Example](#example)
+  - [License](#license)
 
 ---
 
@@ -73,11 +84,57 @@ No external tools. No bloated dependencies. Just fast, reliable file type detect
 
 ---
 
-## Usage
+## How to Install
 
-Add to `Cargo.toml`:
+* Add to `Cargo.toml`:
 
 ```toml
 [dependencies]
 magical_rs = "0.0.4"
 ```
+---
+* Or, use with `Cargo` package manager:
+```bash
+cargo add magical_rs
+```
+
+## Example
+
+* With default constant `DEFAULT_MAX_BYTES_READ`:
+
+```rust
+use magical_rs::magical::bytes_read::DEFAULT_MAX_BYTES_READ;
+use magical_rs::magical::{
+        bytes_read::{read_file_header, with_bytes_read},
+        magic::FileKind,
+};
+
+let png_file = "example.png";
+let header_bytes = read_file_header(png_file, DEFAULT_MAX_BYTES_READ).unwrap();
+
+assert_eq!(FileKind::match_types(&header_bytes), FileKind::Png);
+assert_ne!(FileKind::match_types(&header_bytes), FileKind::Unknown);
+```
+
+---
+
+* Use with `with_bytes_read()`:
+```rust
+use magical_rs::magical::bytes_read::DEFAULT_MAX_BYTES_READ;
+use magical_rs::magical::{
+    bytes_read::{read_file_header, with_bytes_read},
+    magic::FileKind,
+};
+
+let iso_file = "example.iso";
+let bytes_max = with_bytes_read();
+let wrong_max = DEFAULT_MAX_BYTES_READ;
+
+let header_bytes = read_file_header(iso_file, bytes_max).unwrap();
+
+assert_eq!(FileKind::match_types(&header_bytes), FileKind::ISO);
+assert_ne!(FileKind::match_types(&header_bytes), FileKind::Unknown);
+```
+
+## License
+* `magical_rs` is licensed under the GNU General Public License v3.0. [See here](LICENSE)

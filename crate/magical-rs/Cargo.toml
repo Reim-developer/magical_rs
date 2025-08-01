@@ -1,10 +1,10 @@
 [package]
 name = "magical_rs"
 description = "This crate detects file types by matching magic bytes (signatures) at specific offsets."
-version = "0.0.4"
+version = "0.0.5"
 edition = "2024"
 license = "GPL-3.0-or-later"
-keywords = ["detect-file", "no-dependency", "foss", "magic"]
+keywords = ["detect-file", "no-dependency", "foss", "magic", "rlib"]
 categories = ["filesystem"]
 include = ["LICENSE", "tests", "src/**/*.rs"]
 authors = ["Reim-developer", "contact.kaxtr@gmail.com"]

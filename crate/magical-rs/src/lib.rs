@@ -111,10 +111,14 @@
 //!
 //! ---
 //!
-//! [`magical_rs`]: https://docs.rs/magical_rs/0.0.4/magical_rs
+//! [`magical_rs`]: https://docs.rs/magical_rs/0.1.0/magical_rs
 //!
 #![deny(clippy::pedantic, clippy::all, clippy::nursery, clippy::perf)]
 #![cfg_attr(feature = "no_std", no_std)]
+
+#[cfg(feature = "magical_dyn")]
+extern crate std;
+
 pub mod magical {
     pub mod bytes_read;
 
@@ -122,6 +126,7 @@ pub mod magical {
         pub mod webp;
     }
 
+    pub mod dyn_magic;
     pub mod magic;
     pub mod magic_custom;
     pub mod match_rules;

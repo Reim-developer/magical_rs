@@ -48,7 +48,6 @@ pub enum FileKind {
     PhotoCapTemplate,
     AceCompressed,
     FlashVideo,
-    Unknown,
 }
 
 impl FileKind {
@@ -58,7 +57,7 @@ impl FileKind {
     /// This function compares the input bytes with a list of predefined
     /// file signatures (magic numbers) at specified.
     /// It returns the most appropriate [`FileKind`] if a match is found.
-    /// Otherwise, return [`FileKind::Unknown`] if no signature matches.
+    /// Otherwise, return [`None`] if no signature matches.
     ///
     /// # Parameters
     ///
@@ -66,9 +65,9 @@ impl FileKind {
     ///
     /// # Returns
     ///
-    /// * `Self` (`FileKind`) - The detected file type. This is:
-    ///   - The `kind` of the **first** matching signature in `SIGNATURE_KIND`, or
-    ///   - [`FileKind::Unknown`] if no match is found.
+    /// `Self` (`FileKind`) - The detected file type. This is:
+    /// - The `kind` of the first matching signature in `SIGNATURE_KIND`, or
+    /// - [`None`] if no match is found.
     ///
     /// # Matching Logic
     ///
@@ -78,7 +77,7 @@ impl FileKind {
     ///   1. The input `bytes` is long enough to cover the range `[offset..offset + signature.len()]`.
     ///   2. The slice `&bytes[offset..offset + signature.len()]` exactly matches `signature`.
     ///
-    /// The search is performed in the order of `SIGNATURE_KIND`, and the **first successful match** wins.
+    /// The search is performed in the order of `SIGNATURE_KIND`, and the first successful match wins.
     ///
     /// # Examples
     ///
@@ -86,7 +85,8 @@ impl FileKind {
     /// use magical_rs::magical::magic::FileKind;
     ///
     /// let png_header = &[0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A];
-    /// let kind = FileKind::match_types(png_header);
+    /// let kind = FileKind::match_types(png_header).unwrap();
+    ///
     /// assert_eq!(kind, FileKind::Png);
     /// ```
     ///
@@ -95,26 +95,27 @@ impl FileKind {
     ///
     /// let unknown_bytes = &[0x00, 0x01, 0x02, 0x03];
     /// let kind = FileKind::match_types(unknown_bytes);
-    /// assert_eq!(kind, FileKind::Unknown);
+    ///
+    /// assert!(kind.is_none());
     /// ```
     ///
     /// ```rust
-    /// # #[cfg(not(feature = "no_std"))]
     /// use magical_rs::magical::{magic::FileKind, bytes_read::{read_file_header, DEFAULT_MAX_BYTES_READ}};
-    /// # #[cfg(not(feature = "no_std"))]
     /// let bytes = read_file_header("tests/1.png", DEFAULT_MAX_BYTES_READ).unwrap();
-    /// # #[cfg(not(feature = "no_std"))]
-    /// assert_eq!(FileKind::match_types(&bytes), FileKind::Png);
+    ///
+    /// assert_eq!(FileKind::match_types(&bytes).unwrap(), FileKind::Png);
     /// ```
     ///
     /// # Notes
     ///
-    /// - **Order matters**: Since the function returns on the first match, the order of entries
+    /// - Order matters: Since the function returns on the first match, the order of entries
     ///   in `SIGNATURE_KIND` can affect the result (e.g., in case of ambiguous or overlapping signatures).
-    /// - **Performance**: The function short-circuits on the first match. Worst-case time complexity
+    /// - Performance: The function short-circuits on the first match. Worst-case time complexity
     ///   is linear in the number of signatures and offsets.
-    /// - **Buffer size**: Ensure that `bytes` is at least as large as required by [`with_bytes_read()`],
+    /// - Buffer size: Ensure that `bytes` is at least as large as required by [`with_bytes_read`],
     ///   otherwise some signatures may not be detectable.
+    ///
+    /// [`with_bytes_read`]: https://docs.rs/magical_rs/0.1.0/magical_rs/magical/bytes_read/fn.with_bytes_read.html
     ///
     /// # Safety
     ///
@@ -122,11 +123,11 @@ impl FileKind {
     /// so it will not panic or cause memory access violations even with small or empty input.
     #[must_use]
     #[inline]
-    pub fn match_types(bytes: &[u8]) -> Self {
+    pub fn match_types(bytes: &[u8]) -> Option<Self> {
         SIGNATURE_KIND
             .iter()
             .find(|magic| magic.matches(bytes))
-            .map_or(Self::Unknown, |magic| magic.kind)
+            .map(|magic| magic.kind)
     }
 
     /// Detects the file type by matching against built-in signatures, but only considers rules
@@ -145,7 +146,7 @@ impl FileKind {
     ///
     /// # Returns
     /// - `Self`: The detected `FileKind` if a matching rule is found and within the read limit.
-    /// - `Self::Unknown`: If no rule matches or all matching rules require more bytes than allowed.
+    /// - [`None`]: If no rule matches or all matching rules require more bytes than allowed.
     ///
     /// # Why This Matters
     ///
@@ -160,53 +161,38 @@ impl FileKind {
     /// The behavior of this function depends on built-in constants defined in `no_std_bytes_read.rs`:
     ///
     /// ```rust
-    /// # #[cfg(feature = "no_std")]
-    /// # use magical_rs::magical::bytes_read::max_bytes;
-    /// # #[cfg(feature = "no_std")]
-    /// # pub const DEFAULT_MAX_BYTES_READ: usize = 2048;
-    /// # #[cfg(feature = "no_std")]
-    /// # pub const DEFAULT_OFFSET: usize = 0;
-    /// # #[cfg(feature = "no_std")]
-    /// # pub const ISO_OFFSETS: &[usize] = &[32769, 34817, 36865];
-    /// # #[cfg(feature = "no_std")]
-    /// # pub const TAR_OFFSETS: &[usize] = &[257];
-    /// # #[cfg(feature = "no_std")]
-    /// # pub const ISO_MAX_BYTES_READ: usize = max_bytes(ISO_OFFSETS, b"CD001"); // ~32774
-    /// # #[cfg(feature = "no_std")]
-    /// # pub const TAR_MAX_BYTES_READ: usize = max_bytes(TAR_OFFSETS, b"ustar"); // 262
+    /// use magical_rs::magical::bytes_read::max_bytes;
+    ///
+    /// pub const DEFAULT_MAX_BYTES_READ: usize = 2048;
+    /// pub const DEFAULT_OFFSET: usize = 0;
+    /// pub const ISO_OFFSETS: &[usize] = &[32769, 34817, 36865];
+    /// pub const TAR_OFFSETS: &[usize] = &[257];
+    /// pub const ISO_MAX_BYTES_READ: usize = max_bytes(ISO_OFFSETS, b"CD001"); // ~32774
+    /// pub const TAR_MAX_BYTES_READ: usize = max_bytes(TAR_OFFSETS, b"ustar"); // 262
     /// ```
     ///
     /// For example:
-    /// - **PNG, JPG, GIF, etc.**: require `allowed_max_read >= 2048` to be considered.
-    /// - **TAR**: requires `allowed_max_read >= 262`.
-    /// - **ISO**: requires `allowed_max_read >= 32774`.
+    /// - PNG, JPG, GIF, etc..: require `allowed_max_read >= 2048` to be considered.
+    /// - TAR: requires `allowed_max_read >= 262`.
+    /// - ISO: requires `allowed_max_read >= 32774`.
     ///
     /// If `allowed_max_read < 2048`, even common formats like PNG will be **excluded** from detection.
     ///
     /// # Example
     ///
     /// ```rust
-    /// # #[cfg(feature = "no_std")]
-    /// # use magical_rs::magical::magic::FileKind;
+    /// use magical_rs::magical::magic::FileKind;
     ///
-    /// # #[cfg(feature = "no_std")]
-    /// # let png_bytes = [
+    /// let png_bytes = [
     ///     0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A,
     ///     0x00, 0x00, 0x00, 0x0D, 0x49, 0x48, 0x44, 0x52,
-    ///     // ... đủ 2048 byte hoặc dùng `Vec::resize` trong test
-    /// # ];
+    /// ];
     ///
-    /// // Must be >= DEFAULT_MAX_BYTES_READ (2048)
-    /// # #[cfg(feature = "no_std")]
-    /// # let kind =  FileKind::no_std_match_with_max_read_rule(&png_bytes, 2048);
-    /// # #[cfg(feature = "no_std")]
-    /// # assert_eq!(kind, FileKind::Png);
+    /// let kind =  FileKind::match_with_max_read_rule(&png_bytes, 2048).unwrap();
+    /// assert_eq!(kind, FileKind::Png);
     ///
-    /// // Will return `Unknown` because 100 < 2048 → PNG rule filtered out
-    /// # #[cfg(feature = "no_std")]
-    /// let kind = FileKind::no_std_match_with_max_read_rule(&png_bytes, 100);
-    /// # #[cfg(feature = "no_std")]
-    /// assert_eq!(kind, FileKind::Unknown);
+    /// let kind = FileKind::match_with_max_read_rule(&png_bytes, 100);
+    /// assert!(kind.is_none());
     /// ```
     ///
     /// # `no_std` Compatibility
@@ -215,18 +201,15 @@ impl FileKind {
     /// - No dependency on `std`
     /// - `#[must_use]` and `#[inline]` for performance
     /// - Safe to use in embedded, kernel, or WASM environments
-    ///
-    /// The `no_std_` prefix signals that this is part of the safe, controlled API surface
-    /// for constrained environments.
     #[must_use]
     #[inline]
-    #[cfg(feature = "no_std")]
-    pub fn no_std_match_with_max_read_rule(bytes: &[u8], allowed_max_read: usize) -> Self {
+    #[cfg(not(feature = "std"))]
+    pub fn match_with_max_read_rule(bytes: &[u8], allowed_max_read: usize) -> Option<Self> {
         SIGNATURE_KIND
             .iter()
             .filter(|magic| magic.max_bytes_read <= allowed_max_read)
             .find(|magic| magic.matches(bytes))
-            .map_or(Self::Unknown, |magic| magic.kind)
+            .map(|magic| magic.kind)
     }
 
     /// Detects the file type by matching against built-in signatures, without enforcing per-rule `max_bytes_read` limits.
@@ -242,7 +225,7 @@ impl FileKind {
     ///
     /// # Returns
     /// - `Self`: The detected `FileKind` if a matching rule is found.
-    /// - `Self::Unknown`: If the input is too short, or no signature matches.
+    /// - [`None`]: If the input is too short, or no signature matches.
     ///
     /// # Why This Matters
     ///
@@ -258,34 +241,24 @@ impl FileKind {
     /// # Example
     ///
     /// ```rust
-    /// # #[cfg(feature = "no_std")]
-    /// # use magical_rs::magical::magic::FileKind;
+    /// use magical_rs::magical::magic::FileKind;
     ///
-    /// # #[cfg(feature = "no_std")]
-    /// # let png_bytes = [
+    /// let png_bytes = [
     ///     0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A,
     ///     0x00, 0x00, 0x00, 0x0D, 0x49, 0x48, 0x44, 0x52,
-    ///     // ... (ensure total length >= allowed_max_read)
-    /// # ];
+    /// ];
     ///
-    /// // Will attempt to match PNG, even if other rules require more bytes
-    /// # #[cfg(feature = "no_std")]
-    /// let kind = FileKind::no_std_match_with_custom_max_read(&png_bytes, 16);
-    /// # #[cfg(feature = "no_std")]
+    /// let kind = FileKind::match_with_custom_max_read(&png_bytes, 16).unwrap();
     /// assert_eq!(kind, FileKind::Png);
     ///
-    /// // Returns `Unknown` if input is too short
-    /// # #[cfg(feature = "no_std")]
     /// let tiny = [0x89, 0x50];
-    /// # #[cfg(feature = "no_std")]
-    /// let kind = FileKind::no_std_match_with_custom_max_read(&tiny, 16);
-    /// # #[cfg(feature = "no_std")]
-    /// assert_eq!(kind, FileKind::Unknown);
+    /// let wrong_kind = FileKind::match_with_custom_max_read(&tiny, 16);
+    /// assert!(wrong_kind.is_none());
     /// ```
     ///
     /// # Note
     /// - This function only requires that `bytes.len() >= allowed_max_read`
-    ///   to proceed with matching — it does **not** enforce `magic.max_bytes_read`.
+    ///   to proceed with matching — it does not enforce `magic.max_bytes_read`.
     /// - All signature checks (including high-offset ones like ISO, TAR) will be attempted
     ///   as long as the input buffer is large enough.
     ///
@@ -293,20 +266,17 @@ impl FileKind {
     /// - Zero allocation
     /// - No dependency on `std`
     /// - Safe to use in embedded, kernel, or WASM environments
-    ///
-    /// The `no_std_` prefix indicates this function is part of the `no_std`-safe API,
-    /// designed for constrained environments where control over I/O is explicit.
     #[must_use]
     #[inline]
-    #[cfg(feature = "no_std")]
-    pub fn no_std_match_with_custom_max_read(bytes: &[u8], allowed_max_read: usize) -> Self {
+    #[cfg(not(feature = "std"))]
+    pub fn match_with_custom_max_read(bytes: &[u8], allowed_max_read: usize) -> Option<Self> {
         if bytes.len() < allowed_max_read {
-            return Self::Unknown;
+            return None;
         }
 
         SIGNATURE_KIND
             .iter()
             .find(|magic| magic.matches(bytes))
-            .map_or(Self::Unknown, |magic| magic.kind)
+            .map(|magic| magic.kind)
     }
 }

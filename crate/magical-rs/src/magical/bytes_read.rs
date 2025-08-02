@@ -1,10 +1,3 @@
-#[cfg(not(feature = "no_std"))]
-use std::fs::File;
-#[cfg(not(feature = "no_std"))]
-use std::io;
-#[cfg(not(feature = "no_std"))]
-use std::io::{BufReader, Read};
-
 use crate::magical::signatures::SIGNATURE_KIND;
 
 #[must_use]
@@ -48,18 +41,13 @@ pub const TAR_MAX_BYTES_READ: usize = max_bytes(TAR_OFFSETS, b"ustar");
 /// # Examples
 ///
 /// ```rust
-/// # #[cfg(not(feature = "no_std"))]
-/// # use magical_rs::magical::bytes_read::{with_bytes_read, read_file_header};
+/// use magical_rs::magical::bytes_read::{with_bytes_read, read_file_header};
 ///
-/// # #[cfg(not(feature = "no_std"))]
-/// # let buffer_size = with_bytes_read();
-/// # #[cfg(not(feature = "no_std"))]
-/// # let bytes = read_file_header("Cargo.toml", buffer_size);
+/// let buffer_size = with_bytes_read();
+/// let bytes = read_file_header("Cargo.toml", buffer_size);
 ///
-/// # #[cfg(not(feature = "no_std"))]
-/// # assert!(read_file_header("Cargo.toml", buffer_size).is_ok());
-/// # #[cfg(not(feature = "no_std"))]
-/// # assert!(!read_file_header("Cargo.toml", buffer_size).unwrap().is_empty());
+/// assert!(read_file_header("Cargo.toml", buffer_size).is_ok());
+/// assert!(!read_file_header("Cargo.toml", buffer_size).unwrap().is_empty());
 ///
 /// ```
 /// # Note
@@ -78,12 +66,9 @@ pub const TAR_MAX_BYTES_READ: usize = max_bytes(TAR_OFFSETS, b"ustar");
 ///
 /// Always use this function to determine the read size:
 /// ```no_run
-/// # #[cfg(not(feature = "no_std"))]
-/// # use magical_rs::magical::bytes_read::{with_bytes_read, read_file_header};
+/// use magical_rs::magical::bytes_read::{with_bytes_read, read_file_header};
 ///
-/// # #[cfg(not(feature = "no_std"))]
 /// let max_bytes = with_bytes_read();
-/// # #[cfg(not(feature = "no_std"))]
 /// let header = read_file_header("file.iso", max_bytes).unwrap();
 /// ```
 ///
@@ -103,6 +88,12 @@ pub fn with_bytes_read() -> usize {
         .unwrap_or(DEFAULT_MAX_BYTES_READ)
 }
 
+#[cfg(feature = "std")]
+use {
+    std::fs::File,
+    std::io,
+    std::io::{BufReader, Read},
+};
 /// Reads up to `max_bytes` from beginning of a file.
 ///
 /// This function opens the file at the given path and reads a maxium of `max bytes`.
@@ -111,20 +102,6 @@ pub fn with_bytes_read() -> usize {
 ///
 /// * `file_path` - A string slice that holds the path to the file to read.
 /// * `max_bytes` - The maxium number of bytes to read from the file header.
-///
-/// # Returns
-///
-/// Returns a `Result<Vec<u8, io::Error>`
-///
-/// * `Ok(Vec<u8>)` - A vector containing the bytes read from file.
-/// * `Err(io::Error)` - An I/O error if the file could not be append or read.
-///
-/// # Errors
-///
-/// This function returns an error in the following cases:
-///
-/// * The file does not exists or cannot be opened. (e.g., due to permission issues).
-/// * There is error while reading from the file. (e.g., disk I/O error).
 ///
 ///
 /// # Examples
@@ -152,7 +129,17 @@ pub fn with_bytes_read() -> usize {
 ///         .unwrap()
 ///         .is_empty());
 /// ```
-#[cfg(not(feature = "no_std"))]
+/// # Result
+/// Returns a `Result<Vec<u8, io::Error>`
+///
+/// * `Ok(Vec<u8>)` - A vector containing the bytes read from file.
+/// * `Err(io::Error)` - An I/O error if the file could not be append or read.
+///
+/// # Errors
+/// This function returns an error in the following cases:
+///
+/// * The file does not exists or cannot be opened. (e.g., due to permission issues).
+/// * There is error while reading from the file. (e.g., disk I/O error).
 pub fn read_file_header(file_path: &str, max_bytes: usize) -> Result<Vec<u8>, io::Error> {
     let file = File::open(file_path)?;
     let mut reader = BufReader::new(file);
@@ -174,7 +161,7 @@ pub fn read_file_header(file_path: &str, max_bytes: usize) -> Result<Vec<u8>, io
 }
 
 #[test]
-#[cfg(not(feature = "no_std"))]
+#[cfg(feature = "std")]
 fn test_read_file_header() {
     use crate::magical::bytes_read::{DEFAULT_MAX_BYTES_READ, read_file_header};
 

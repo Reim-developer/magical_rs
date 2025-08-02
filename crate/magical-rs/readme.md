@@ -95,18 +95,11 @@ No external tools. No bloated dependencies. Just fast, reliable file type detect
 ---
 
 ## How to Install
-
-* Add to `Cargo.toml`:
-
-```toml
-[dependencies]
-magical_rs = "0.0.4"
-```
----
-* Or, use with `Cargo` package manager:
+* With `Cargo`:
 ```bash
 cargo add magical_rs
 ```
+---
 
 ## Example
 
@@ -122,51 +115,38 @@ use magical_rs::magical::{
 let png_file = "example.png";
 let header_bytes = read_file_header(png_file, DEFAULT_MAX_BYTES_READ).unwrap();
 
-assert_eq!(FileKind::match_types(&header_bytes), FileKind::Png);
-assert_ne!(FileKind::match_types(&header_bytes), FileKind::Unknown);
+assert_eq!(FileKind::match_types(&header_bytes).unwrap(), FileKind::Png);
 ```
 
 ---
 
 * Use with `with_bytes_read()`:
 ```rust
-use magical_rs::magical::bytes_read::DEFAULT_MAX_BYTES_READ;
 use magical_rs::magical::{
     bytes_read::{read_file_header, with_bytes_read},
     magic::FileKind,
 };
 
 let iso_file = "example.iso";
-let bytes_max = with_bytes_read();
-let wrong_max = DEFAULT_MAX_BYTES_READ;
 
+let bytes_max = with_bytes_read();
 let header_bytes = read_file_header(iso_file, bytes_max).unwrap();
 
-assert_eq!(FileKind::match_types(&header_bytes), FileKind::ISO);
-assert_ne!(FileKind::match_types(&header_bytes), FileKind::Unknown);
+assert_eq!(FileKind::match_types(&header_bytes).unwrap(), FileKind::ISO);
 ```
 
 ---
 
 ## No Std Features
 
-* `magical_rs` is designed to be **`no_std`-friendly** out of the box. While the default build includes `std` for convenience (e.g., file I/O utilities), the core detection logic is built on zero-allocation, `&[u8]`-based matching — making it fully compatible with embedded systems, kernels, WASM, and other constrained environments.
+* `magical_rs` is designed to be `no_std`-friendly out of the box. While the default build includes `std` for convenience (e.g., file I/O utilities), the core detection logic is built on zero-allocation, `&[u8]`-based matching — making it fully compatible with embedded systems, kernels, WASM, and other constrained environments.
 
-- **Zero dependency on `std`**: The core signature matching engine uses only `core`.
-- **No heap allocation**: All rules are `&'static`, and matching is done via slicing and comparison.
-- **`const fn`-friendly utilities**: Helper functions like `no_std_max_bytes` can be evaluated at compile time.
-- **Extensible without `Vec` or `Box`**: Use `MagicCustom<K>` with `&'static` data for custom detection logic.
+- Zero dependency on `std`: The core signature matching engine uses only `core`.
+- No heap allocation: All rules are `&'static`, and matching is done via slicing and comparison.
+- `const fn`-friendly utilities: Helper functions like `no_std_max_bytes` can be evaluated at compile time.
+- Extensible without `Vec` or `Box`: Use `MagicCustom<K>` with `&'static` data for custom detection logic.
 
-* To use `magical_rs` in a `no_std` context
-```toml
-[dependencies.magical_rs]
-version = "0.1.0"
-default-features = false
-```
-
----
-
-* Or, you can add with `Cargo:`
+* To use `magical_rs` in a `no_std` context, you can use `Cargo`
 ```bash
 cargo add magical_rs --features no_std
 ```
@@ -184,10 +164,10 @@ use magical_rs::magical::magic::FileKind;
 const PNG_BYTES: &[u8] = &[
   0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, 0x00, 0x00, 0x00, 0x0D,
 ];
-let result = FileKind::no_std_match_with_max_read_rule(PNG_BYTES, DEFAULT_MAX_BYTES_READ);
+
+let result = FileKind::match_with_max_read_rule(PNG_BYTES, DEFAULT_MAX_BYTES_READ).unwrap();
 
 assert_eq!(result, FileKind::Png);
-assert_ne!(result, FileKind::Unknown);
 ```
 
 ---
@@ -203,10 +183,9 @@ const PNG_BYTES: &[u8] = &[
   0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, 0x00, 0x00, 0x00, 0x0D,
 ];
 const MY_MAX_BYTES_READ: usize = 8;
-let result = FileKind:: no_std_match_with_custom_max_read(PNG_BYTES, MY_MAX_BYTES_READ);
+let result = FileKind::match_with_custom_max_read(PNG_BYTES, MY_MAX_BYTES_READ).unwrap();
 
 assert_eq!(result, FileKind::Png);
-assert_ne!(result, FileKind::Unknown);
 ```
 
 ---
@@ -259,12 +238,7 @@ assert_ne!(result, ShoujuFile::Unknown);
 - Heap allocation: Uses `Box` — not suitable for `static` contexts unless combined with `LazyLock`.
 ---
 **To use this feature:**
-* In `Cargo.toml`:
-```toml
-magical-rs = { version = "0.1.0", features = ["magical_dyn"]}
-```
----
-* Or:
+* Add with `Cargo`
 ```bash
 cargo add magical-rs --features magical_dyn
 ```
@@ -296,7 +270,7 @@ let rules = vec![
 let data = b"Shoujo";
 let result = match_dyn_types_as::<String>(data, &rules).unwrap();
 
-assert_eq!(result, "MagicalGirl".to_string());
+assert_eq!(result, &"MagicalGirl".to_string());
 ```
 
 ## License

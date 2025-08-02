@@ -140,6 +140,7 @@ use {
 ///
 /// * The file does not exists or cannot be opened. (e.g., due to permission issues).
 /// * There is error while reading from the file. (e.g., disk I/O error).
+#[cfg(feature = "std")]
 pub fn read_file_header(file_path: &str, max_bytes: usize) -> Result<Vec<u8>, io::Error> {
     let file = File::open(file_path)?;
     let mut reader = BufReader::new(file);

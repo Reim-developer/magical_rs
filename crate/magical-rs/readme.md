@@ -4,8 +4,15 @@
 
 `magical_rs` is a lightweight, dependency-free Rust crate that detects file types by matching **magic bytes (signatures)** at specific offsets — including tricky formats like `.iso` with signatures **32KB into the file**.
 
-No external tools. No bloated dependencies. Just fast, reliable file type detection.
+**Infinite Customization with magical_dyn:**
+* While magical_rs is zero-cost and no_std-friendly by default, it also scales up to full runtime flexibility when you need it. 
 
+**Enable the `magical_dyn` feature to unlock:**
+* Closures as matchers: Define logic inline with |bytes| bytes.starts_with(b"MAGIC").
+* Arbitrary return types: Attach any value — strings, structs, enums, configs — as the detection result.
+* Dynamic rule tables: Build file type detectors that are defined at runtime, driven by config, plugins, or user input.    
+
+No external tools. No bloated dependencies. Just fast, reliable file type detection.
 
 ---
 

@@ -107,7 +107,7 @@
 //!
 //! * To use `magical_rs` in a `no_std` context, you can use `Cargo`
 //! ```bash
-//! cargo add magical_rs --features no_std
+//! cargo add magical_rs --no-default-features
 //! ```
 //! ---
 //! **Example:**

@@ -14,3 +14,6 @@ linter:
 
 test-nostd:
 	@cargo test --features no_std
+
+test-dyn:
+	@cargo test --features magical_dyn

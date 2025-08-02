@@ -17,6 +17,7 @@ No external tools. No bloated dependencies. Just fast, reliable file type detect
   - [How to Install](#how-to-install)
   - [Example](#example)
   - [No Std Features](#no-std-features)
+  - [Dyn Magical Features](#dyn-magical-features)
   - [License](#license)
 
 ---
@@ -152,8 +153,15 @@ assert_ne!(FileKind::match_types(&header_bytes), FileKind::Unknown);
 * To use `magical_rs` in a `no_std` context
 ```toml
 [dependencies.magical_rs]
-version = "0.0.6"
+version = "0.1.0"
 default-features = false
+```
+
+---
+
+* Or, you can add with `Cargo:`
+```bash
+cargo add magical_rs --features no_std
 ```
 
 ---
@@ -224,6 +232,64 @@ let result = match_types_custom(magical_girl, &[SHOUJO_RULE], ShoujuFile::Unknow
 
 assert_eq!(result, ShoujuFile::MahouShouju);
 assert_ne!(result, ShoujuFile::Unknown);
+```
+
+## Dyn Magical Features
+
+**Description:**
+* This crate supports runtime-flexible file type detection via the optional `magical_dyn` feature.  
+* Enable it when you need closures, dynamic dispatch, and arbitrary return types — perfect for plugins, config-driven systems, or interactive tools.
+---
+**Features:**
+- Closures as matchers: Use inline logic like `|bytes| bytes.starts_with(b"MAGIC")`.
+- Arbitrary `kind` types: Store any type (`&str`, `String`, structs, enums, etc.) as the detection result.
+- Dynamic downcasting: Recover original types safely using `.kind_downcast_ref::<T>()`.
+- Zero-cost when disabled: This feature is **off by default** and does not affect `no_std` or performance-critical use cases.
+---
+**Note:**
+- Requires `std`: This feature uses `Box<dyn Fn>` and `Box<dyn Any>`, so it only works in `std` environments.
+- Not compatible with `no_std`: If your target doesn’t have `std`, do not enable `magical_dyn`.
+- Heap allocation: Uses `Box` — not suitable for `static` contexts unless combined with `LazyLock`.
+---
+**To use this feature:**
+* In `Cargo.toml`:
+```toml
+magical-rs = { version = "0.1.0", features = ["magical_dyn"]}
+```
+---
+* Or:
+```bash
+cargo add magical-rs --features magical_dyn
+```
+---
+**Example:**
+* Dynamic file detection:
+```rust
+use magical_rs::magical::dyn_magic::DynMagicCustom;
+
+let rule_fn = |bytes: &[u8]| bytes.starts_with(b"Shoujo");
+let rule = DynMagicCustom::new(rule_fn, "Magical", 32);
+
+assert!(rule.matches(b"Shoujo<3"));
+assert!(!rule.matches(b"Not Shoujo Here..."));
+```
+---
+```rust
+use magical_rs::magical::dyn_magic::{DynMagicCustom, match_dyn_types_as};
+
+let rules = vec![
+    DynMagicCustom::new(|bytes: &[u8]| bytes.starts_with(b"PNG"), "image/png", 8),
+    DynMagicCustom::new(
+    |bytes: &[u8]| bytes.starts_with(b"Shoujo"),
+    String::from("MagicalGirl"),
+    6969,
+  ),
+];
+
+let data = b"Shoujo";
+let result = match_dyn_types_as::<String>(data, &rules).unwrap();
+
+assert_eq!(result, "MagicalGirl".to_string());
 ```
 
 ## License

@@ -1,7 +1,7 @@
 [package]
 name = "magical_rs"
 description = "Zero-dependency, no_std-friendly file type detection by magic bytes — accurate, fast, and extensible"
-version = "0.0.8"
+version = "0.0.9"
 edition = "2024"
 license = "GPL-3.0-or-later"
 keywords = ["detect-file", "no-dependency", "foss", "magic", "rlib"]

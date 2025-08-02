@@ -187,7 +187,7 @@ use magical_rs::magical::magic::FileKind;
 const PNG_BYTES: &[u8] = &[
   0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, 0x00, 0x00, 0x00, 0x0D,
 ];
-const MY_MAX_BYTES_READ: usize = 7777;
+const MY_MAX_BYTES_READ: usize = 8;
 let result = FileKind:: no_std_match_with_custom_max_read(PNG_BYTES, MY_MAX_BYTES_READ);
 
 assert_eq!(result, FileKind::Png);

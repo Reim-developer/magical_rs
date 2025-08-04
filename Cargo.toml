@@ -17,11 +17,6 @@ repository = "https://github.com/reim-developer/magical_rs"
 [lib]
 crate-type = ["lib"]
 
-[[example]]
-name = "Examples of magical_rs"
-path = "examples"
-test = false
-
 [features]
 default = ["std"]
 std = []

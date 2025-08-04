@@ -91,6 +91,8 @@ No external tools. No bloated dependencies. Just fast, reliable file type detect
 | AceCompressed                     | `ACE` followed by version byte at offset 0 (e.g., `ACE\x01`)                                          |
 | FlashVideo                        | `FLV\x01` at offset 0                                                                                 |
 | Unknown                           | Fallback when no signature matches                                                                    |
+| VMDK File                         | `0x4B, 0x44, 0x4D`                                            at off set `0`                          |
+| Google Chrome Extension           | `0x43, 0x72, 0x32, 0x34`                            at off set `0`                                    |
 
 ---
 

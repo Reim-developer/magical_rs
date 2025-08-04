@@ -72,6 +72,8 @@ const RICHTEXT_FORMAT_SIGNATURE: &[u8] = &[0x7B, 0x5C, 0x72, 0x74, 0x66, 0x31];
 const PHOTOCAP_TEMPLATE_SIGNATURE: &[u8] = &[0x78, 0x56, 0x34];
 const ACE_COMPRESSED_SIGNATURE: &[u8] = &[0x2A, 0x2A, 0x41, 0x43, 0x45, 0x2A, 0x2A];
 const FLASH_VIDEO_SIGNATURE: &[u8] = &[0x46, 0x4C, 0x56];
+const VMDK_FILE_SIGNATURE: &[u8] = &[0x4B, 0x44, 0x4D];
+const GOOGLE_CHROME_EXTENSION_SIGNATURE: &[u8] = &[0x43, 0x72, 0x32, 0x34];
 
 pub struct Magic {
     pub signatures: &'static [&'static [u8]],
@@ -419,6 +421,20 @@ pub static SIGNATURE_KIND: &[Magic] = &[
         offsets: &[DEFAULT_OFFSET],
         max_bytes_read: DEFAULT_MAX_BYTES_READ,
         kind: FileKind::FlashVideo,
+        rules: MatchRules::Default,
+    },
+    Magic {
+        signatures: &[VMDK_FILE_SIGNATURE],
+        offsets: &[DEFAULT_OFFSET],
+        max_bytes_read: DEFAULT_MAX_BYTES_READ,
+        kind: FileKind::Vmdk,
+        rules: MatchRules::Default,
+    },
+    Magic {
+        signatures: &[GOOGLE_CHROME_EXTENSION_SIGNATURE],
+        offsets: &[DEFAULT_OFFSET],
+        max_bytes_read: DEFAULT_MAX_BYTES_READ,
+        kind: FileKind::GoogleChromeExtension,
         rules: MatchRules::Default,
     },
 ];

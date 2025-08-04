@@ -13,5 +13,6 @@
 | Basic usage        | [normal_usage](examples/normal_usage)  |
 | Magic Custom usage | [magic_custom](examples/magic_custom/) |
 
-* Added category `"No standard library"` to [`[Cargo.toml]`](Cargo.toml)
+* Added category `"no-std"` to [`[Cargo.toml]`](Cargo.toml)
 * Changed repository URL of `magical_rs` in [`Cargo.toml`](Cargo.toml)
+* Added examples to [`Cargo metadata`](Cargo.toml)

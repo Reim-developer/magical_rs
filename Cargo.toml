@@ -1,12 +1,15 @@
 [package]
 name = "magical_rs"
-description = "Zero-dependency, no_std-friendly file type detection by magic bytes — accurate, fast, and extensible"
-version = "0.1.2"
+description = """A zero-dependency, no_std-friendly Rust crate that detects file types with 
+surgical precision by matching magic bytes at exact 
+offsets — including deep-offset formats like ISO and TAR.
+Built for speed, safety, and extensibility. """
+version = "0.1.3"
 edition = "2024"
 license = "GPL-3.0-or-later"
-keywords = ["detect-file", "no-dependency", "foss", "magic", "rlib"]
+keywords = ["detect file", "no dependency", "no_std", "magic", "rlib"]
 categories = ["filesystem", "No standard library"]
-include = ["LICENSE", "tests", "src/**/*.rs"]
+include = ["LICENSE", "src/**/*.rs", "CHANGELOG.md"]
 authors = ["Reim-developer", "contact.kaxtr@gmail.com"]
 readme = "readme.md"
 repository = "https://github.com/reim-developer/magical_rs"

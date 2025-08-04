@@ -2,10 +2,10 @@ name: Test the crate before merge/push.
 
 on:
     push:
-        branches: [ "master"]
+        branches: [ "dev"]
       
     pull_request:
-        branches: ["master"]
+        branches: ["dev"]
 
 env:
   CARGO_TERM_COLOR: always
@@ -28,13 +28,18 @@ jobs:
           shell: bash
           run: |
             rustup component add clippy
-        
-        - name: Test lib
-          shell: bash
-          run: |
-            make test-lib
 
         - name: Linter check
           shell: bash
           run: |
-            make check-lib
+            make linter
+        
+        - name: Test default feature
+          shell: bash
+          run: |
+            make test
+
+        - name: Test feature magical_dyn
+          shell: bash
+          run: |
+            make test-dyn

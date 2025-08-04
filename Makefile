@@ -1,33 +1,16 @@
-.PHONY: target dist
+.PHONY: target
 
-SHELL := /bin/bash
-CHECKS_FILE = "checks"
+test:
+	@cargo test
 
-test-core:
-	@$(MAKE) -C scripts test
+linter:
+	@cargo clippy \
+    --all-targets \
+    --all-features \
+    -- -D clippy::all\
+    -D clippy::pedantic \
+    -D clippy::nursery \
+    -D clippy::perf
 
-build-core:
-	@$(MAKE) -C scripts build-core-debug
-
-dev-gui:
-	@$(MAKE) -C venus_gui run-dev 
-
-run-dev:
-	@$(MAKE) build-core
-	@$(MAKE) dev-gui
-
-test-lib:
-	@$(MAKE) -C crate/magical-rs test
-
-check-lib:
-	@$(MAKE) -C crate/magical-rs linter
-
-pre-push:
-	@$(MAKE) test-core
-
-	@if test ! -x $(CHECK_FILE); then \
-		chmod +x checks; \
-		./checks; \
-	else \
-		./checks; \
-	fi
+test-dyn:
+	@cargo test --features magical_dyn

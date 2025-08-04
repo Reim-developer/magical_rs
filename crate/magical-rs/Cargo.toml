@@ -5,11 +5,11 @@ version = "0.1.2"
 edition = "2024"
 license = "GPL-3.0-or-later"
 keywords = ["detect-file", "no-dependency", "foss", "magic", "rlib"]
-categories = ["filesystem"]
+categories = ["filesystem", "No standard library"]
 include = ["LICENSE", "tests", "src/**/*.rs"]
 authors = ["Reim-developer", "contact.kaxtr@gmail.com"]
 readme = "readme.md"
-repository = "https://github.com/reim-developer/venus"
+repository = "https://github.com/reim-developer/magical_rs"
 
 [lib]
 crate-type = ["lib"]

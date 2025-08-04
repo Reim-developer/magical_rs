@@ -28,7 +28,8 @@ fn test_match_types_custom() {
 
 #[test]
 fn test_with_custom_rules() {
-    use magical_rs::magical::magic_custom::{CustomMatchRules, MagicCustom, match_types_custom};
+    use magical_rs::magical::magic_custom::{MagicCustom, match_types_custom};
+    use magical_rs::with_fn_matches;
 
     #[derive(Debug, Clone, Copy, PartialEq)]
     enum ShoujuFile {
@@ -45,7 +46,7 @@ fn test_with_custom_rules() {
         offsets: &[],
         max_bytes_read: 2048,
         kind: ShoujuFile::MahouShouju,
-        rules: CustomMatchRules::WithFn(is_shoujo_girl),
+        rules: with_fn_matches!(is_shoujo_girl),
     };
 
     let magical_girl = b"MagicalGirl";
@@ -53,4 +54,41 @@ fn test_with_custom_rules() {
 
     assert_eq!(result, ShoujuFile::MahouShouju);
     assert_ne!(result, ShoujuFile::Unknown);
+}
+
+#[test]
+fn test_with_any_matches() {
+    use magical_rs::any_matches;
+    use magical_rs::magic_custom;
+    use magical_rs::match_custom;
+
+    #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+    enum CuteGirlKind {
+        ShoujoFile,
+        UnknownFallback,
+    }
+
+    fn find_shoujo_girl(bytes: &[u8]) -> bool {
+        bytes.starts_with(b"MagicalGirl")
+    }
+
+    fn wrong_shoujo_girl(bytes: &[u8]) -> bool {
+        !bytes.starts_with(b"MagicalGirl")
+    }
+
+    let rule = magic_custom! (
+        signatures: [b"MagicalGirl"],
+        offsets: [0],
+        max_bytes_read: 69,
+        kind: CuteGirlKind::ShoujoFile,
+        rules: any_matches!(find_shoujo_girl, wrong_shoujo_girl)
+    );
+
+    let result = match_custom! {
+        bytes: b"MagicalGirl",
+        rules: [rule],
+        fallback: CuteGirlKind::UnknownFallback
+    };
+
+    assert_eq!(result, CuteGirlKind::ShoujoFile);
 }

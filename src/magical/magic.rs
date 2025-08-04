@@ -48,6 +48,8 @@ pub enum FileKind {
     PhotoCapTemplate,
     AceCompressed,
     FlashVideo,
+    Vmdk,
+    GoogleChromeExtension,
 }
 
 impl FileKind {

@@ -25,6 +25,7 @@
 * Still retains backward compatibility for `no_std`.
 * Added some macro to standardize the syntax sugar to make the API more friendly.
 * Some examples of using the macros have also been added. Can be found at: [examples](examples).
+* Some examples of using `DynMagic` have also been added. Can be found at: [examples](examples).
  
 	**Bellow is a list of macros that have been added:**
 

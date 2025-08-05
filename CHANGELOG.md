@@ -1,7 +1,7 @@
 # CHANGELOG
 - [CHANGELOG](#changelog)
   - [Version: 0.1.3](#version-013)
-  - [Version: 0.2.3](#version-023)
+  - [Version: 0.2.0](#version-020)
 
 
 ## Version: 0.1.3
@@ -18,7 +18,7 @@
 * Changed repository URL of `magical_rs` in [`Cargo.toml`](Cargo.toml)
 * Added examples to [`Cargo metadata`](Cargo.toml)
 
-## Version: 0.2.3
+## Version: 0.2.0
 **What has been changed:**
 * Added methods to normalize and extends file matching in `CustomRulesMatches`
 * Added documentation and test cases.
@@ -47,7 +47,7 @@
   | VMDK File               | `0x4B, 0x44, 0x4D`       | `0`    |
   | Google Chrome Extension | `0x43, 0x72, 0x32, 0x34` | `0`    |
 
-* Bellow is the development roadmap for version `0.1.4`:
+* Bellow is the development roadmap for version `0.2.0`:
   
 | Name              | Description                                                             | Status |
 | ----------------- | ----------------------------------------------------------------------- | ------ |

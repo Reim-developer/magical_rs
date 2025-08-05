@@ -1,0 +1,18 @@
+[package]
+name = "dyn_magic"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+# Here, for the convenience of the example
+# we will use `path`.
+# However, in practice:
+# 'cargo add magical_rs'
+# is always recommended.		
+# 
+# To use `DynMagic`, you need to
+# declare 'features = ["magical_dyn"]'
+#
+# Or, use cargo:
+# cargo add magical_rs --features magical_dyn
+magical_rs = { path = "../../", features = ["magical_dyn"] }

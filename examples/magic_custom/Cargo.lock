@@ -11,6 +11,4 @@ dependencies = [
 
 [[package]]
 name = "magical_rs"
-version = "0.1.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7ac584c106e65f4f94ca583a9b2f914afd53b6ad6b927ba760506235a76308a6"
+version = "0.1.3"

@@ -4,4 +4,9 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
-magical_rs = "0.1.2"
+# Here, for the convenience of the example
+# we will use `path`.
+# However, in practice:
+# 'cargo add magical_rs'
+# is always recommended.
+magical_rs = { path = "../../" }

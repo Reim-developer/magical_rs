@@ -28,7 +28,7 @@
 /// ```
 #[derive(Clone, Copy)]
 pub enum CustomMatchRules<'a> {
-    /// Default. Let [`MagicCustom::matches_custom`] it handle for you.
+    /// Default. Let [`match_types_custom`] it handle for you.
     ///
     /// # Examples
     /// ```
@@ -63,7 +63,7 @@ pub enum CustomMatchRules<'a> {
     /// returns a boolean. The result will be the basic for
     /// checking if the byte matches the rule.
     ///
-    /// Macros with sugar syntax: [`with_fn_matches!`]
+    /// Macros with sugar syntax: [`macro@crate::with_fn_matches`]
     ///
     /// # Examples
     /// ```rust
@@ -105,7 +105,7 @@ pub enum CustomMatchRules<'a> {
     ///
     /// So, use it when you want to relax the file recognition rules.
     ///
-    /// Macros with sugar syntax: [`any_matches!`]
+    /// Macros with sugar syntax: [`macro@crate::any_matches`]
     ///     
     /// # Examples
     /// ```
@@ -153,7 +153,7 @@ pub enum CustomMatchRules<'a> {
     ///
     /// Corresponds to the `AND` comparison type.
     ///
-    /// Macros with sugar syntax: [`all_matches!`]
+    /// Macros with sugar syntax: [`macro@crate::all_matches`]
     ///
     /// # Examples
     /// ```

@@ -2,6 +2,7 @@
 - [CHANGELOG](#changelog)
   - [Version: 0.1.3](#version-013)
   - [Version: 0.2.0](#version-020)
+  - [Version: 0.2.1:](#version-021)
 
 
 ## Version: 0.1.3
@@ -54,3 +55,10 @@
 | ----------------- | ----------------------------------------------------------------------- | ------ |
 | `Macro Supported` | Allows the use of macros to sugar-syntaxize the API                     | [x]    |
 | `MultipeFn`       | Support for multiple `OR`, `AND` type pointer function in `CustomMagic` | [x]    |
+
+## Version: 0.2.1:
+
+**What has been changed:**
+
+* Fixed the documentation and added use for each module in [readme.md](readme.md)
+* Fixed blank signatures & offsets blank in [magic_custom example](examples/magic_custom/src/v_2_0_0/magic_custom_macro.rs)

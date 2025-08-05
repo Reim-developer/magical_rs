@@ -4,7 +4,7 @@ description = """A zero-dependency, no_std-friendly Rust crate that detects file
 surgical precision by matching magic bytes at exact 
 offsets — including deep-offset formats like ISO and TAR.
 Built for speed, safety, and extensibility. """
-version = "0.2.0"
+version = "0.2.1"
 edition = "2024"
 license = "GPL-3.0-or-later"
 keywords = ["detect_file", "no_dependency", "no_std", "magic", "rlib"]

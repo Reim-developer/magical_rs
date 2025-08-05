@@ -4,26 +4,7 @@
 /// It supports both byte signature matching and custom logic via function pointers,
 /// making it suitable for integration in `static` contexts and `no_std` environments.
 ///
-/// # Variants
-///
-/// - [`CustomMatchRules::Default`]: Matches by checking if any of the defined `signatures`
-///   appears at any of the specified `offsets` within the input data.
-///   This is the standard method used for most file types (e.g., PNG, ZIP, ELF).
-///
-/// - [`CustomMatchRules::WithFn(fn(&[u8]) -> bool)`]: Uses a **custom function** to determine
-///   whether the input bytes match a specific format.
-///   The function must:
-///   - Be a `fn` pointer (not a closure or `Box<dyn Fn>`).
-///   - Have the exact signature `fn(&[u8]) -> bool`.
-///   - Be usable in `const` or `static` contexts.
-///
-/// # Why Function Pointers?
-///
-/// - Zero-cost: No heap allocation or vtable overhead.
-/// - static compatible: Can be used in `static MAGIC_RULE: MagicCustom<T> = ...`.
-/// - `no_std` friendly: No dependency on `std`, `alloc`, or runtime features.
-/// - No closure: You cannot use inline closures like `|b| b.starts_with(...)` directly.
-///   Instead, define a separate `const fn` and pass it.
+/// ---
 ///
 /// # Example
 ///
@@ -36,35 +17,83 @@
 ///     Unknown,
 /// }
 ///
-/// fn is_magical_girl(bytes: &[u8]) -> bool {
-///     bytes.starts_with(b"MagicalGirl")
-/// }
-///
 /// static SHOUJO_FILE: MagicCustom<ShoujuFile> = MagicCustom {
-///     signatures: &[],
-///     offsets: &[],
+///     signatures: &[b"Magic"],
+///     offsets: &[0],
 ///     max_bytes_read: 32,
 ///     kind: ShoujuFile::MahouShouju,
-///     rules: CustomMatchRules::WithFn(is_magical_girl),
+///     rules: CustomMatchRules::Default,
 /// };
 ///
 /// ```
-///
-/// # Note
-///
-/// This enum is designed to work seamlessly with `MagicCustom<K>` for extensible,
-/// compile-time file type detection without sacrificing performance or portability.
-///
 #[derive(Clone, Copy)]
 pub enum CustomMatchRules<'a> {
     /// Default. Let [`MagicCustom::matches_custom`] it handle for you.
+    ///
+    /// # Examples
+    /// ```
+    /// use magical_rs::magical::magic_custom::{CustomMatchRules, MagicCustom, match_types_custom};
+    /// #[derive(Debug, Clone, Copy, PartialEq)]
+    /// enum FileKind {
+    ///     Png,
+    ///     Unknown,
+    /// }
+    ///
+    /// const PNG_SIGNATURE: &[u8] = &[0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A];
+    /// static PNG_RULE: MagicCustom<FileKind> = MagicCustom {
+    ///     signatures: &[PNG_SIGNATURE],
+    ///     offsets: &[0],
+    ///     max_bytes_read: 2048,
+    ///     kind: FileKind::Png,
+    ///     rules: CustomMatchRules::Default,
+    /// };
+    ///
+    /// const PNG_BYTES: &[u8] = &[
+    ///     0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, 0x00, 0x00, 0x00, 0x0D,
+    /// ];
+    ///
+    /// let result = match_types_custom(PNG_BYTES, &[PNG_RULE], FileKind::Unknown);
+    ///
+    /// assert_eq!(result, FileKind::Png);
+    /// assert_ne!(result, FileKind::Unknown);
+    /// ```
     Default,
     /// With a single function.
     /// You can use it to check any condition as long as it
     /// returns a boolean. The result will be the basic for
     /// checking if the byte matches the rule.
     ///
-    /// Macros with sugar syntax: [`with_fn_matches`]
+    /// Macros with sugar syntax: [`with_fn_matches!`]
+    ///
+    /// # Examples
+    /// ```rust
+    /// use magical_rs::magical::magic_custom::{MagicCustom, match_types_custom};
+    /// use magical_rs::with_fn_matches;
+    ///
+    /// #[derive(Debug, Clone, Copy, PartialEq)]
+    /// enum ShoujuFile {
+    ///     MahouShouju,
+    ///     Unknown,
+    /// }
+    ///
+    /// fn is_shoujo_girl(bytes: &[u8]) -> bool {
+    ///     bytes.starts_with(b"MagicalGirl")
+    /// }
+    ///
+    /// static SHOUJO_RULE: MagicCustom<ShoujuFile> = MagicCustom {
+    ///     signatures: &[],
+    ///     offsets: &[],
+    ///     max_bytes_read: 2048,
+    ///     kind: ShoujuFile::MahouShouju,
+    ///     rules: with_fn_matches!(is_shoujo_girl),
+    /// };
+    ///
+    /// let magical_girl = b"MagicalGirl";
+    /// let result = match_types_custom(magical_girl, &[SHOUJO_RULE], ShoujuFile::Unknown);
+    ///
+    /// assert_eq!(result, ShoujuFile::MahouShouju);
+    /// assert_ne!(result, ShoujuFile::Unknown);
+    /// ```
     WithFn(fn(bytes: &[u8]) -> bool),
     /// For the purpose of using more than one function,
     /// with `OR` comparison type, this will be what you
@@ -76,7 +105,45 @@ pub enum CustomMatchRules<'a> {
     ///
     /// So, use it when you want to relax the file recognition rules.
     ///
-    /// Macros with sugar syntax: [`any_matches`]
+    /// Macros with sugar syntax: [`any_matches!`]
+    ///     
+    /// # Examples
+    /// ```
+    /// use magical_rs::any_matches;
+    /// use magical_rs::magic_custom;
+    /// use magical_rs::match_custom;
+    ///
+    /// #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+    /// enum CuteGirlKind {
+    ///     ShoujoFile,
+    ///     UnknownFallback,
+    /// }
+    ///
+    /// fn find_shoujo_girl(bytes: &[u8]) -> bool {
+    ///     bytes.starts_with(b"MagicalGirl")
+    /// }
+    ///
+    /// fn wrong_shoujo_girl(bytes: &[u8]) -> bool {
+    ///     !bytes.starts_with(b"MagicalGirl")
+    /// }
+    ///
+    /// let rule = magic_custom! (
+    ///     signatures: [b"MagicalGirl"],
+    ///     offsets: [0],
+    ///     max_bytes_read: 69,
+    ///     kind: CuteGirlKind::ShoujoFile,
+    ///     rules: any_matches!(find_shoujo_girl, wrong_shoujo_girl)
+    /// );
+    ///
+    /// let result = match_custom! {
+    ///     bytes: b"MagicalGirl",
+    ///     rules: [rule],
+    ///     fallback: CuteGirlKind::UnknownFallback
+    /// };
+    ///
+    /// assert_eq!(result, CuteGirlKind::ShoujoFile);
+    /// assert_ne!(result, CuteGirlKind::UnknownFallback);
+    /// ```
     AnyMatches(&'a [fn(bytes: &[u8]) -> bool]),
     /// This way you will be able to define multipe functions with rules.
     ///
@@ -86,7 +153,45 @@ pub enum CustomMatchRules<'a> {
     ///
     /// Corresponds to the `AND` comparison type.
     ///
-    /// Macros with sugar syntax: [`all_matches`]
+    /// Macros with sugar syntax: [`all_matches!`]
+    ///
+    /// # Examples
+    /// ```
+    /// use magical_rs::all_matches;
+    /// use magical_rs::magic_custom;
+    /// use magical_rs::match_custom;
+    ///
+    /// #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+    /// enum CuteGirlKind {
+    ///     ShoujoFile,
+    ///     UnknownFallback,
+    /// }
+    ///
+    /// fn find_shoujo_girl(bytes: &[u8]) -> bool {
+    ///     bytes.starts_with(b"MagicalGirl")
+    /// }
+    ///
+    /// fn wrong_shoujo_girl(bytes: &[u8]) -> bool {
+    ///     !bytes.starts_with(b"MagicalGirl")
+    /// }
+    ///
+    /// let rule = magic_custom! (
+    ///     signatures: [],
+    ///     offsets: [],
+    ///     max_bytes_read: 69,
+    ///     kind: CuteGirlKind::ShoujoFile,
+    ///     rules: all_matches!(find_shoujo_girl, wrong_shoujo_girl)
+    /// );
+    ///
+    /// let result = match_custom! {
+    ///     bytes: b"MagicalGirl",
+    ///     rules: [rule],
+    ///     fallback: CuteGirlKind::UnknownFallback
+    /// };
+    ///
+    /// assert_eq!(result, CuteGirlKind::UnknownFallback);
+    /// assert_ne!(result, CuteGirlKind::ShoujoFile);
+    /// ```
     AllMatches(&'a [fn(bytes: &[u8]) -> bool]),
 }
 
@@ -271,14 +376,14 @@ macro_rules! with_fn_matches {
 /// ```
 #[macro_export]
 macro_rules! magic_custom {
-    (signatures: [$($sig:expr),+ $(,)?],
-    offsets: [$($offsets:expr),+ $(,)?],
+    (signatures: [$($sig:expr),* $(,)?],
+    offsets: [$($offsets:expr),* $(,)?],
     max_bytes_read: $max_bytes_read:expr,
     kind: $kind:expr,
     rules: $rules:expr) => {
         $crate::magical::magic_custom::MagicCustom {
-            signatures: &[$($sig),+],
-            offsets: &[$($offsets),+],
+            signatures: &[$($sig),*],
+            offsets: &[$($offsets),*],
             max_bytes_read: $max_bytes_read,
             kind: $kind,
             rules: $rules
@@ -286,6 +391,7 @@ macro_rules! magic_custom {
     };
 }
 
+/// Macros with sugar-coated syntax for [`match_types_custom`]
 #[macro_export]
 macro_rules! match_custom {
     (bytes: $bytes:expr,

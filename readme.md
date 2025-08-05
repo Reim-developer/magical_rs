@@ -2,41 +2,125 @@
 
 **A zero-dependency, no_std-friendly Rust crate that detects file types with surgical precision by matching magic bytes at exact offsets — including deep-offset formats like ISO and TAR. Built for speed, safety, and extensibility.**
 
-`magical_rs` is a lightweight, dependency-free Rust crate that detects file types by matching **magic bytes (signatures)** at specific offsets — including tricky formats like `.iso` with signatures **32KB into the file**.
-
-**Infinite Customization with magical_dyn:**
-* While magical_rs is zero-cost and no_std-friendly by default, it also scales up to full runtime flexibility when you need it. 
-
-**Enable the `magical_dyn` feature to unlock:**
-* Closures as matchers: Define logic inline with |bytes| bytes.starts_with(b"MAGIC").
-* Arbitrary return types: Attach any value — strings, structs, enums, configs — as the detection result.
-* Dynamic rule tables: Build file type detectors that are defined at runtime, driven by config, plugins, or user input.    
-
-No external tools. No bloated dependencies. Just fast, reliable file type detection.
-
 ---
 
 ## Table of Contents:
 - [magical\_rs](#magical_rs)
   - [Table of Contents:](#table-of-contents)
-  - [Features](#features)
+  - [Level of use](#level-of-use)
   - [Supported File Types](#supported-file-types)
-  - [How to Install](#how-to-install)
-  - [Example](#example)
-  - [No Std Features](#no-std-features)
-  - [Dyn Magical Features](#dyn-magical-features)
   - [License](#license)
 
 ---
 
-## Features
+## Level of use
 
-- **Zero dependencies** — pure Rust, `no_std`-friendly (with minor tweaks).
-- **Accurate detection** — supports common formats (PNG, JPG, ZIP) and **deep-offset types like ISO, RPM, TAR**.
-- **Smart header reading** — reads just enough bytes to detect all known types.
-- **Python-compatible** — exposes clean PyO3 bindings for Python interop.
-- **Fast & safe** — uses compile-time constants and safe slicing.
-- **Extensible** — easy to add new signatures.
+**Level 1, uses built-in file detection via signature:**
+* At this level, you will use the `magical_rs` built-in API, which supports detecting ~50 file types via signatures.
+* List of currently supported file types [here](#supported-file-types)
+* By the way, you can contribute new file signatures [here](https://github.com/Reim-developer/magical_rs/pulls)
+
+* Examples:
+* ```rust
+    let max_byte_read = with_bytes_read();
+
+    let bytes = read_file_header("img/2.iso", max_byte_read).unwrap();
+
+    match FileKind::match_types(&bytes) {
+        Some(k) => println!("{k:?}"),
+        None => println!("Could not detect ISO file."),
+    }
+  ```
+* More examples of level 1 can be found [here](https://github.com/Reim-developer/magical_rs/tree/master/examples/dyn_magic)
+
+---
+
+**Level 2, untilimited compiler-time customization with infinite function pointers:**
+* At this level, you can customize file signatures, offsets, and more.
+
+* Here, you can also use function pointers for complex logic. In theory, you can do almost anything at compiler-time. And thanks to that, you can detect any file type you want.
+
+* Also, supports the use of infinite function pointers at once. And function pointers have macros with syntax-sugar supports at well.
+
+* Examples:
+* ```rust
+  #[derive(Clone, Copy, PartialEq, Eq, Debug)]
+  enum FileKind {
+    Shoujo,
+    UnknownFallback,
+  }
+
+  fn is_shoujo(bytes: &[u8]) -> bool {
+      bytes.starts_with(b"Magic!")
+  }
+
+  fn is_not_shoujo(bytes: &[u8]) -> bool {
+      !bytes.starts_with(b"Magic!")
+  }
+
+
+  pub fn magic_custom_any() {
+      let rule = magic_custom! (
+          signatures: [b""],
+          offsets: [0],
+          max_bytes_read: 2451,
+          kind: FileKind::Shoujo,
+          rules: any_matches!(is_shoujo, is_not_shoujo)
+      );
+
+      let result = match_custom! (
+          bytes: b"Magic!",
+          rules: [rule],
+          fallback: FileKind::UnknownFallback
+      );
+
+      assert_eq!(result, FileKind::Shoujo);
+      assert_ne!(result, FileKind::UnknownFallback);
+  }
+  ```
+* There are many ways to implement it, and you can find them [here](https://github.com/Reim-developer/magical_rs/tree/master/examples/magic_custom)
+
+
+**Level 1 & 2 both support `no_std`.**
+
+---
+
+**Level 3, custom run-time file detection with infinite logic**
+* At this level, you can customize the runtime logic. You can do anything. You can detect any type of file, even if it changes at run-time. You can emit AI, send requests to the Open-AI API, even spawn processes. The only limit is your imagination.
+
+* So, you need to unlock this feature by:
+
+* ```bash
+  cargo add magical_rs --features magical_dyn
+  ```
+
+* Examples:
+* ```rust
+  fn my_detect_rule() -> impl Fn(&[u8]) -> bool {
+      let require_bytes = b"MagicalGirl";
+
+      |bytes: &[u8]| bytes.starts_with(require_bytes) && bytes.len() == require_bytes.len()
+  }
+
+  fn detect_custom_file(file_bytes: &'static [u8]) -> bool {
+
+      let detect_fn = my_detect_rule();
+      let rule = DynMagicCustom::new(detect_fn, String::from("Is Mahou Shoujo Detect."), 32);
+
+      let kind = rule.kind_downcast_ref::<String>();
+      
+      match kind {
+          Some(k) => println!("{k}"), /* Is Mahou Shoujo Detect. */
+          None => println!("Kind not found."),
+      }
+      rule.matches(file_bytes)
+  }
+
+  ```
+
+* Many examples of use can be found [here](https://github.com/Reim-developer/magical_rs/tree/master/examples/dyn_magic)
+
+* Warning: Use only if you really know what you are doing.
 
 ---
 
@@ -94,186 +178,6 @@ No external tools. No bloated dependencies. Just fast, reliable file type detect
 | VMDK File                         | `0x4B, 0x44, 0x4D`                                            at off set `0`                          |
 | Google Chrome Extension           | `0x43, 0x72, 0x32, 0x34`                            at off set `0`                                    |
 
----
-
-## How to Install
-* With `Cargo`:
-```bash
-cargo add magical_rs
-```
----
-
-## Example
-
-* With default constant `DEFAULT_MAX_BYTES_READ`:
-
-```rust
-use magical_rs::magical::bytes_read::DEFAULT_MAX_BYTES_READ;
-use magical_rs::magical::{
-        bytes_read::{read_file_header, with_bytes_read},
-        magic::FileKind,
-};
-
-let png_file = "example.png";
-let header_bytes = read_file_header(png_file, DEFAULT_MAX_BYTES_READ).unwrap();
-
-assert_eq!(FileKind::match_types(&header_bytes).unwrap(), FileKind::Png);
-```
-
----
-
-* Use with `with_bytes_read()`:
-```rust
-use magical_rs::magical::{
-    bytes_read::{read_file_header, with_bytes_read},
-    magic::FileKind,
-};
-
-let iso_file = "example.iso";
-
-let bytes_max = with_bytes_read();
-let header_bytes = read_file_header(iso_file, bytes_max).unwrap();
-
-assert_eq!(FileKind::match_types(&header_bytes).unwrap(), FileKind::ISO);
-```
-
----
-
-## No Std Features
-
-* `magical_rs` is designed to be `no_std`-friendly out of the box. While the default build includes `std` for convenience (e.g., file I/O utilities), the core detection logic is built on zero-allocation, `&[u8]`-based matching — making it fully compatible with embedded systems, kernels, WASM, and other constrained environments.
-
-- Zero dependency on `std`: The core signature matching engine uses only `core`.
-- No heap allocation: All rules are `&'static`, and matching is done via slicing and comparison.
-- `const fn`-friendly utilities: Helper functions like `no_std_max_bytes` can be evaluated at compile time.
-- Extensible without `Vec` or `Box`: Use `MagicCustom<K>` with `&'static` data for custom detection logic.
-
-* To use `magical_rs` in a `no_std` context, you can use `Cargo`
-```bash
-cargo add magical_rs --no-default-features
-```
-
----
-
-**Example:**
-* With `DEFAULT_MAX_BYTES_READ`:
-
-```rust
-#![no_std]
-use magical_rs::magical::bytes_read::DEFAULT_MAX_BYTES_READ;
-use magical_rs::magical::magic::FileKind;
-
-const PNG_BYTES: &[u8] = &[
-  0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, 0x00, 0x00, 0x00, 0x0D,
-];
-
-let result = FileKind::match_with_max_read_rule(PNG_BYTES, DEFAULT_MAX_BYTES_READ).unwrap();
-
-assert_eq!(result, FileKind::Png);
-```
-
----
-
-* With customize max bytes read:
-
-
-```rust
-#![no_std]
-use magical_rs::magical::magic::FileKind;
-
-const PNG_BYTES: &[u8] = &[
-  0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, 0x00, 0x00, 0x00, 0x0D,
-];
-const MY_MAX_BYTES_READ: usize = 8;
-let result = FileKind::match_with_custom_max_read(PNG_BYTES, MY_MAX_BYTES_READ).unwrap();
-
-assert_eq!(result, FileKind::Png);
-```
-
----
-
-* With customize signature:
-```rust
-#![no_std]
-use magical_rs::magical::magic_custom::{CustomMatchRules, MagicCustom, match_types_custom};
-
-#[derive(Debug, Clone, Copy, PartialEq)]
-  enum ShoujuFile {
-  MahouShouju,
-  Unknown,
-}
-
-fn is_shoujo_girl(bytes: &[u8]) -> bool {
-  bytes.starts_with(b"MagicalGirl")
-}
-
-static SHOUJO_RULE: MagicCustom<ShoujuFile> = MagicCustom {
-  signatures: &[],
-  offsets: &[],
-  max_bytes_read: 2048,
-  kind: ShoujuFile::MahouShouju,
-  rules: CustomMatchRules::WithFn(is_shoujo_girl),
-};
-
-let magical_girl = b"MagicalGirl";
-let result = match_types_custom(magical_girl, &[SHOUJO_RULE], ShoujuFile::Unknown);
-
-assert_eq!(result, ShoujuFile::MahouShouju);
-assert_ne!(result, ShoujuFile::Unknown);
-```
-
-## Dyn Magical Features
-
-**Description:**
-* This crate supports runtime-flexible file type detection via the optional `magical_dyn` feature.  
-* Enable it when you need closures, dynamic dispatch, and arbitrary return types — perfect for plugins, config-driven systems, or interactive tools.
----
-**Features:**
-- Closures as matchers: Use inline logic like `|bytes| bytes.starts_with(b"MAGIC")`.
-- Arbitrary `kind` types: Store any type (`&str`, `String`, structs, enums, etc.) as the detection result.
-- Dynamic downcasting: Recover original types safely using `.kind_downcast_ref::<T>()`.
-- Zero-cost when disabled: This feature is **off by default** and does not affect `no_std` or performance-critical use cases.
----
-**Note:**
-- Requires `std`: This feature uses `Box<dyn Fn>` and `Box<dyn Any>`, so it only works in `std` environments.
-- Not compatible with `no_std`: If your target doesn’t have `std`, do not enable `magical_dyn`.
-- Heap allocation: Uses `Box` — not suitable for `static` contexts unless combined with `LazyLock`.
----
-**To use this feature:**
-* Add with `Cargo`
-```bash
-cargo add magical-rs --features magical_dyn
-```
----
-**Example:**
-* Dynamic file detection:
-```rust
-use magical_rs::magical::dyn_magic::DynMagicCustom;
-
-let rule_fn = |bytes: &[u8]| bytes.starts_with(b"Shoujo");
-let rule = DynMagicCustom::new(rule_fn, "Magical", 32);
-
-assert!(rule.matches(b"Shoujo<3"));
-assert!(!rule.matches(b"Not Shoujo Here..."));
-```
----
-```rust
-use magical_rs::magical::dyn_magic::{DynMagicCustom, match_dyn_types_as};
-
-let rules = vec![
-    DynMagicCustom::new(|bytes: &[u8]| bytes.starts_with(b"PNG"), "image/png", 8),
-    DynMagicCustom::new(
-    |bytes: &[u8]| bytes.starts_with(b"Shoujo"),
-    String::from("MagicalGirl"),
-    6969,
-  ),
-];
-
-let data = b"Shoujo";
-let result = match_dyn_types_as::<String>(data, &rules).unwrap();
-
-assert_eq!(result, &"MagicalGirl".to_string());
-```
 
 ## License
 * `magical_rs` is licensed under the GNU General Public License v3.0. [See here](LICENSE)

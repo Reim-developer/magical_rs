@@ -22,6 +22,9 @@
 
 * Examples:
 * ```rust
+    use magical_rs::magical::bytes_read::{read_file_header, with_bytes_read};
+    use magical_rs::magical::magic::FileKind;
+
     let max_byte_read = with_bytes_read();
 
     let bytes = read_file_header("img/2.iso", max_byte_read).unwrap();
@@ -44,6 +47,8 @@
 
 * Examples:
 * ```rust
+  use magical_rs::{any_matches, magic_custom, match_custom};
+
   #[derive(Clone, Copy, PartialEq, Eq, Debug)]
   enum FileKind {
     Shoujo,
@@ -58,10 +63,9 @@
       !bytes.starts_with(b"Magic!")
   }
 
-
   pub fn magic_custom_any() {
       let rule = magic_custom! (
-          signatures: [b""],
+          signatures: [],
           offsets: [0],
           max_bytes_read: 2451,
           kind: FileKind::Shoujo,
@@ -96,6 +100,8 @@
 
 * Examples:
 * ```rust
+  use magical_rs::magical::dyn_magic::DynMagicCustom;
+  
   fn my_detect_rule() -> impl Fn(&[u8]) -> bool {
       let require_bytes = b"MagicalGirl";
 

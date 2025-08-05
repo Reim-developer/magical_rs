@@ -1,4 +1,9 @@
 use magical_rs::magical::magic_custom::{CustomMatchRules, MagicCustom, match_types_custom};
+use v_2_0_0::magic_custom_macro;
+
+pub mod v_2_0_0 {
+    pub mod magic_custom_macro;
+}
 
 /*
 * First. You should to define
@@ -133,4 +138,6 @@ fn main() {
     my_custom_magic();
     my_custom_magic_with_fn();
     my_magic_detect();
+    magic_custom_macro::magic_custom_any();
+    magic_custom_macro::magic_custom_all();
 }

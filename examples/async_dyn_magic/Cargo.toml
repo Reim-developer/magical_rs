@@ -1,0 +1,12 @@
+[package]
+name = "async_dyn_magic"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+# A runtime is required to use
+# the `AsyncDynMagic` module.
+# But anyway, you can use any runtime.
+# I recommend `tokio`.
+async-std = { version = "1.13.1", features = ["attributes"] }
+magical_rs = { path = "../../", features = ["magical_async_dyn"] }

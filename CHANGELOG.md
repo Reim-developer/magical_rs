@@ -4,6 +4,7 @@
   - [Version: 0.2.0](#version-020)
   - [Version: 0.2.1:](#version-021)
   - [Version: 0.3.0:](#version-030)
+  - [Version: 0.3.1, `Minor edits`](#version-031-minor-edits)
 
 
 ## Version: 0.1.3
@@ -82,3 +83,10 @@ cargo add magical_rs --features magical_async_dyn
 | `magical_dyn`       | Unlock lvl 3 with file dection with infinite rules at run time | `magical_dyn`           |
 | `magical_async_dyn` | Has all the features of level 3 but supports asynchronous      | `magical_async_dyn`     |
 | `no_std`            | Used in non-std environments like kernel, emebedded            | `--no-default-features` |
+
+## Version: 0.3.1, `Minor edits`
+**What has been changed:**
+* Minor edit in [`Cargo.toml`](Cargo.toml), added category slug `asynchronous`
+* Edited some keywords related to the framework in [`Cargo.toml`](Cargo.toml)
+* Changed the description of the framework to better identify it's purpose
+* 

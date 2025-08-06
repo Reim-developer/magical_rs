@@ -21,5 +21,6 @@ crate-type = ["lib"]
 default = ["std"]
 std = []
 magical_dyn = []
+magical_async_dyn = []
 
 [dependencies]

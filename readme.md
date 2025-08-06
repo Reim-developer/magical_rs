@@ -130,6 +130,44 @@
 
 ---
 
+**Level 4, Configure, code rules, deploy endlessly and without limits in asynchronous.**
+* Here you can design file detection rules with any logic no matter how complex in asynchronous environment. There are no specific limitations other than your own skill level. Only use it when you know what you're doing, and only use it when you really need to identify files in an asynchronous environment. If you are new to Rust or unsure, stop here and just use level 2 below. You're not as good as you think. Unless you really understand what the hell you're doing. And if you really know what you're doing, congratulations! You have one of the most powerful file recognition systems in the Rust ecosystem.
+* Don't blame me and other maintainers for your ignorance if something bad happends because I warned you in advance.
+
+* Examples:
+* ```rust
+  use async_std::task;
+  use magical_rs::magical::async_dyn_magic::AsyncDynMagic;
+  use magical_rs::magical::async_dyn_magic::match_dyn_types_as;
+  use std::time::Duration;
+
+  async fn magic_async_detect() {
+      let func_detect = |bytes: &[u8]| {
+          let owned_bytes = bytes.to_vec();
+
+          Box::pin(async move {
+              println!("Rest for 1 second");
+
+              task::sleep(Duration::from_millis(1000)).await;
+              owned_bytes.starts_with(b"Magical")
+          })
+      };
+
+      let rule = AsyncDynMagic::new(func_detect, "Magical_File", 128);
+      let rules = vec![rule];
+
+      let result = match_dyn_types_as::<&str>(b"Magical", &rules).await;
+      match result {
+          Some(r) => println!("Magical File Detect: {r}"),
+          None => println!("Magical File Not Found"),
+      }
+  }
+  ```
+
+* There are many instructions that can be found at [here](examples/async_dyn_magic)
+
+---
+
 ## Supported File Types
 
 | Format                            | Notes                                                                                                 |

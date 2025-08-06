@@ -3,6 +3,7 @@
   - [Version: 0.1.3](#version-013)
   - [Version: 0.2.0](#version-020)
   - [Version: 0.2.1:](#version-021)
+  - [Version: 0.3.0:](#version-030)
 
 
 ## Version: 0.1.3
@@ -57,8 +58,27 @@
 | `MultipeFn`       | Support for multiple `OR`, `AND` type pointer function in `CustomMagic` | [x]    |
 
 ## Version: 0.2.1:
-
 **What has been changed:**
 
 * Fixed the documentation and added use for each module in [readme.md](readme.md)
 * Fixed blank signatures & offsets blank in [magic_custom example](examples/magic_custom/src/v_2_0_0/magic_custom_macro.rs)
+
+## Version: 0.3.0:
+**What has been changed:**
+
+* Added feature only avalable in version `0.3.0` of `magical_rs`: `AsyncDynMagic`
+* Added documentation and usage warnings to [`lib.rs`](src/lib.rs) and [`readme.md`](readme.md)
+* From this version onwards, `AsyncDynMagic` becomes an optional module. Cargo and flags are required to enable it:
+
+```bash
+cargo add magical_rs --features magical_async_dyn
+```
+* Of course, flag `magical_async_dyn` has also been added to [`Cargo.toml`](Cargo.toml)
+* Instructions on how to use have also added at [`AsyncDynMagic Examples`](examples/async_dyn_magic)
+* Current flags in version `0.3.0` can be used:
+
+| Name                | Description                                                    | Cargo flag              |
+| ------------------- | -------------------------------------------------------------- | ----------------------- |
+| `magical_dyn`       | Unlock lvl 3 with file dection with infinite rules at run time | `magical_dyn`           |
+| `magical_async_dyn` | Has all the features of level 3 but supports asynchronous      | `magical_async_dyn`     |
+| `no_std`            | Used in non-std environments like kernel, emebedded            | `--no-default-features` |

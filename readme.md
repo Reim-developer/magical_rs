@@ -1,6 +1,6 @@
 # magical_rs
 
-**A zero-dependency, no_std-friendly Rust crate that detects file types with surgical precision by matching magic bytes at exact offsets — including deep-offset formats like ISO and TAR. Built for speed, safety, and extensibility.**
+**One of the best frameworks in the Rust ecosystem for file recognition, advanced customization, in every context from synchronous to asynchronous. Supports running in the most minimal environments. No dependencies, no limitations.**
 
 ---
 

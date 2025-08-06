@@ -138,6 +138,12 @@
 //!  And if you really know what you're doing, congratulations!
 //!  You have one of the most powerful file recognition systems in the Rust ecosystem.
 //!
+//!* You need run this command bellow to enable the feature:
+//!
+//!```bash
+//! cargo add --features magical_async_dyn
+//! ```
+//!
 //!* Don't blame me and other maintainers for your ignorance if
 //!  something bad happends because I warned you in advance.
 //!

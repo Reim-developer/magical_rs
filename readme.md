@@ -134,6 +134,11 @@
 * Here you can design file detection rules with any logic no matter how complex in asynchronous environment. There are no specific limitations other than your own skill level. Only use it when you know what you're doing, and only use it when you really need to identify files in an asynchronous environment. If you are new to Rust or unsure, stop here and just use level 2 below. You're not as good as you think. Unless you really understand what the hell you're doing. And if you really know what you're doing, congratulations! You have one of the most powerful file recognition systems in the Rust ecosystem.
 * Don't blame me and other maintainers for your ignorance if something bad happends because I warned you in advance.
 
+* You need run this command bellow enable the feature:
+* ```bash
+  cargo add magical_rs --features magical_async_dyn
+  ```
+
 * Examples:
 * ```rust
   use async_std::task;

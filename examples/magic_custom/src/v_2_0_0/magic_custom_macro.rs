@@ -32,7 +32,7 @@ fn is_not_shoujo(bytes: &[u8]) -> bool {
 */
 pub fn magic_custom_any() {
     let rule = magic_custom! (
-        signatures: [b""],
+        signatures: [],
         offsets: [0],
         max_bytes_read: 2451,
         kind: FileKind::Shoujo,
@@ -55,7 +55,7 @@ pub fn magic_custom_any() {
 */
 pub fn magic_custom_all() {
     let rule = magic_custom! (
-        signatures: [b"Magic!"],
+        signatures: [],
         offsets: [0],
         max_bytes_read: 2451,
         kind: FileKind::Shoujo,

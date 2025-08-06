@@ -237,10 +237,7 @@
 #![deny(clippy::pedantic, clippy::all, clippy::nursery, clippy::perf)]
 #![cfg_attr(not(feature = "std"), no_std)]
 
-#[cfg(feature = "magical_dyn")]
-extern crate std;
-
-#[cfg(feature = "magical_async_dyn")]
+#[cfg(any(feature = "magical_dyn", feature = "magical_async_dyn"))]
 extern crate std;
 
 pub mod magical {

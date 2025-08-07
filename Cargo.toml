@@ -22,5 +22,6 @@ default = ["std"]
 std = []
 magical_dyn = []
 magical_async_dyn = []
+unsafe_context = []
 
 [dependencies]

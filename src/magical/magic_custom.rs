@@ -57,15 +57,29 @@ pub enum CustomMatchRules<'a> {
     /// assert_eq!(result, FileKind::Png);
     /// assert_ne!(result, FileKind::Unknown);
     /// ```
+    ///
+    /// ---
+    ///
+    /// # No Standard Library Context:
+    /// Basically, [`CustomMatchRules::Default`] supports `no_std` context.
+    ///
+    /// It only requires at least Rust's [`core`].
     Default,
+
+    /// # Safety:
     /// With a single function.
     /// You can use it to check any condition as long as it
     /// returns a boolean. The result will be the basic for
     /// checking if the byte matches the rule.
     ///
-    /// Macros with sugar syntax: [`macro@crate::with_fn_matches`]
+    /// However, it is limited to a single function and the logic is `OR` by default.
     ///
-    /// # Examples
+    /// Therefore, it is not suitable for strict rules or many combinations. It
+    /// should not be used if the rule is too strict or many conditions are interwined.
+    ///
+    /// ---
+    ///
+    /// # Examples:
     /// ```rust
     /// use magical_rs::magical::magic_custom::{MagicCustom, match_types_custom};
     /// use magical_rs::with_fn_matches;
@@ -94,7 +108,23 @@ pub enum CustomMatchRules<'a> {
     /// assert_eq!(result, ShoujuFile::MahouShouju);
     /// assert_ne!(result, ShoujuFile::Unknown);
     /// ```
+    ///
+    /// ---
+    ///
+    /// # Macros:
+    /// Macros with sugar syntax: [`with_fn_matches`]
+    ///
+    /// [`with_fn_matches`]: https://docs.rs/magical_rs/0.3.1/magical_rs/macro.with_fn_matches.html
+    ///
+    /// ---
+    ///
+    /// # No Standard Library Context:
+    /// Basically, [`CustomMatchRules::WithFn`] supports `no_std` context.
+    ///
+    /// It only requires at least Rust's [`core`].
     WithFn(fn(bytes: &[u8]) -> bool),
+
+    /// # Safety:
     /// For the purpose of using more than one function,
     /// with `OR` comparison type, this will be what you
     /// need.
@@ -102,10 +132,15 @@ pub enum CustomMatchRules<'a> {
     /// It's like [`CustomMatchRules::WithFn`], but can be
     /// used with multipe functions returning bool.
     /// Just one function that returns `true`, is enough.
-    ///
     /// So, use it when you want to relax the file recognition rules.
     ///
-    /// Macros with sugar syntax: [`macro@crate::any_matches`]
+    /// However, remember that even if you add `1000` rule functions, as long
+    /// as just one of them is passed. Implicitly returning true, then of course
+    /// the file will be recognized as the `Kind` you defined. It can create security
+    /// risks in systems that require very high levels of identification and security.
+    /// So, if you require a stricter rule, use [`CustomMatchRules::AllMatches`].
+    ///
+    /// ---
     ///     
     /// # Examples
     /// ```
@@ -144,7 +179,21 @@ pub enum CustomMatchRules<'a> {
     /// assert_eq!(result, CuteGirlKind::ShoujoFile);
     /// assert_ne!(result, CuteGirlKind::UnknownFallback);
     /// ```
+    /// ---
+    ///
+    /// # Macros:
+    /// Macros with sugar syntax: [`any_matches`]
+    ///
+    /// [`any_matches`]: https://docs.rs/magical_rs/latest/magical_rs/macro.any_matches.html
+    ///
+    /// ---
+    /// # No Standard Library Context:
+    /// Basically, [`CustomMatchRules::AnyMatches`] supports `no_std` context.
+    ///
+    /// It only requires at least Rust's [`core`].
     AnyMatches(&'a [fn(bytes: &[u8]) -> bool]),
+
+    /// # Safety:
     /// This way you will be able to define multipe functions with rules.
     ///
     /// However, all functions must be passed. Otherwise false will be returned.
@@ -153,9 +202,13 @@ pub enum CustomMatchRules<'a> {
     ///
     /// Corresponds to the `AND` comparison type.
     ///
-    /// Macros with sugar syntax: [`macro@crate::all_matches`]
+    /// That is, if you need a very strict rule that guarantees that everything must pass,
+    /// implicitly returning true, then use it. It doesn't make sense if you only need to check
+    /// simple conditions, and may cause undefined beavior if used in the wrong context.
     ///
-    /// # Examples
+    /// ---
+    ///
+    /// # Examples:
     /// ```
     /// use magical_rs::all_matches;
     /// use magical_rs::magic_custom;
@@ -191,8 +244,125 @@ pub enum CustomMatchRules<'a> {
     ///
     /// assert_eq!(result, CuteGirlKind::UnknownFallback);
     /// assert_ne!(result, CuteGirlKind::ShoujoFile);
+    ///
     /// ```
+    ///
+    /// ---
+    ///
+    /// # Macros:
+    /// Macros with sugar syntax: [`all_matches`]
+    ///
+    /// [`all_matches`]: https://docs.rs/magical_rs/latest/magical_rs/macro.all_matches.html
+    ///
+    /// ---
+    ///
+    /// # No Standard Library Context:
+    /// Basically, [`CustomMatchRules::AllMatches`] supports `no_std` context.
+    ///
+    /// It only requires at least Rust's [`core`].
     AllMatches(&'a [fn(bytes: &[u8]) -> bool]),
+
+    /// # Safety:
+    /// Here, you can use raw pointers. There are no restrictions.
+    ///
+    /// You will need to make sure the length of data is correct.
+    ///
+    /// Too much will cause overhead, to litle will cause undefined
+    /// beavior.
+    ///
+    /// Worse, it can cause your program to crash irreversibly, or
+    /// cause serious erros such as segmentation faults, buffer overflows,
+    /// or memory overwrites.
+    ///
+    /// Only use this if you case requires very high
+    /// performance, or in environments like kernel, embeded, or you want
+    /// handle very specific file types, maybe very large file over 100 GiB,
+    /// then this will be a very good choice.
+    ///
+    /// However, you will also have trade off the inherent memory safety of Rust.
+    ///
+    /// So, use it with caution.
+    ///
+    /// ---
+    ///
+    /// # Usable Version:
+    /// You can use [`CustomMatchRules::WithFnUnsafe`] from version `0.4.0` onwards.
+    ///
+    /// ---
+    ///
+    /// # Feature Flag:
+    /// To be safe and make sure you know what you are doing, you need to use the feature flag:
+    ///
+    /// ```bash
+    /// cargo add magical_rs --features unsafe_context
+    /// ```
+    /// By default, this feature is disabled and not compiled.
+    ///
+    /// ---
+    ///
+    /// # Examples:
+    ///```rust
+    /// use core::slice;
+    /// use magical_rs::magical::magic_custom::match_types_custom;
+    /// use magical_rs::magical::magic_custom::{CustomMatchRules, MagicCustom};
+    ///
+    /// fn is_magic_file() {
+    ///     #[derive(Clone, Copy, PartialEq, Eq, Debug)]
+    ///     enum MagicKind {
+    ///         MoeMoe,
+    ///         UnknownFallback,
+    ///     }
+    ///
+    ///     fn is_shoujo_girl(data: *const ()) -> bool {
+    ///         unsafe {
+    ///             let slice_ptr = data.cast::<u8>();
+    ///             let slice = slice::from_raw_parts(slice_ptr, 100);
+    ///
+    ///             slice.starts_with(b"MagicalGirl")
+    ///         }
+    ///     }
+    ///
+    ///     let rules: &[MagicCustom<MagicKind>] = &[MagicCustom {
+    ///         signatures: &[],
+    ///         offsets: &[],
+    ///         max_bytes_read: 200,
+    ///         kind: MagicKind::MoeMoe,
+    ///         rules: CustomMatchRules::WithFnUnsafe {
+    ///             func: is_shoujo_girl,
+    ///         },
+    ///     }];
+    ///
+    ///     let result = match_types_custom(b"MagicalGirl", rules, MagicKind::UnknownFallback);
+    ///
+    ///     assert_eq!(result, MagicKind::MoeMoe);
+    ///     assert_ne!(result, MagicKind::UnknownFallback);
+    /// }
+    /// ```
+    ///
+    /// ---
+    ///
+    /// # No Standard Library Context:
+    /// Basically, [`CustomMatchRules::WithFnUnsafe`] supports `no_std` context.
+    ///
+    /// It only requires at least Rust's [`core`].
+    ///
+    /// You can also skip using [`core`] if you don't use [`core::slice`].
+    ///
+    /// The above sample uses [`core`] and [`core::slice`] as an assumption of minimal
+    /// environments like kernel, embedded.
+    ///
+    /// ---
+    ///
+    /// # Macros:
+    /// We will not and do not intend to create macros for this context.
+    ///
+    /// Macros would undermine the reliability of the type system, which is
+    /// already fragile in `unsafe`. So not using macros, even if supported, is
+    /// always encouraged.
+    #[cfg(feature = "unsafe_context")]
+    WithFnUnsafe {
+        func: unsafe fn(ptr_data: *const ()) -> bool,
+    },
 }
 
 #[derive(Clone, Copy)]
@@ -233,6 +403,23 @@ impl<K: Clone> MagicCustom<'_, K> {
             CustomMatchRules::WithFn(func) => func(bytes),
             CustomMatchRules::AnyMatches(funcs) => funcs.iter().any(|&func| func(bytes)),
             CustomMatchRules::AllMatches(funcs) => funcs.iter().all(|&func| func(bytes)),
+
+            #[cfg(feature = "unsafe_context")]
+            CustomMatchRules::WithFnUnsafe { func, .. } => {
+                #[must_use]
+                #[inline]
+                const fn __from_ref<T: ?Sized>(r: &T) -> *const T {
+                    r
+                }
+                /*
+                 * This is a minimal type conversion.
+                 * You have full control over every byte.
+                 * Be careful.
+                 */
+                let raw = __from_ref::<[u8]>(bytes).cast::<()>();
+
+                unsafe { func(raw) }
+            }
         }
     }
 }

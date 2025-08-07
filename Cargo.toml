@@ -1,10 +1,7 @@
 [package]
 name = "magical_rs"
-description = """One of the best frameworks in the Rust ecosystem for 
-file recognition, advanced customization, 
-in every context from synchronous to asynchronous. 
-Supports running in the most minimal environments. No dependencies, no limitations."""
-version = "0.3.1"
+description = """Rust framework for file recognition, aiming for high extensibility and customization."""
+version = "0.4.0"
 edition = "2024"
 license = "GPL-3.0-or-later"
 keywords = ["detect-file", "no-dependency", "no-std", "magic", "rlib"]

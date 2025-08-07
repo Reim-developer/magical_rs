@@ -1,6 +1,6 @@
 # magical_rs
 
-**One of the best frameworks in the Rust ecosystem for file recognition, advanced customization, in every context from synchronous to asynchronous. Supports running in the most minimal environments. No dependencies, no limitations.**
+**Rust framework for file recognition, aiming for high extensibility and customization.**
 
 ---
 
@@ -170,6 +170,64 @@
   ```
 
 * There are many instructions that can be found at [here](examples/async_dyn_magic)
+
+---
+
+**Level 5, Freely control byte-to-byte, register-by-register, binary files, and more:**
+* Here you will be using raw pointer. There are no limits. You can read a 100 `GiB` file or use any crazy technique.
+* However, this is a level only for cases where you really need performance, in a kernel, embedded, or super constrained environment with 64 `KiB` RAM. It would pointless and dangerous to use level 5 to read a `PNG` file.
+  
+* To enable the feature, run this following command:
+* ```bash
+  cargo add magical_rs --features unsafe_context
+  ```
+
+* Examples:
+* ```rust
+  use core::slice;
+  use magical_rs::magical::magic_custom::match_types_custom;
+  use magical_rs::magical::magic_custom::{CustomMatchRules, MagicCustom};
+
+  #[derive(Clone, Copy, PartialEq, Eq, Debug)]
+  enum MagicKind {
+      MoeMoe,
+      UnknownFallback,
+  }
+
+  fn is_shoujo_girl(data: *const ()) -> bool {
+      unsafe {
+          let slice_ptr = data.cast::<u8>();
+
+          let slice_len: usize = 100;
+          let slice = slice::from_raw_parts(slice_ptr, slice_len);
+
+          assert_ne!(slice.len(), slice_len + 1);
+          assert_eq!(slice.len(), 100);
+          assert!(!slice.is_empty());
+          assert!(slice.starts_with(b"MagicalGirl"));
+
+          slice.starts_with(b"MagicalGirl")
+      }
+  }
+
+  let rules: &[MagicCustom<MagicKind>] = &[MagicCustom {
+      signatures: &[],
+      offsets: &[],
+      max_bytes_read: 200,
+      kind: MagicKind::MoeMoe,
+      rules: CustomMatchRules::WithFnUnsafe {
+          func: is_shoujo_girl,
+      },
+  }];
+
+  let my_bytes = b"MagicalGirl";
+  let result = match_types_custom(my_bytes, rules, MagicKind::UnknownFallback);
+
+  assert_eq!(result, MagicKind::MoeMoe);
+  assert_ne!(result, MagicKind::UnknownFallback);
+  println!("{result:?}");
+  ```
+* More examples can be found in [`examples`](examples/unsafe_context).
 
 ---
 

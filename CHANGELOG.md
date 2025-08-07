@@ -5,6 +5,7 @@
   - [Version: 0.2.1:](#version-021)
   - [Version: 0.3.0:](#version-030)
   - [Version: 0.3.1, `Minor edits`](#version-031-minor-edits)
+  - [Version: 0.4.0 `Major API Update`](#version-040-major-api-update)
 
 
 ## Version: 0.1.3
@@ -89,4 +90,20 @@ cargo add magical_rs --features magical_async_dyn
 * Minor edit in [`Cargo.toml`](Cargo.toml), added category slug `asynchronous`
 * Edited some keywords related to the framework in [`Cargo.toml`](Cargo.toml)
 * Changed the description of the framework to better identify it's purpose
-* 
+
+
+## Version: 0.4.0 `Major API Update`
+**What has been changed:**
+* Added feature flag `unsafe_context` to [`Cargo.toml`](Cargo.toml)
+* Release new features included in the module `magic_custom` is `WithUnsafeFn`
+  - Test can be found at: [`here`](tests/unsafe.rs).
+  - Documentation and instructions, security warnings have also added for `magic_custom` module.
+  - This unsafe feature is only compiled and used when the `unsafe_context` flag is explicitly enabled via `Cargo`:
+    ```bash
+    cargo add magical_rs --features unsafe_context
+    ```
+  - This version also adds more documentation and warnings for features like `Default`, `WithFn`.
+  - However, `no_std` support is still absolutely guaranteed.
+  - Edited [`Makefile`](Makefile) rules, allowing testing with `unsafe_context` feature
+  - Added example for using `unsafe_context` [`here`](examples/unsafe_context) and [`readme.md`](readme.md)
+  - We do a plan to add bindings to Python. However, we can't show them yet. So, the `bindings` folder will be ignored by Git for now. [`.gitignore`](.gitignore)

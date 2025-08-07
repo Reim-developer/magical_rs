@@ -14,3 +14,6 @@ linter:
 
 test-dyn:
 	@cargo test --features magical_dyn
+
+test-unsafe:
+	@cargo test --features unsafe_context

@@ -6,6 +6,7 @@
   - [Version: 0.3.0:](#version-030)
   - [Version: 0.3.1, `Minor edits`](#version-031-minor-edits)
   - [Version: 0.4.0 `Major API Update`](#version-040-major-api-update)
+  - [Version: 0.4.5 `Major API Update`](#version-045-major-api-update)
 
 
 ## Version: 0.1.3
@@ -107,3 +108,101 @@ cargo add magical_rs --features magical_async_dyn
   - Edited [`Makefile`](Makefile) rules, allowing testing with `unsafe_context` feature
   - Added example for using `unsafe_context` [`here`](examples/unsafe_context) and [`readme.md`](readme.md)
   - We do a plan to add bindings to Python. However, we can't show them yet. So, the `bindings` folder will be ignored by Git for now. [`.gitignore`](.gitignore)
+
+## Version: 0.4.5 `Major API Update`
+**What has been changed:**
+* Added support for multiple unsafe function pointers. It will be disabled by default.
+  - Only usable if feature flag is explicitly used by Cargo:
+  - ```bash
+    cargo add magical_rs --features unsafe_context
+    ```
+  - These new features will not affect `no_std`, and will still be supported.
+  - Added testing for the above features. Can be found at [`test`](tests/unsafe.rs)
+  - Samples for the above features:
+  - `AllMatchesUnsafe`:
+  - ```rust
+    use core::slice;
+    use magical_rs::magical::magic_custom::match_types_custom;
+    use magical_rs::magical::magic_custom::{CustomMatchRules, MagicCustom};
+
+    #[derive(Clone, Copy, PartialEq, Eq, Debug)]
+    enum MagicKind {
+        MoeMoe,
+        UnknownFallback,
+    }
+
+    fn is_shoujo_girl(data: *const ()) -> bool {
+        unsafe {
+            let slice_ptr = data.cast::<u8>();
+            let slice = slice::from_raw_parts(slice_ptr, 100);
+
+            slice.starts_with(b"MagicalGirl")
+        }
+    }
+
+    fn is_not_shoujo_girl(data: *const ()) -> bool {
+        unsafe {
+            let slice_ptr = data.cast::<u8>();
+            let slice = slice::from_raw_parts(slice_ptr, 100);
+
+            !slice.starts_with(b"MagicalGirl")
+        }
+    }
+
+    let rules: &[MagicCustom<MagicKind>] = &[MagicCustom {
+        signatures: &[],
+        offsets: &[],
+        max_bytes_read: 200,
+        kind: MagicKind::MoeMoe,
+        rules: CustomMatchRules::AllMatchesUnsafe(&[is_shoujo_girl, is_not_shoujo_girl]),
+    }];
+
+    let result = match_types_custom(b"MagicalGirl", rules, MagicKind::UnknownFallback);
+
+    assert_ne!(result, MagicKind::MoeMoe);
+    assert_eq!(result, MagicKind::UnknownFallback);
+    ```
+  - `AnyMatchesUnsafe`:
+  - ```rust
+    use core::slice;
+    use magical_rs::magical::magic_custom::match_types_custom;
+    use magical_rs::magical::magic_custom::{CustomMatchRules, MagicCustom};
+
+    #[derive(Clone, Copy, PartialEq, Eq, Debug)]
+    enum MagicKind {
+        MoeMoe,
+        UnknownFallback,
+    }
+
+    fn is_shoujo_girl(data: *const ()) -> bool {
+        unsafe {
+            let slice_ptr = data.cast::<u8>();
+            let slice = slice::from_raw_parts(slice_ptr, 100);
+
+            slice.starts_with(b"MagicalGirl")
+        }
+    }
+
+    fn is_not_shoujo_girl(data: *const ()) -> bool {
+        unsafe {
+            let slice_ptr = data.cast::<u8>();
+            let slice = slice::from_raw_parts(slice_ptr, 100);
+
+            !slice.starts_with(b"MagicalGirl")
+        }
+    }
+
+    let rules: &[MagicCustom<MagicKind>] = &[MagicCustom {
+        signatures: &[],
+        offsets: &[],
+        max_bytes_read: 200,
+        kind: MagicKind::MoeMoe,
+        rules: CustomMatchRules::AnyMatchesUnsafe(&[is_shoujo_girl, is_not_shoujo_girl]),
+    }];
+
+    let result = match_types_custom(b"MagicalGirl", rules, MagicKind::UnknownFallback);
+
+    assert_eq!(result, MagicKind::MoeMoe);
+    assert_ne!(result, MagicKind::UnknownFallback);
+    ```
+  

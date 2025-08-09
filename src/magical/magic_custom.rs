@@ -363,6 +363,194 @@ pub enum CustomMatchRules<'a> {
     WithFnUnsafe {
         func: unsafe fn(ptr_data: *const ()) -> bool,
     },
+
+    /// # Safety:
+    ///
+    /// Similar to [`CustomMatchRules::AnyMatches`] but supports `unsafe`
+    ///
+    /// Here, you can pass in multiple unsafe function pointers.
+    ///
+    /// However, these functions will work on `OR` logic, so only one
+    /// function returning `true` is needed.
+    ///
+    /// Since it's operating in an `unsafe` context, you need to control
+    /// everything and there are no constraints or protections from the
+    /// Rust compiler.
+    ///
+    /// It can cause segmentation faults, memory leaks, or worse
+    /// undefined beavior.
+    ///
+    /// Becareful and use them when you need to combine multiple unsafe function
+    /// pointers.
+    ///
+    /// Note that the rules for using `OR` logic can be very loose if you're not
+    /// careful. If stricter rules are needed, use [`CustomMatchRules::AllMatchesUnsafe`],
+    /// or use [`CustomMatchRules::AllMatches`] if you don't need unsafe.
+    ///
+    /// ---
+    ///
+    /// # Feature Flag:
+    /// To be safe and make sure you know what you are doing, you need to use the feature flag:
+    ///
+    /// ```bash
+    /// cargo add magical_rs --features unsafe_context
+    /// ```
+    /// By default, this feature is disabled and not compiled.
+    ///
+    /// ---
+    ///
+    /// # Examples:
+    /// ```rust
+    /// fn any_unsafe_fn() {
+    ///     use core::slice;
+    ///     use magical_rs::magical::magic_custom::match_types_custom;
+    ///     use magical_rs::magical::magic_custom::{CustomMatchRules, MagicCustom};
+    ///
+    ///     #[derive(Clone, Copy, PartialEq, Eq, Debug)]
+    ///     enum MagicKind {
+    ///         MoeMoe,
+    ///         UnknownFallback,
+    ///     }
+    ///
+    ///     fn is_shoujo_girl(data: *const ()) -> bool {
+    ///         unsafe {
+    ///             let slice_ptr = data.cast::<u8>();
+    ///             let slice = slice::from_raw_parts(slice_ptr, 100);
+    ///
+    ///             slice.starts_with(b"MagicalGirl")
+    ///         }
+    ///     }
+    ///
+    ///     fn is_not_shoujo_girl(data: *const ()) -> bool {
+    ///         unsafe {
+    ///             let slice_ptr = data.cast::<u8>();
+    ///             let slice = slice::from_raw_parts(slice_ptr, 100);
+    ///
+    ///             !slice.starts_with(b"MagicalGirl")
+    ///         }
+    ///     }
+    ///
+    ///     let rules: &[MagicCustom<MagicKind>] = &[MagicCustom {
+    ///         signatures: &[],
+    ///         offsets: &[],
+    ///         max_bytes_read: 200,
+    ///         kind: MagicKind::MoeMoe,
+    ///         rules: CustomMatchRules::AnyMatchesUnsafe(
+    ///                 &[is_shoujo_girl, is_not_shoujo_girl]),
+    ///     }];
+    ///
+    ///     let result = match_types_custom(b"MagicalGirl", rules, MagicKind::UnknownFallback);
+    ///
+    ///     assert_eq!(result, MagicKind::MoeMoe);
+    ///     assert_ne!(result, MagicKind::UnknownFallback);
+    /// }
+    /// ```
+    ///
+    /// ---
+    ///
+    /// # Unsafe Context:
+    /// Basically, [`CustomMatchRules::AnyMatchesUnsafe`] supports `no_std` context.
+    ///
+    /// It only requires at least Rust's [`core`].
+    ///
+    /// You can also skip using [`core`] if you don't use [`core::slice`].
+    ///
+    /// The above sample uses [`core`] and [`core::slice`] as an assumption of minimal
+    /// environments like kernel, embedded.
+    #[cfg(feature = "unsafe_context")]
+    AnyMatchesUnsafe(&'a [unsafe fn(ptr_data: *const ()) -> bool]),
+
+    /// # Safety:
+    ///
+    /// Similar to [`CustomMatchRules::AllMatches`] but supports `unsafe`
+    ///
+    /// Here, you can pass in multiple unsafe function pointers.
+    ///
+    /// However, these functions will work on `AND` logic, so all
+    /// functions returning `true` is needed.
+    ///
+    /// Since it's operating in an `unsafe` context, you need to control
+    /// everything and there are no constraints or protections from the
+    /// Rust compiler.
+    ///
+    /// It can cause segmentation faults, memory leaks, or worse
+    /// undefined beavior.
+    ///
+    /// Becareful and use them when you need to combine multiple unsafe function
+    /// pointers.
+    ///
+    /// ---
+    ///
+    /// # Feature Flag:
+    /// To be safe and make sure you know what you are doing, you need to use the feature flag:
+    ///
+    /// ```bash
+    /// cargo add magical_rs --features unsafe_context
+    /// ```
+    /// By default, this feature is disabled and not compiled.
+    ///
+    /// ---
+    ///
+    /// # Examples:
+    /// ```rust
+    /// fn any_unsafe_fn() {
+    ///     use core::slice;
+    ///     use magical_rs::magical::magic_custom::match_types_custom;
+    ///     use magical_rs::magical::magic_custom::{CustomMatchRules, MagicCustom};
+    ///
+    ///     #[derive(Clone, Copy, PartialEq, Eq, Debug)]
+    ///     enum MagicKind {
+    ///         MoeMoe,
+    ///         UnknownFallback,
+    ///     }
+    ///
+    ///     fn is_shoujo_girl(data: *const ()) -> bool {
+    ///         unsafe {
+    ///             let slice_ptr = data.cast::<u8>();
+    ///             let slice = slice::from_raw_parts(slice_ptr, 100);
+    ///
+    ///             slice.starts_with(b"MagicalGirl")
+    ///         }
+    ///     }
+    ///
+    ///     fn is_not_shoujo_girl(data: *const ()) -> bool {
+    ///         unsafe {
+    ///             let slice_ptr = data.cast::<u8>();
+    ///             let slice = slice::from_raw_parts(slice_ptr, 100);
+    ///
+    ///             !slice.starts_with(b"MagicalGirl")
+    ///         }
+    ///     }
+    ///
+    ///     let rules: &[MagicCustom<MagicKind>] = &[MagicCustom {
+    ///         signatures: &[],
+    ///         offsets: &[],
+    ///         max_bytes_read: 200,
+    ///         kind: MagicKind::MoeMoe,
+    ///         rules: CustomMatchRules::AllMatchesUnsafe(
+    ///                 &[is_shoujo_girl, is_not_shoujo_girl]),
+    ///     }];
+    ///
+    ///     let result = match_types_custom(b"MagicalGirl", rules, MagicKind::UnknownFallback);
+    ///
+    ///     assert_ne!(result, MagicKind::MoeMoe);
+    ///     assert_eq!(result, MagicKind::UnknownFallback);
+    /// }
+    /// ```
+    ///
+    /// ---
+    ///
+    /// # Unsafe Context:
+    /// Basically, [`CustomMatchRules::AllMatchesUnsafe`] supports `no_std` context.
+    ///
+    /// It only requires at least Rust's [`core`].
+    ///
+    /// You can also skip using [`core`] if you don't use [`core::slice`].
+    ///
+    /// The above sample uses [`core`] and [`core::slice`] as an assumption of minimal
+    /// environments like kernel, embedded.
+    #[cfg(feature = "unsafe_context")]
+    AllMatchesUnsafe(&'a [unsafe fn(ptr_data: *const ()) -> bool]),
 }
 
 #[derive(Clone, Copy)]
@@ -387,6 +575,14 @@ pub struct MagicCustom<'a, K> {
     pub rules: CustomMatchRules<'a>,
 }
 
+#[must_use]
+#[inline]
+#[doc(hidden)]
+#[cfg(feature = "unsafe_context")]
+const fn __from_ref<T: ?Sized>(r: &T) -> *const T {
+    r
+}
+
 impl<K: Clone> MagicCustom<'_, K> {
     #[must_use]
     #[inline]
@@ -406,11 +602,6 @@ impl<K: Clone> MagicCustom<'_, K> {
 
             #[cfg(feature = "unsafe_context")]
             CustomMatchRules::WithFnUnsafe { func, .. } => {
-                #[must_use]
-                #[inline]
-                const fn __from_ref<T: ?Sized>(r: &T) -> *const T {
-                    r
-                }
                 /*
                  * This is a minimal type conversion.
                  * You have full control over every byte.
@@ -420,6 +611,28 @@ impl<K: Clone> MagicCustom<'_, K> {
 
                 unsafe { func(raw) }
             }
+            #[cfg(feature = "unsafe_context")]
+            CustomMatchRules::AnyMatchesUnsafe(funcs) => funcs.iter().any(|&func| {
+                /*
+                 * This is a minimal type conversion.
+                 * You have full control over every byte.
+                 * Be careful.
+                 */
+                let raw = __from_ref::<[u8]>(bytes).cast::<()>();
+
+                unsafe { func(raw) }
+            }),
+            #[cfg(feature = "unsafe_context")]
+            CustomMatchRules::AllMatchesUnsafe(funcs) => funcs.iter().all(|&func| {
+                /*
+                 * This is a minimal type conversion.
+                 * You have full control over every byte.
+                 * Be careful.
+                 */
+                let raw = __from_ref::<[u8]>(bytes).cast::<()>();
+
+                unsafe { func(raw) }
+            }),
         }
     }
 }

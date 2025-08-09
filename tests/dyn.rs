@@ -42,7 +42,7 @@ fn test_match_dyn_types_all() {
 
     let types: Vec<&str> = matches
         .iter()
-        .map(|any| any.downcast_ref::<&str>().unwrap())
+        .map(|any| (**any).downcast_ref::<&str>().unwrap())
         .copied()
         .collect();
 

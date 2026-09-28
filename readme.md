@@ -1,335 +1,489 @@
-# magical_rs
+# `magical_rs`
 
-**Rust framework for file recognition, aiming for high extensibility and customization.**
+Zero-dependency file type detection for Rust, with a customization layer that
+stays out of your way until you need it.
 
----
+`magical_rs` identifies files by their magic bytes. It has **no dependencies at
+all** — not one — and it compiles for `no_std` targets, so it works in
+embedded, kernel-adjacent, and WebAssembly builds where most detection crates
+cannot go.
 
-## Table of Contents:
-- [magical\_rs](#magical_rs)
-  - [Table of Contents:](#table-of-contents)
-  - [Level of use](#level-of-use)
-  - [Supported File Types](#supported-file-types)
-  - [License](#license)
+```toml
+[dependencies]
+magical_rs = "0.6"
+```
 
----
+## Quick start
 
-## Level of use
+```rust,no_run
+use magical_rs::magical::bytes_read::{read_file_header, with_bytes_read};
+use magical_rs::magical::magic::FileKind;
 
-**Level 1, uses built-in file detection via signature:**
-* At this level, you will use the `magical_rs` built-in API, which supports detecting ~50 file types via signatures.
-* List of currently supported file types [here](#supported-file-types)
-* By the way, you can contribute new file signatures [here](https://github.com/Reim-developer/magical_rs/pulls)
+fn main() -> Result<(), std::io::Error> {
+    let header = read_file_header("photo.png", with_bytes_read())?;
 
-* Examples:
-* ```rust
-    use magical_rs::magical::bytes_read::{read_file_header, with_bytes_read};
-    use magical_rs::magical::magic::FileKind;
-
-    let max_byte_read = with_bytes_read();
-
-    let bytes = read_file_header("img/2.iso", max_byte_read).unwrap();
-
-    match FileKind::match_types(&bytes) {
-        Some(k) => println!("{k:?}"),
-        None => println!("Could not detect ISO file."),
+    match FileKind::match_types(&header) {
+        Some(kind) => println!("{kind:?}"),
+        None => println!("unrecognized file type"),
     }
-  ```
-* More examples of level 1 can be found [here](https://github.com/Reim-developer/magical_rs/tree/master/examples/dyn_magic)
 
----
+    Ok(())
+}
+```
 
-**Level 2, untilimited compiler-time customization with infinite function pointers:**
-* At this level, you can customize file signatures, offsets, and more.
+## Why it might fit your project
 
-* Here, you can also use function pointers for complex logic. In theory, you can do almost anything at compiler-time. And thanks to that, you can detect any file type you want.
+**Zero dependencies.** The `Cargo.toml` dependency list is empty. Nothing to
+audit, nothing to keep up to date, no version conflicts in your tree.
 
-* Also, supports the use of infinite function pointers at once. And function pointers have macros with syntax-sugar supports at well.
+**`no_std` support.** Levels 1 and 2 build for bare-metal targets. Verified
+against `thumbv7em-none-eabi`.
 
-* Examples:
-* ```rust
-  use magical_rs::{any_matches, magic_custom, match_custom};
+**Detection is just bytes in, enum out.** `FileKind::match_types` takes a
+`&[u8]` and returns `Option<FileKind>`. There is no handle, no session, no async
+runtime requirement. First match wins, so it is allocation-free and
+predictable.
 
-  #[derive(Clone, Copy, PartialEq, Eq, Debug)]
-  enum FileKind {
-    Shoujo,
-    UnknownFallback,
-  }
+**Custom rules compile-time or runtime, your choice.** Fixed signatures at
+compile time, or closures that decide at runtime. See the levels below.
 
-  fn is_shoujo(bytes: &[u8]) -> bool {
-      bytes.starts_with(b"Magic!")
-  }
+## Two things to know before you rely on it
 
-  fn is_not_shoujo(bytes: &[u8]) -> bool {
-      !bytes.starts_with(b"Magic!")
-  }
+**`with_bytes_read()` returns 36,870 bytes.** ISO 9660 stores its magic at
+offset 36,865, so detecting it requires reading that far into the file. If you
+only care about formats with magic at offset 0, pass a smaller value yourself
+and skip ISO. Do not hardcode `2048` and assume you are done.
 
-  pub fn magic_custom_any() {
-      let rule = magic_custom! (
-          signatures: [],
-          offsets: [0],
-          max_bytes_read: 2451,
-          kind: FileKind::Shoujo,
-          rules: any_matches!(is_shoujo, is_not_shoujo)
-      );
+**Some signatures are still only two bytes.** `Gzip` matches on `1F 8B`,
+`Bitmap` on `BM`, `MSDOS` on `MZ` and `SerializedJavaData` on `AC ED`. Those are
+the values the formats themselves specify, so there is nothing longer to match
+against. It does mean a file beginning with those bytes is reported as that
+type, so treat detection as a strong hint rather than proof, and validate the
+result if a wrong answer would be harmful.
 
-      let result = match_custom! (
-          bytes: b"Magic!",
-          rules: [rule],
-          fallback: FileKind::UnknownFallback
-      );
+Three signatures that were **wrong or far too broad** were tightened in
+`0.6.0`, which is a breaking change:
 
-      assert_eq!(result, FileKind::Shoujo);
-      assert_ne!(result, FileKind::UnknownFallback);
-  }
-  ```
-* There are many ways to implement it, and you can find them [here](https://github.com/Reim-developer/magical_rs/tree/master/examples/magic_custom)
+| Format | Before | Now |
+| --- | --- | --- |
+| `Bzip` | `BZ` | `BZh`, the real bzip2 block header |
+| `ScriptExecute` | `#!` | `#!` plus a path separator on the same line |
+| `Ply` | `ply` | `ply` followed by a line break |
 
+The old `Bzip` rule matched any file starting with the letters `BZ`, and the old
+shebang rule matched any file starting `#!`, which included the `#!AMR` audio
+header. Narrowing the shebang rule is what allowed `Amr` to be added.
 
-**Level 1 & 2 both support `no_std`.**
+## Detection levels
 
----
+Five levels, ordered by how much control you give up. Start at level 1 and move
+down only when you need to.
 
-**Level 3, custom run-time file detection with infinite logic**
-* At this level, you can customize the runtime logic. You can do anything. You can detect any type of file, even if it changes at run-time. You can emit AI, send requests to the Open-AI API, even spawn processes. The only limit is your imagination.
+### Level 1 — built-in signatures
 
-* So, you need to unlock this feature by:
+Uses the built-in table of 114 formats. No configuration.
 
-* ```bash
-  cargo add magical_rs --features magical_dyn
-  ```
+```rust
+use magical_rs::magical::magic::FileKind;
 
-* Examples:
-* ```rust
-  use magical_rs::magical::dyn_magic::DynMagicCustom;
-  
-  fn my_detect_rule() -> impl Fn(&[u8]) -> bool {
-      let require_bytes = b"MagicalGirl";
+let kind = FileKind::match_types(&[0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A]);
+assert_eq!(kind, Some(FileKind::Png));
+```
 
-      |bytes: &[u8]| bytes.starts_with(require_bytes) && bytes.len() == require_bytes.len()
-  }
+Returns `None` when nothing matches. This level and level 2 both support
+`no_std`.
 
-  fn detect_custom_file(file_bytes: &'static [u8]) -> bool {
+### Level 2 — custom rules at compile time
 
-      let detect_fn = my_detect_rule();
-      let rule = DynMagicCustom::new(detect_fn, String::from("Is Mahou Shoujo Detect."), 32);
+Define your own signatures, offsets, and predicates. Predicates are plain
+`fn(&[u8]) -> bool`, so the whole thing is resolved at compile time and works
+under `no_std`.
 
-      let kind = rule.kind_downcast_ref::<String>();
-      
-      match kind {
-          Some(k) => println!("{k}"), /* Is Mahou Shoujo Detect. */
-          None => println!("Kind not found."),
-      }
-      rule.matches(file_bytes)
-  }
+```rust
+use magical_rs::{all_matches, magic_custom, match_custom};
 
-  ```
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+enum Kind {
+    CadFile,
+    Fallback,
+}
 
-* Many examples of use can be found [here](https://github.com/Reim-developer/magical_rs/tree/master/examples/dyn_magic)
+fn is_cad(bytes: &[u8]) -> bool {
+    bytes.starts_with(b"ACAD")
+}
 
-* Warning: Use only if you really know what you are doing.
+fn is_short(bytes: &[u8]) -> bool {
+    bytes.len() <= 4
+}
 
----
+let rule = magic_custom!(
+    signatures: [b"ACAD"],
+    offsets: [0],
+    max_bytes_read: 2048,
+    kind: Kind::CadFile,
+    rules: all_matches!(is_cad, is_short)
+);
 
-**Level 4, Configure, code rules, deploy endlessly and without limits in asynchronous.**
-* Here you can design file detection rules with any logic no matter how complex in asynchronous environment. There are no specific limitations other than your own skill level. Only use it when you know what you're doing, and only use it when you really need to identify files in an asynchronous environment. If you are new to Rust or unsure, stop here and just use level 2 below. You're not as good as you think. Unless you really understand what the hell you're doing. And if you really know what you're doing, congratulations! You have one of the most powerful file recognition systems in the Rust ecosystem.
-* Don't blame me and other maintainers for your ignorance if something bad happends because I warned you in advance.
+let result = match_custom!(bytes: b"ACAD", rules: [rule], fallback: Kind::Fallback);
 
-* You need run this command bellow enable the feature:
-* ```bash
-  cargo add magical_rs --features magical_async_dyn
-  ```
+assert_eq!(result, Kind::CadFile);
+```
 
-* Examples:
-* ```rust
-  use async_std::task;
-  use magical_rs::magical::async_dyn_magic::AsyncDynMagic;
-  use magical_rs::magical::async_dyn_magic::match_dyn_types_as;
-  use std::time::Duration;
+Combine predicates with `all_matches!`, `any_matches!`, or `with_fn_matches!`.
 
-  async fn magic_async_detect() {
-      let func_detect = |bytes: &[u8]| {
-          let owned_bytes = bytes.to_vec();
+### Level 3 — rules decided at runtime
 
-          Box::pin(async move {
-              println!("Rest for 1 second");
+When the rule itself is not known until run time, pass a closure instead.
 
-              task::sleep(Duration::from_millis(1000)).await;
-              owned_bytes.starts_with(b"Magical")
-          })
-      };
+```bash
+cargo add magical_rs --features magical_dyn
+```
 
-      let rule = AsyncDynMagic::new(func_detect, "Magical_File", 128);
-      let rules = vec![rule];
+```rust
+#[cfg(feature = "magical_dyn")]
+use magical_rs::magical::dyn_magic::DynMagicCustom;
 
-      let result = match_dyn_types_as::<&str>(b"Magical", &rules).await;
-      match result {
-          Some(r) => println!("Magical File Detect: {r}"),
-          None => println!("Magical File Not Found"),
-      }
-  }
-  ```
+#[cfg(feature = "magical_dyn")]
+fn example() {
+    let rule = DynMagicCustom::new(
+        |bytes: &[u8]| bytes.starts_with(b"MAGICAL"),
+        String::from("custom format"),
+        32,
+    );
 
-* There are many instructions that can be found at [here](examples/async_dyn_magic)
+    assert!(rule.matches(b"MAGICAL"));
+    assert_eq!(rule.kind_downcast_ref::<String>().unwrap(), "custom format");
+}
+```
 
----
+Unlike the previous levels, this allocates and requires `std`. The matcher must
+be `Send + Sync + 'static`.
 
-**Level 5, Freely control byte-to-byte, register-by-register, binary files, and more:**
-* Here you will be using raw pointer. There are no limits. You can read a 100 `GiB` file or use any crazy technique.
-* However, this is a level only for cases where you really need performance, in a kernel, embedded, or super constrained environment with 64 `KiB` RAM. It would pointless and dangerous to use level 5 to read a `PNG` file.
-  
-* To enable the feature, run this following command:
-* ```bash
-  cargo add magical_rs --features unsafe_context
-  ```
+### Level 4 — asynchronous rules
 
-* Examples:
-* ```rust
-  use core::slice;
-  use magical_rs::magical::magic_custom::match_types_custom;
-  use magical_rs::magical::magic_custom::{CustomMatchRules, MagicCustom};
+For detection that has to await something — a network lookup, a database, a
+service call.
 
-  #[derive(Clone, Copy, PartialEq, Eq, Debug)]
-  enum MagicKind {
-      MoeMoe,
-      UnknownFallback,
-  }
+```bash
+cargo add magical_rs --features magical_async_dyn
+```
 
-  fn is_shoujo_girl(data: *const ()) -> bool {
-      unsafe {
-          let slice_ptr = data.cast::<u8>();
+```rust
+#[cfg(feature = "magical_async_dyn")]
+use magical_rs::magical::async_dyn_magic::{match_dyn_types_as, AsyncDynMagic};
 
-          let slice_len: usize = 100;
-          let slice = slice::from_raw_parts(slice_ptr, slice_len);
+#[cfg(feature = "magical_async_dyn")]
+async fn example() {
+    let rule = AsyncDynMagic::new(
+        |bytes: &[u8]| {
+            // The future must be 'static, so it cannot borrow `bytes`.
+            let owned = bytes.to_vec();
+            async move { owned.starts_with(b"MAGICAL") }
+        },
+        String::from("custom format"),
+        128,
+    );
 
-          assert_ne!(slice.len(), slice_len + 1);
-          assert_eq!(slice.len(), 100);
-          assert!(!slice.is_empty());
-          assert!(slice.starts_with(b"MagicalGirl"));
+    let rules = [rule];
+    let result = match_dyn_types_as::<String>(b"MAGICAL", &rules).await;
+    assert_eq!(result.map(String::as_str), Some("custom format"));
+}
+```
 
-          slice.starts_with(b"MagicalGirl")
-      }
-  }
+`magical_rs` does not depend on any async runtime. The future you return is
+yours to poll on whichever executor you already use.
 
-  let rules: &[MagicCustom<MagicKind>] = &[MagicCustom {
-      signatures: &[],
-      offsets: &[],
-      max_bytes_read: 200,
-      kind: MagicKind::MoeMoe,
-      rules: CustomMatchRules::WithFnUnsafe {
-          func: is_shoujo_girl,
-      },
-  }];
+Two constraints are easy to trip over here. The returned future must be
+`'static`, so it cannot borrow the input slice — copy the bytes you need into
+the async block first. And `match_dyn_types_as::<T>` returns `Option<&T>`, so a
+`&'static str` kind must be downcast as `::<&str>`, which yields
+`Option<&&str>`. Storing owned data in a `String` avoids that double reference.
 
-  let my_bytes = b"MagicalGirl";
-  let result = match_types_custom(my_bytes, rules, MagicKind::UnknownFallback);
+### Level 5 — raw pointers
 
-  assert_eq!(result, MagicKind::MoeMoe);
-  assert_ne!(result, MagicKind::UnknownFallback);
-  println!("{result:?}");
-  ```
-* From version `0.4.5` onwards, you can use multiple unsafe function pointers.
-* Examples:
-* ```rust
-  use core::slice;
-  use magical_rs::magical::magic_custom::match_types_custom;
-  use magical_rs::magical::magic_custom::{CustomMatchRules, MagicCustom};
+The escape hatch for kernel, embedded, or severely memory-constrained builds
+where a `&[u8]` cannot be constructed. This level is `unsafe` by definition, and
+enabling it makes the safety contract yours to uphold.
 
-  #[derive(Clone, Copy, PartialEq, Eq, Debug)]
-  enum MagicKind {
-      MoeMoe,
-      UnknownFallback,
-  }
+```bash
+cargo add magical_rs --features unsafe_context
+```
 
-  fn is_shoujo_girl(data: *const ()) -> bool {
-      unsafe {
-          let slice_ptr = data.cast::<u8>();
-          let slice = slice::from_raw_parts(slice_ptr, 100);
+```rust
+#[cfg(feature = "unsafe_context")]
+fn example() {
+    use core::slice;
+    use magical_rs::magical::magic_custom::{match_types_custom, CustomMatchRules, MagicCustom};
 
-          slice.starts_with(b"MagicalGirl")
-      }
-  }
+    #[derive(Clone, Copy, PartialEq, Eq, Debug)]
+    enum Kind {
+        Matched,
+        Fallback,
+    }
 
-  fn is_not_shoujo_girl(data: *const ()) -> bool {
-      unsafe {
-          let slice_ptr = data.cast::<u8>();
-          let slice = slice::from_raw_parts(slice_ptr, 100);
+    const MAGIC_LEN: usize = 8;
 
-          !slice.starts_with(b"MagicalGirl")
-      }
-  }
+    // The pointer is only valid for the number of bytes the caller
+    // guarantees at the call site.
+    unsafe fn starts_with_marker(ptr_data: *const ()) -> bool {
+        // SAFETY: caller guarantees `ptr_data` is readable for `MAGIC_LEN` bytes.
+        let ptr = ptr_data.cast::<u8>();
+        unsafe { slice::from_raw_parts(ptr, MAGIC_LEN).starts_with(b"MAGICALG") }
+    }
 
-  let rules: &[MagicCustom<MagicKind>] = &[MagicCustom {
-      signatures: &[],
-      offsets: &[],
-      max_bytes_read: 200,
-      kind: MagicKind::MoeMoe,
-      rules: CustomMatchRules::AnyMatchesUnsafe(&[is_shoujo_girl, is_not_shoujo_girl]),
-  }];
+    let rules: &[MagicCustom<Kind>] = &[MagicCustom {
+        signatures: &[],
+        offsets: &[],
+        max_bytes_read: 200,
+        kind: Kind::Matched,
+        rules: CustomMatchRules::AllMatchesUnsafe(&[starts_with_marker]),
+    }];
 
-  let result = match_types_custom(b"MagicalGirl", rules, MagicKind::UnknownFallback);
+    let result = match_types_custom(b"MAGICALG", rules, Kind::Fallback);
+    assert_eq!(result, Kind::Matched);
+}
+```
 
-  assert_eq!(result, MagicKind::MoeMoe);
-  assert_ne!(result, MagicKind::UnknownFallback);
-  ```
+The available predicates are `AllMatchesUnsafe` and `AnyMatchesUnsafe`, each
+taking a slice of `unsafe fn(*const ()) -> bool`. There is no
+`WithFnUnsafe` variant — the single-predicate case uses `AllMatchesUnsafe` with
+one element. Multiple unsafe predicates have been supported since `0.4.5`.
 
-* More examples can be found in [`examples`](examples/unsafe_context).
+## Feature flags
 
----
+| Flag | Default | Effect |
+| --- | --- | --- |
+| `std` | yes | Enables `read_file_header` and filesystem I/O |
+| `magical_dyn` | no | Level 3, runtime rules |
+| `magical_async_dyn` | no | Level 4, async rules |
+| `unsafe_context` | no | Level 5, raw pointer rules |
 
-## Supported File Types
+Building with `--no-default-features` gives a `no_std` library with only levels
+1 and 2 available.
 
-| Format                            | Notes                                                                                                 |
-| --------------------------------- | ----------------------------------------------------------------------------------------------------- |
-| PNG                               | `‰PNG` at offset 0                                                                                    |
-| Bitmap (BMP)                      | `BM` at offset 0                                                                                      |
-| GZIP                              | `1F 8B` at offset 0                                                                                   |
-| BZIP2                             | `BZh` (e.g., `BZh9`) at offset 0                                                                      |
-| ZIP / PkgZip (JAR, APK, etc.)     | `PK` at offset 0                                                                                      |
-| TAR                               | `ustar` at offset 257                                                                                 |
-| MS-DOS Executable (COM/EXE)       | `MZ` at offset 0 (DOS header)                                                                         |
-| JPG / JPEG                        | Start with `ÿØÿ` (`FF D8 FF`)                                                                         |
-| Java Class File                   | `CAFEBABE` at offset 0                                                                                |
-| MP3 (MPEG Audio)                  | Often starts with `ID3` tag or `FF FB` (MPEG-1 Layer 3)                                               |
-| ISO 9660                          | `CD001` at offset 32769, 34817, or 36865                                                              |
-| RPM                               | Binary header after lead; signature in first few hundred bytes                                        |
-| SQLite                            | `SQLite format 3\0` at offset 0                                                                       |
-| XML                               | Text-based: starts with `<?xml` or `<!DOCTYPE`                                                        |
-| ICO (Icon)                        | `00 00 01 00` (icon) or `00 00 02 00` (cursor) at offset 0                                            |
-| WebAssembly (WASM)                | `\0asm` (`00 61 73 6D`) at offset 0                                                                   |
-| DEB (Debian package)              | `!<arch>` at offset 0 (ar archive)                                                                    |
-| RAR                               | `Rar!` (`52 61 72 21 1A 07 00`) at offset 0                                                           |
-| Script / Executable               | Shebang: `#!` at offset 0 (e.g., `#!/bin/sh`)                                                         |
-| ELF (Executable and Linkable)     | `\x7fELF` (`7F 45 4C 46`) at offset 0                                                                 |
-| OGG (Ogg Vorbis, Opus, etc.)      | `OggS` (`4F 67 67 53`) at offset 0                                                                    |
-| Photoshop (8BPS)                  | `8BPS` (`38 42 50 53`) at offset 0                                                                    |
-| Blender (.blend)                  | `BLENDER` followed by version (e.g., `BLENDER-v293`) at offset 0                                      |
-| TrueType Font (TTF)               | `00 01 00 00` or `ttcf` at offset 4                                                                   |
-| OpenType Font (OTF)               | `OTTO` (`4F 54 54 4F`) at offset 4                                                                    |
-| Module (Environment Modules)      | `MODULE\0\0\0` or similar (custom binary format)                                                      |
-| Windows Imaging Format (WIM)      | `MSCF` (`4D 53 43 46`) at offset 0                                                                    |
-| SLOB (StarDict Binary Dictionary) | `SLOB` magic at start                                                                                 |
-| Serialized Java Data              | `AC ED` (`STREAM_MAGIC`) at offset 0                                                                  |
-| Creative Voice File (VOC)         | `Creative Voice File\0` at offset 0                                                                   |
-| AU Audio File Format              | `.snd` header: `2E 73 6E 64` at offset 0                                                              |
-| OpenGL Iris Performer (IV)        | Rare; may use `InfiniteReality` or IRIX-based header                                                  |
-| Noodlesoft Hazel                  | `HZLR` or `HZL` magic; used in Hazel file manager archives                                            |
-| VBScript Encoded (VBE)            | Starts with `#@~^` (`23 40 7E 5E`); obfuscated VBScript                                               |
-| WebP                              | `RIFFxxxxWEBP` container; `file_size` field must be >= 4                                              |
-| AppleIconImage                    | `icns` at offset 0                                                                                    |
-| GIF                               | `GIF87a` or `GIF89a` at offset 0                                                                      |
-| JPEG2000                          | `\0\0\0\x0C\0\njP\x20\x20\r\n\x87\n` or `\xFF\x4F\xFF\x51` at offset 0                                |
-| PDF                               | `%PDF` at offset 0                                                                                    |
-| AppleDiskImage                    | `koly` at offset 1048576 (rare), or `cafe`/`ed2k` in header; often starts with zeros but magic at end |
-| Cabinet                           | `MSCF` at offset 0                                                                                    |
-| MatroskaMediaContainer            | `\x1A\x45\xDF\xA3` at offset 0                                                                        |
-| RichTextFormat                    | `{\\rtf` at offset 0                                                                                  |
-| PhotoCapTemplate                  | No standard public signature; often `.pct` or `.tpl`; may be proprietary                              |
-| AceCompressed                     | `ACE` followed by version byte at offset 0 (e.g., `ACE\x01`)                                          |
-| FlashVideo                        | `FLV\x01` at offset 0                                                                                 |
-| Unknown                           | Fallback when no signature matches                                                                    |
-| VMDK File                         | `0x4B, 0x44, 0x4D`                                            at off set `0`                          |
-| Google Chrome Extension           | `0x43, 0x72, 0x32, 0x34`                            at off set `0`                                    |
+## Supported formats
 
+Magic bytes and offsets below are read directly from `SIGNATURE_KIND` in
+[`src/magical/signatures.rs`](https://github.com/Reim-developer/magical_rs/blob/master/src/magical/signatures.rs).
+"Offset" is the byte position the magic is compared at.
+
+| Format | `FileKind` | Magic | Offset |
+| --- | --- | --- | --- |
+| PNG | `Png` | `89 50 4E 47 0D 0A 1A 0A` | 0 |
+| Java class | `Class` | `CA FE BA BE` | 0 |
+| JPEG | `Jpg` | `FF D8 FF E0` | 0 |
+| Gzip | `Gzip` | `1F 8B` | 0 |
+| Bzip2 | `Bzip` | `42 5A 68` (`BZh`) | 0 |
+| Zip / JAR / APK | `PkgZip` | `50 4B 03 04` | 0 |
+| Bitmap | `Bitmap` | `42 4D` (`BM`) | 0 |
+| DOS/PE executable | `MSDOS` | `4D 5A` (`MZ`) | 0 |
+| Tar | `Tar` | `75 73 74 61 72` (`ustar`) | 257 |
+| MP3 | `MP3` | `FF FB`, `FF F3`, or `FF F2` | 0 |
+| ISO 9660 | `ISO` | `43 44 30 30 31` (`CD001`) | 32769, 34817, 36865 |
+| RPM | `RPM` | `ED AB EE DB` | 0 |
+| SQLite | `SQLite` | `SQLite format 3\0` | 0 |
+| XML | `XML` | `3C 3F 78 6D 6C 20` (`<?xml `) | 0 |
+| Windows icon | `ICO` | `00 00 01 00` | 0 |
+| WebAssembly | `WASM` | `00 61 73 6D` (`\0asm`) | 0 |
+| Debian package | `Deb` | `21 3C 61 72 63 68 3E 0A` (`!<arch>\n`) | 0 |
+| Script / shebang | `ScriptExecute` | `23 21` plus a `/` on the same line | 0 |
+| RAR | `RAR` | `52 61 72 21 1A 07 00` or `... 01 00` | 0 |
+| ELF | `ELF` | `7F 45 4C 46` | 0 |
+| Ogg | `OGG` | `4F 67 67 53` (`OggS`) | 0 |
+| Photoshop PSD | `_8BPS` | `38 42 50 53` | 0 |
+| Blender | `BLENDER` | `42 4C 45 4E 44 45 52` (`BLENDER`) | 0 |
+| TrueType font | `TrueTypeFont` | `00 01 00 00 00` | 0 |
+| OpenType font | `OpenTypeFont` | `4F 54 54 4F` (`OTTO`) | 0 |
+| Environment module | `ModuleForEvenvironmentModules` | `23 25 4D 6F 64 75 6C 65` (`#%Module`) | 0 |
+| Windows Imaging Format | `WindowImagingFormat` | `4D 53 57 49 4D 00 00 00 D0 ...` | 0 |
+| `StarDict` binary | `Slob` | `21 2D 31 53 4C 4F 42 1F` | 0 |
+| Java serialization | `SerializedJavaData` | `AC ED` | 0 |
+| Creative Voice File | `CreativeVoiceFile` | `Creative Voice File\x1A\x1A\x00` | 0 |
+| AU audio | `AuAudioFileFormat` | `2E 73 6E 64` (`.snd`) | 0 |
+| OpenGL Iris Performer | `OpenGLIrisPerformer` | `DB 0A CE 00` | 0 |
+| Noodlesoft Hazel | `NoodlesoftHazel` | `48 5A 4C 52 00 00 00 18` (`HZLR`) | 0 |
+| Encoded `VBScript` | `VBScriptEncoded` | `23 40 7E 5E` (`#@~^`) | 0 |
+| Apple icon | `AppleIconImage` | `69 63 6E 73` (`icns`) | 0 |
+| GIF | `GIF` | `47 49 46 38 37 61` / `... 39 61` | 0 |
+| JPEG 2000 | `JPEG2000` | `00 00 00 0C 0A 6A 50 20 20 0D 0A 87 0A` or `FF 4F FF 51` | 0 |
+| PDF | `PDF` | `25 50 44 46 2D` (`%PDF-`) | 0 |
+| Apple disk image | `AppleDiskImage` | `6B 6F 6C 79` (`koly`) | 0 |
+| Cabinet | `Cabinet` | `4D 53 43 46` (`MSCF`) | 0 |
+| Matroska | `MatroskaMediaContainer` | `1A 45 DF A3` | 0 |
+| Rich Text Format | `RichTextFormat` | `7B 5C 72 74 66 31` (`{\rtf1`) | 0 |
+| `PhotoCap` template | `PhotoCapTemplate` | `78 56 34` (`xV4`) | 0 |
+| ACE archive | `AceCompressed` | `2A 2A 41 43 45 2A 2A` (`**ACE**`) | 0 |
+| Flash video | `FlashVideo` | `46 4C 56` (`FLV`) | 0 |
+| `VMware` disk image | `Vmdk` | `4B 44 4D` (`KDM`) | 0 |
+| Chrome extension | `GoogleChromeExtension` | `43 72 32 34` (`Cr24`) | 0 |
+| WebP | `WEBP` | RIFF container, validated by `is_webp` | 0 |
+
+Two entries are not matched by a byte signature alone. WebP uses a dedicated
+function in
+[`src/magical/ext_fn/webp.rs`](https://github.com/Reim-developer/magical_rs/blob/master/src/magical/ext_fn/webp.rs)
+because the format requires checking the `RIFF` header and the file size field
+together. Shebangs use
+[`src/magical/ext_fn/shebang.rs`](https://github.com/Reim-developer/magical_rs/blob/master/src/magical/ext_fn/shebang.rs)
+to require a path separator, which is what separates `#!/bin/sh` from the
+`#!AMR` audio header.
+
+**Matching order matters.** `match_types` returns on the first match, so the
+order of `SIGNATURE_KIND` decides which type wins when two signatures could both
+apply. A JAR file is reported as `PkgZip`, not `Class`, because `PK` is tested
+first. The 66 formats added after the original 48 are **appended** to the table
+rather than interleaved, which guarantees they can never shadow an original
+rule.
+
+### Extended formats
+
+Added in `0.5.0` and `0.6.0`, defined in
+[`src/magical/signatures_ext.rs`](https://github.com/Reim-developer/magical_rs/blob/master/src/magical/signatures_ext.rs).
+
+**Archives and compression**
+
+| Format | `FileKind` | Magic | Offset |
+| --- | --- | --- | --- |
+| 7-Zip | `SevenZip` | `37 7A BC AF 27 1C` | 0 |
+| XZ | `Xz` | `FD 37 7A 58 5A 00` | 0 |
+| LZ4 frame | `Lz4` | `04 22 4D 18` | 0 |
+| Zstandard | `Zstd` | `28 B5 2F FD` | 0 |
+| LHA/LZH | `Lzh` | `2D 6C 68` | 2 |
+| cpio | `Cpio` | `30 37 30 37 30` | 0 |
+| ARJ | `Arj` | `60 EA` | 0 |
+| `StuffIt` | `Stuffit` | `53 74 75 66 66 49 74` | 0 |
+| `StuffIt` `.sit` | `StuffitSit` | `53 49 54 21` | 0 |
+| PAR2 | `Par2` | `50 41 52 32 0A 50 4B 54` | 0 |
+| zlib stream | `Zlib` | `78 01`, `78 5E`, `78 9C`, `78 DA` | 0 |
+
+**Images**
+
+| Format | `FileKind` | Magic | Offset |
+| --- | --- | --- | --- |
+| `TIFF` / `BigTIFF` | `Tiff` | `49 49 2A 00`, `4D 4D 00 2A`, `49 49 2B 00`, `4D 4D 2B 00` | 0 |
+| PCX | `Pcx` | `0A 00`, `0A 02`, `0A 03`, `0A 05` | 0 |
+| `DirectDraw` surface | `Dds` | `44 44 53 20` | 0 |
+| KTX 2 | `Ktx2` | `AB 4B 54 58 20 32 30 BB 0D 0A 1A 0A` | 0 |
+| KTX 1 | `Ktx` | `AB 4B 54 58 20` | 0 |
+| `OpenEXR` | `OpenExr` | `76 2F 31 01` | 0 |
+| Radiance HDR | `Radiance` | `23 3F 52 41 44 49 41 4E 43 45` | 0 |
+| JPEG XL | `JpegXl` | `FF 0A` or `00 00 00 0C 4A 58 4C 20 0D 0A 87 0A` | 0 |
+| Windows cursor | `Cursor` | `00 00 02 00` | 0 |
+| GIMP XCF | `GimpXcf` | `67 69 6D 70` | 0 |
+| FITS | `Fits` | `53 49 4D 50 4C 45 20 20` | 0 |
+
+**Audio and video**
+
+| Format | `FileKind` | Magic | Offset |
+| --- | --- | --- | --- |
+| MIDI | `Midi` | `4D 54 68 64` | 0 |
+| AIFF | `Aiff` | `46 4F 52 4D` | 0 |
+| FLAC | `Flac` | `66 4C 61 43` | 0 |
+| `WavPack` | `WavPack` | `77 61 76 70` | 0 |
+| Core Audio | `CoreAudio` | `63 61 66 66` | 0 |
+| AMR audio | `Amr` | `23 21 41 4D 52` (`#!AMR`) or `23 21 41 4D 52 2D 57 50` | 0 |
+| Monkey's Audio | `MonkeyAudio` | `4D 41 43 20` | 0 |
+| ISO base media | `IsoMedia` | `66 74 79 70` (`ftyp`) | 4 |
+| SWF | `Swf` | `46 57 53`, `43 57 53`, `5A 57 53` | 0 |
+| ASF / WMV | `Asf` | `30 26 B2 75 8E 66 CF 11` | 0 |
+| MPEG program stream | `MpegProgramStream` | `00 00 01 BA` | 0 |
+
+**Documents**
+
+| Format | `FileKind` | Magic | Offset |
+| --- | --- | --- | --- |
+| PostScript | `PostScript` | `25 21 50 53` | 0 |
+| `DjVu` | `Djvu` | `41 54 26 54 26 46 4F 52 4D` | 0 |
+| Mobipocket | `Mobipocket` | `42 4F 4F 4B 4D 4F 42 49` (`BOOKMOBI`) | 60 |
+| MS Compiled HTML | `Chm` | `49 54 53 46` | 0 |
+| OLE compound file | `OleCompoundFile` | `D0 CF 11 E0 A1 B1 1A E1` | 0 |
+
+**Executables, byte code and fonts**
+
+| Format | `FileKind` | Magic | Offset |
+| --- | --- | --- | --- |
+| Mach-O | `MachO` | `CE FA ED FE`, `CF FA ED FE`, `FE ED FA CE`, `FE ED FA CF` | 0 |
+| Dalvik | `Dalvik` | `64 65 78 0A` | 0 |
+| Lua byte code | `Lua` | `1B 4C 75 61` | 0 |
+| Windows shortcut | `WindowsShortcut` | `4C 00 00 00 01 14 02 00` | 0 |
+| WOFF | `Woff` | `77 4F 46 46` | 0 |
+| WOFF2 | `Woff2` | `77 4F 46 32` | 0 |
+| Font collection | `FontCollection` | `74 74 63 66` | 0 |
+
+**Data, columnar and machine learning**
+
+| Format | `FileKind` | Magic | Offset |
+| --- | --- | --- | --- |
+| `NumPy` `.npy` | `Numpy` | `93 4E 55 4D 50 59` | 0 |
+| HDF5 | `Hdf5` | `89 48 44 46 0D 0A 1A 0A` | 0 |
+| MATLAB | `Matlab` | `4D 41 54 4C 42 20 35 2E 30` | 0 |
+| Parquet | `Parquet` | `50 41 52 31` | 0 |
+| Apache ORC | `Orc` | `4F 52 43` | 0 |
+| Avro | `Avro` | `4F 62 6A 01` | 0 |
+| Binary plist | `BinaryPlist` | `62 70 6C 69 73 74` | 0 |
+| Python pickle | `Pickle` | `80 02`, `80 03`, `80 04`, `80 05` | 0 |
+| GGUF | `Gguf` | `47 47 55 46` | 0 |
+| R serialized data | `RData` | `52 44 58 32`, `52 44 58 33` | 0 |
+
+**3D, game data, disk images and network**
+
+| Format | `FileKind` | Magic | Offset |
+| --- | --- | --- | --- |
+| glTF binary | `GltfBinary` | `67 6C 54 46` | 0 |
+| FBX binary | `FbxBinary` | `4B 61 79 64 61 72 61 20 46 42 58 20` | 0 |
+| Stanford PLY | `Ply` | `70 6C 79 0A` (`ply\n`) or `70 6C 79 0D 0A` | 0 |
+| Doom WAD | `DoomWad` | `49 57 41 44` | 0 |
+| QCOW2 | `Qcow2` | `51 46 49 FB` | 0 |
+| QCOW | `Qcow` | `51 46 49` | 0 |
+| `VirtualBox` `VDI` | `VirtualBoxVdi` | `3C 3C 3C 20 4F 72 61 63 6C 65` | 0 |
+| Virtual HD | `VirtualHd` | `63 6F 6E 65 63 74 69 78` | 0 |
+| pcap | `Pcap` | `D4 C3 B2 A1`, `A1 B2 C3 D4`, `4D 3C B2 A1`, `A1 B2 3C 4D` | 0 |
+| pcapng | `PcapNg` | `0A 0D 0D 0A` | 0 |
+| `BitTorrent` metainfo | `BitTorrent` | `64 38 3A 61 6E 6E 6F 75 6E 63 65` | 0 |
+
+### Formats that cannot be detected reliably
+
+These were evaluated and deliberately left out:
+
+- **3D Studio Max** — its magic is `4D 4D 00 2A`, byte-for-byte identical to
+  `BigTIFF`. No byte-level rule can tell them apart.
+- **Text-based formats** — `.txt`, `.csv`, `.json`, `.html`, `.svg`, `.fasta`
+  and similar have no magic bytes. Guessing at them produces false positives.
+
+Missing a format? [Open a pull request](https://github.com/Reim-developer/magical_rs/pulls)
+with the magic bytes and the format specification.
+
+## Examples
+
+Runnable examples live in
+[`examples/`](https://github.com/Reim-developer/magical_rs/tree/master/examples):
+
+| Directory | Shows |
+| --- | --- |
+| `normal_usage` | Level 1, reading a file header |
+| `magic_custom` | Level 2, custom compile-time rules |
+| `dyn_magic` | Level 3, runtime rules |
+| `async_dyn_magic` | Level 4, async rules |
+| `unsafe_context` | Level 5, raw pointer rules |
+
+## Development
+
+```bash
+cargo build
+cargo test
+cargo test --all-features
+cargo clippy --all-targets --all-features -- -D warnings
+```
+
+Verify `no_std` still holds:
+
+```bash
+cargo build --no-default-features --target thumbv7em-none-eabi
+```
 
 ## License
-* `magical_rs` is licensed under the MIT License. [See here](LICENSE)
+
+MIT — see [LICENSE](https://github.com/Reim-developer/magical_rs/blob/master/LICENSE).
+
+Versions `0.4.5` and earlier were published under the GNU General Public
+License v3.0. Those grants are permanent and remain in force for anyone who
+already received those versions. Only `0.5.0` and later are MIT-licensed.

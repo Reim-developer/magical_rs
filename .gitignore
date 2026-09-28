@@ -1,4 +1,14 @@
 target
 
-# Soon.
-bindings
+# Python bindings build artifacts.
+#
+# `_magical_rs.pyi` is deliberately NOT ignored: it is a hand-written type
+# stub, and `bindings/python/tests/test_stub.py` checks it against the
+# compiled module. The compiled module beside it is an artifact.
+*.pyd
+*.so
+*.pdb
+bindings/python/dist/
+bindings/python/.venv/
+__pycache__/
+.pytest_cache/

@@ -89,6 +89,8 @@ pub(crate) const POSTSCRIPT: &[u8] = &[0x25, 0x21, 0x50, 0x53];
 pub(crate) const DJVU: &[u8] = &[0x41, 0x54, 0x26, 0x54, 0x26, 0x46, 0x4F, 0x52, 0x4D];
 /// `BOOKMOBI`, located past the `PalmDOC` header.
 pub(crate) const MOBIPOCKET: &[u8] = &[0x42, 0x4F, 0x4F, 0x4B, 0x4D, 0x4F, 0x42, 0x49];
+pub(crate) const AMR_NARROW: &[u8] = b"#!AMR";
+pub(crate) const AMR_WIDE: &[u8] = b"#!AMR-WP";
 pub(crate) const CHM: &[u8] = &[0x49, 0x54, 0x53, 0x46];
 /// OLE2 compound file, used by MS Office legacy formats, MSI and VSTA projects.
 pub(crate) const OLE_COMPOUND_FILE: &[u8] =
@@ -140,7 +142,14 @@ pub(crate) const R_DATA_V3: &[u8] = &[0x52, 0x44, 0x58, 0x33];
 pub(crate) const GLTF_BINARY: &[u8] = &[0x67, 0x6C, 0x54, 0x46];
 pub(crate) const FBX_BINARY: &[u8] =
     &[0x4B, 0x61, 0x79, 0x64, 0x61, 0x72, 0x61, 0x20, 0x46, 0x42, 0x58, 0x20];
-pub(crate) const PLY: &[u8] = &[0x70, 0x6C, 0x79];
+/// `ply` followed by a line break. The PLY specification puts a line ending
+/// straight after the magic keyword, and it may be LF or CRLF. A bare `ply`
+/// would claim any text file starting with that word.
+///
+/// Two signatures are required because the byte immediately after `ply` is
+/// either `\n` or `\r`.
+pub(crate) const PLY_LF: &[u8] = b"ply\n";
+pub(crate) const PLY_CRLF: &[u8] = b"ply\r\n";
 pub(crate) const DOOM_WAD: &[u8] = &[0x49, 0x57, 0x41, 0x44];
 
 // ---------------------------------------------------------------------------

@@ -251,6 +251,7 @@ pub mod magical {
     pub mod bytes_read;
 
     pub mod ext_fn {
+        pub mod shebang;
         pub mod webp;
     }
 

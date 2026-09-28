@@ -2,18 +2,21 @@ use crate::magical::bytes_read::{
     DEFAULT_MAX_BYTES_READ, DEFAULT_OFFSET, ISO_MAX_BYTES_READ, ISO_OFFSETS, TAR_MAX_BYTES_READ,
     TAR_OFFSETS,
 };
+use crate::magical::ext_fn::shebang::is_shebang;
 use crate::magical::ext_fn::webp::is_webp;
 use crate::magical::magic::FileKind;
 use crate::magical::match_rules::MatchRules;
 
 use crate::magical::signatures_ext::{
-    AIFF, APACHE_ORC, ARJ, ASF, AVRO, BINARY_PLIST, BITTORRENT, CHM, CORE_AUDIO, CPIO, CURSOR,
+    AIFF, AMR_NARROW, AMR_WIDE, APACHE_ORC, ARJ, ASF, AVRO, BINARY_PLIST, BITTORRENT, CHM,
+    CORE_AUDIO, CPIO, CURSOR,
     DALVIK, DDS, DJVU, DOOM_WAD, FBX_BINARY, FITS, FLAC, FONT_COLLECTION, GGUF, GIMP_XCF,
     GLTF_BINARY, HDF5, ISO_MEDIA, JPEG_XL_CODESTREAM, JPEG_XL_CONTAINER, KTX, KTX2, LUA, LZH,
     LZ4, MACH_O_32, MACH_O_32_SWAPPED, MACH_O_64, MACH_O_64_SWAPPED, MATLAB, MIDI, MOBIPOCKET,
     MONKEY_AUDIO, MPEG_PROGRAM_STREAM, NUMPY, OLE_COMPOUND_FILE, OPENEXR, PAR2, PARQUET, PCAP_BE,
     PCAP_LE, PCAP_NG, PCAP_NS_BE, PCAP_NS_LE, PCX, PCX_V2, PCX_V3, PCX_V5, PICKLE_V2, PICKLE_V3,
-    PICKLE_V4, PICKLE_V5, PLY, POSTSCRIPT, QCOW, QCOW2, R_DATA_V2, R_DATA_V3, RADIANCE,
+    PICKLE_V4, PICKLE_V5, PLY_CRLF, PLY_LF, POSTSCRIPT, QCOW, QCOW2, R_DATA_V2, R_DATA_V3,
+    RADIANCE,
     SEVEN_ZIP, STUFFIT, STUFFIT_SIT, SWF_LZMA, SWF_UNCOMPRESSED, SWF_ZLIB, TIFF_BE,
     TIFF_BIGTIFF_BE, TIFF_BIGTIFF_LE, TIFF_LE, VIRTUALBOX_VDI, VIRTUAL_HD, WAVPACK,
     WINDOWS_SHORTCUT, WOFF, WOFF2, XZ, ZLIB, ZLIB_BEST, ZLIB_DEFAULT_COMP, ZLIB_LOW, ZSTD,
@@ -37,7 +40,10 @@ macro_rules! entry {
 
 const PNG_SIGNATURE: &[u8] = &[0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A];
 const GZIP_SIGNATURE: &[u8] = &[0x1F, 0x8B];
-const BZIP_SIGNATURE: &[u8] = &[0x42, 0x5A];
+/// `BZh`, the bzip2 block header. The trailing `h` is part of the format, so
+/// the two-byte prefix `BZ` is not a valid signature: it would claim any file
+/// that happens to begin with those letters.
+const BZIP_SIGNATURE: &[u8] = &[0x42, 0x5A, 0x68];
 const PKG_ZIP_SIGNATURE: &[u8] = &[0x50, 0x4B, 0x03, 0x04];
 const BITMAP_SIGNATURE: &[u8] = &[0x42, 0x4D];
 const TAR_SIGNATURE: &[u8] = &[0x75, 0x73, 0x74, 0x61, 0x72];
@@ -254,7 +260,9 @@ pub static SIGNATURE_KIND: &[Magic] = &[
         offsets: &[DEFAULT_OFFSET],
         max_bytes_read: DEFAULT_MAX_BYTES_READ,
         kind: FileKind::ScriptExecute,
-        rules: MatchRules::Default,
+        // `#!/` alone would claim every file beginning with those two bytes,
+        // including the `#!AMR` audio header. Require a path separator.
+        rules: MatchRules::WithFn(is_shebang),
     },
     Magic {
         signatures: RAR_SIGNATURE,
@@ -507,6 +515,9 @@ pub static SIGNATURE_KIND: &[Magic] = &[
     entry!(Flac, [FLAC], [0]),
     entry!(WavPack, [WAVPACK], [0]),
     entry!(CoreAudio, [CORE_AUDIO], [0]),
+    // No longer shadowed: the shebang rule now requires a path separator, so
+    // `#!AMR` falls through to here.
+    entry!(Amr, [AMR_NARROW, AMR_WIDE], [0]),
     entry!(MonkeyAudio, [MONKEY_AUDIO], [0]),
     entry!(IsoMedia, [ISO_MEDIA], [4]),
     entry!(Swf, [SWF_UNCOMPRESSED, SWF_ZLIB, SWF_LZMA], [0]),
@@ -545,7 +556,7 @@ pub static SIGNATURE_KIND: &[Magic] = &[
     // 3D assets and game data
     entry!(GltfBinary, [GLTF_BINARY], [0]),
     entry!(FbxBinary, [FBX_BINARY], [0]),
-    entry!(Ply, [PLY], [0]),
+    entry!(Ply, [PLY_LF, PLY_CRLF], [0]),
     entry!(DoomWad, [DOOM_WAD], [0]),
     // Disk images
     // `Qcow2` must precede `Qcow`: `51 46 49` is a prefix of `51 46 49 FB`.

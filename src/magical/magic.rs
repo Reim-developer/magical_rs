@@ -85,6 +85,9 @@ pub enum FileKind {
     Flac,
     WavPack,
     CoreAudio,
+    /// Narrowband and wideband AMR audio. Distinguished from a shebang by the
+    /// absence of a path separator in the header line.
+    Amr,
     MonkeyAudio,
     /// ISO base media file format, covering MP4, MOV, 3GP, HEIC and AVIF.
     IsoMedia,

@@ -5,6 +5,11 @@ edition = "2024"
 rust-version = "1.85"
 license = "MIT"
 description = "Native Python bindings for magical_rs, a zero-dependency file type detection library."
+repository = "https://github.com/Reim-developer/magical_rs"
+homepage = "https://github.com/Reim-developer/magical_rs/blob/master/bindings/python"
+documentation = "https://docs.rs/magical_rs"
+# This crate is published to PyPI, not to crates.io. It exists to be a path
+# dependency next to the crate it wraps, and to keep that crate dependency-free.
 publish = false
 
 [lib]

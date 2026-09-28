@@ -1,0 +1,49 @@
+[build-system]
+requires = ["maturin>=1.15,<2.0"]
+build-backend = "maturin"
+
+[project]
+name = "magical-py"
+version = "0.1.0"
+description = "Native Python bindings for magical_rs, a zero-dependency file type detection library."
+readme = "README.md"
+license = { text = "MIT" }
+requires-python = ">=3.8"
+keywords = ["file-type", "magic", "mime", "detection", "no-dependency"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.8",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
+    "Programming Language :: Rust",
+    "Topic :: Software Development :: Libraries",
+    "Topic :: Utilities",
+    "Typing :: Typed",
+]
+
+[project.urls]
+Homepage = "https://github.com/Reim-developer/magical_rs"
+Repository = "https://github.com/Reim-developer/magical_rs"
+Changelog = "https://github.com/Reim-developer/magical_rs/blob/master/CHANGELOG.md"
+
+[tool.maturin]
+# The Python package lives in `python/`, which keeps it separate from the
+# Rust sources. `module-name` makes maturin emit
+# `python/magical_py/_magical_rs` and the matching `.pyi` stub.
+python-source = "python"
+module-name = "magical_py._magical_rs"
+features = ["pyo3/extension-module"]
+
+[dependency-groups]
+dev = [
+    "maturin>=1.15,<2.0",
+    "pytest>=8.0",
+    "pyright>=1.1.390",
+]

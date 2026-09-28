@@ -1,0 +1,25 @@
+{
+  "include": ["python", "tests"],
+  "exclude": ["**/__pycache__", "**/.pytest_cache", "target", ".venv", "**/node_modules"],
+
+  "typeCheckingMode": "strict",
+
+  // Pinned to the floor of the abi3-py38 wheel, so the checker rejects
+  // syntax and typing constructs the published wheel cannot rely on.
+  "pythonVersion": "3.8",
+
+  "pythonPlatform": "All",
+
+  // `_magical_rs` is the compiled module. Treating it as a private import
+  // inside the package is intentional, not a mistake, and every symbol the
+  // package re-exports is public in that module.
+  "reportPrivateUsage": "none",
+
+  "reportMissingTypeStubs": "error",
+  "reportMissingModuleSource": "error",
+  "reportImportCycles": "error",
+  "reportUnusedImport": "error",
+  "reportUnusedVariable": "error",
+  "reportUnnecessaryTypeIgnoreComment": "error",
+  "reportUnreachable": "error",
+}

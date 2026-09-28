@@ -12,3 +12,8 @@ bindings/python/dist/
 bindings/python/.venv/
 __pycache__/
 .pytest_cache/
+
+# Planning notes are working documents, not project documentation, so they do
+# not belong here. They are written to the agent's scratch directory instead.
+# `PLAN.md` has no leading slash, so this matches the name at any depth.
+PLAN.md

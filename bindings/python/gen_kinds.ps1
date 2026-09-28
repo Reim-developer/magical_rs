@@ -10,7 +10,11 @@
 # tests/readme_coverage.rs already checks against the Rust detection table,
 # so a format added on the Rust side without a matching row here fails the
 # build rather than shipping a gap.
-Set-Location 'D:\Codes\moskov'
+# The repository root, resolved from this script's own location. Everything
+# below reads a relative path from here, so hard-coding an absolute path meant
+# the generator only ran in one particular checkout.
+$repoRoot = Resolve-Path (Join-Path $PSScriptRoot '..\..')
+Set-Location $repoRoot
 
 # Variant -> value, mime, extension.
 # A null mime or extension means "no registered or verified value", not

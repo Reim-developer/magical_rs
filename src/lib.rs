@@ -260,4 +260,5 @@ pub mod magical {
     pub mod magic_custom;
     pub mod match_rules;
     pub mod signatures;
+    pub mod signatures_ext;
 }

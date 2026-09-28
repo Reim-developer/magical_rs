@@ -50,6 +50,95 @@ pub enum FileKind {
     FlashVideo,
     Vmdk,
     GoogleChromeExtension,
+
+    // --- Archives and compression ---
+    SevenZip,
+    Xz,
+    Lz4,
+    Zstd,
+    Lzh,
+    Cpio,
+    Arj,
+    Stuffit,
+    StuffitSit,
+    Par2,
+    /// zlib stream header. Matches any deflate stream, so this rule is last.
+    Zlib,
+
+    // --- Images ---
+    Tiff,
+    Pcx,
+    Dds,
+    Ktx,
+    Ktx2,
+    OpenExr,
+    Radiance,
+    JpegXl,
+    /// Windows cursor directory, distinct from [`FileKind::ICO`].
+    Cursor,
+    GimpXcf,
+    Fits,
+
+    // --- Audio and video ---
+    Midi,
+    Aiff,
+    Flac,
+    WavPack,
+    CoreAudio,
+    MonkeyAudio,
+    /// ISO base media file format, covering MP4, MOV, 3GP, HEIC and AVIF.
+    IsoMedia,
+    Swf,
+    Asf,
+    MpegProgramStream,
+
+    // --- Documents ---
+    PostScript,
+    Djvu,
+    Mobipocket,
+    Chm,
+    OleCompoundFile,
+
+    // --- Executables and byte code ---
+    /// Mach-O, in both byte orders and both widths.
+    MachO,
+    Dalvik,
+    Lua,
+    WindowsShortcut,
+
+    // --- Fonts ---
+    Woff,
+    Woff2,
+    FontCollection,
+
+    // --- Data, columnar and machine learning ---
+    Numpy,
+    Hdf5,
+    Matlab,
+    Parquet,
+    Orc,
+    Avro,
+    BinaryPlist,
+    Pickle,
+    Gguf,
+    RData,
+
+    // --- 3D assets and game data ---
+    GltfBinary,
+    FbxBinary,
+    Ply,
+    DoomWad,
+
+    // --- Disk images ---
+    Qcow,
+    Qcow2,
+    VirtualBoxVdi,
+    VirtualHd,
+
+    // --- Network capture and transfer ---
+    Pcap,
+    PcapNg,
+    BitTorrent,
 }
 
 impl FileKind {

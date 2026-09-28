@@ -6,6 +6,35 @@ use crate::magical::ext_fn::webp::is_webp;
 use crate::magical::magic::FileKind;
 use crate::magical::match_rules::MatchRules;
 
+use crate::magical::signatures_ext::{
+    AIFF, APACHE_ORC, ARJ, ASF, AVRO, BINARY_PLIST, BITTORRENT, CHM, CORE_AUDIO, CPIO, CURSOR,
+    DALVIK, DDS, DJVU, DOOM_WAD, FBX_BINARY, FITS, FLAC, FONT_COLLECTION, GGUF, GIMP_XCF,
+    GLTF_BINARY, HDF5, ISO_MEDIA, JPEG_XL_CODESTREAM, JPEG_XL_CONTAINER, KTX, KTX2, LUA, LZH,
+    LZ4, MACH_O_32, MACH_O_32_SWAPPED, MACH_O_64, MACH_O_64_SWAPPED, MATLAB, MIDI, MOBIPOCKET,
+    MONKEY_AUDIO, MPEG_PROGRAM_STREAM, NUMPY, OLE_COMPOUND_FILE, OPENEXR, PAR2, PARQUET, PCAP_BE,
+    PCAP_LE, PCAP_NG, PCAP_NS_BE, PCAP_NS_LE, PCX, PCX_V2, PCX_V3, PCX_V5, PICKLE_V2, PICKLE_V3,
+    PICKLE_V4, PICKLE_V5, PLY, POSTSCRIPT, QCOW, QCOW2, R_DATA_V2, R_DATA_V3, RADIANCE,
+    SEVEN_ZIP, STUFFIT, STUFFIT_SIT, SWF_LZMA, SWF_UNCOMPRESSED, SWF_ZLIB, TIFF_BE,
+    TIFF_BIGTIFF_BE, TIFF_BIGTIFF_LE, TIFF_LE, VIRTUALBOX_VDI, VIRTUAL_HD, WAVPACK,
+    WINDOWS_SHORTCUT, WOFF, WOFF2, XZ, ZLIB, ZLIB_BEST, ZLIB_DEFAULT_COMP, ZLIB_LOW, ZSTD,
+};
+
+/// Build one `Magic` entry for the extended format table.
+///
+/// Defined before `SIGNATURE_KIND` because `macro_rules!` must appear textually
+/// before any use. The original 48 entries are written out longhand below.
+macro_rules! entry {
+    ($kind:ident, [$($sig:ident),* $(,)?], [$($off:expr),* $(,)?]) => {
+        Magic {
+            signatures: &[$($sig),*],
+            offsets: &[$($off),*],
+            max_bytes_read: DEFAULT_MAX_BYTES_READ,
+            kind: FileKind::$kind,
+            rules: MatchRules::Default,
+        }
+    };
+}
+
 const PNG_SIGNATURE: &[u8] = &[0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A];
 const GZIP_SIGNATURE: &[u8] = &[0x1F, 0x8B];
 const BZIP_SIGNATURE: &[u8] = &[0x42, 0x5A];
@@ -437,4 +466,99 @@ pub static SIGNATURE_KIND: &[Magic] = &[
         kind: FileKind::GoogleChromeExtension,
         rules: MatchRules::Default,
     },
+    // -----------------------------------------------------------------------
+    // Extended formats.
+    //
+    // These are appended rather than interleaved. `match_types` returns the
+    // first match, so appending guarantees that no rule from the original 48
+    // can ever be shadowed. `entry!` keeps each one to a single line.
+    // -----------------------------------------------------------------------
+    entry!(SevenZip, [SEVEN_ZIP], [0]),
+    entry!(Xz, [XZ], [0]),
+    entry!(Lz4, [LZ4], [0]),
+    entry!(Zstd, [ZSTD], [0]),
+    // `Ktx2` must precede `Ktx`: the KTX1 magic is a byte-for-byte prefix of
+    // the KTX2 magic, and `match_types` stops at the first match.
+    entry!(Ktx2, [KTX2], [0]),
+    entry!(Ktx, [KTX], [0]),
+    entry!(Lzh, [LZH], [2]),
+    entry!(Cpio, [CPIO], [0]),
+    entry!(Arj, [ARJ], [0]),
+    entry!(Stuffit, [STUFFIT], [0]),
+    entry!(StuffitSit, [STUFFIT_SIT], [0]),
+    entry!(Par2, [PAR2], [0]),
+    // Images
+    entry!(
+        Tiff,
+        [TIFF_LE, TIFF_BE, TIFF_BIGTIFF_LE, TIFF_BIGTIFF_BE],
+        [0]
+    ),
+    entry!(Pcx, [PCX, PCX_V2, PCX_V3, PCX_V5], [0]),
+    entry!(Dds, [DDS], [0]),
+    entry!(OpenExr, [OPENEXR], [0]),
+    entry!(Radiance, [RADIANCE], [0]),
+    entry!(JpegXl, [JPEG_XL_CODESTREAM, JPEG_XL_CONTAINER], [0]),
+    entry!(Cursor, [CURSOR], [0]),
+    entry!(GimpXcf, [GIMP_XCF], [0]),
+    entry!(Fits, [FITS], [0]),
+    // Audio and video
+    entry!(Midi, [MIDI], [0]),
+    entry!(Aiff, [AIFF], [0]),
+    entry!(Flac, [FLAC], [0]),
+    entry!(WavPack, [WAVPACK], [0]),
+    entry!(CoreAudio, [CORE_AUDIO], [0]),
+    entry!(MonkeyAudio, [MONKEY_AUDIO], [0]),
+    entry!(IsoMedia, [ISO_MEDIA], [4]),
+    entry!(Swf, [SWF_UNCOMPRESSED, SWF_ZLIB, SWF_LZMA], [0]),
+    entry!(Asf, [ASF], [0]),
+    entry!(MpegProgramStream, [MPEG_PROGRAM_STREAM], [0]),
+    // Documents
+    entry!(PostScript, [POSTSCRIPT], [0]),
+    entry!(Djvu, [DJVU], [0]),
+    entry!(Mobipocket, [MOBIPOCKET], [60]),
+    entry!(Chm, [CHM], [0]),
+    entry!(OleCompoundFile, [OLE_COMPOUND_FILE], [0]),
+    // Executables and byte code
+    entry!(
+        MachO,
+        [MACH_O_32, MACH_O_64, MACH_O_32_SWAPPED, MACH_O_64_SWAPPED],
+        [0]
+    ),
+    entry!(Dalvik, [DALVIK], [0]),
+    entry!(Lua, [LUA], [0]),
+    entry!(WindowsShortcut, [WINDOWS_SHORTCUT], [0]),
+    // Fonts
+    entry!(Woff, [WOFF], [0]),
+    entry!(Woff2, [WOFF2], [0]),
+    entry!(FontCollection, [FONT_COLLECTION], [0]),
+    // Data, columnar and machine learning
+    entry!(Numpy, [NUMPY], [0]),
+    entry!(Hdf5, [HDF5], [0]),
+    entry!(Matlab, [MATLAB], [0]),
+    entry!(Parquet, [PARQUET], [0]),
+    entry!(Orc, [APACHE_ORC], [0]),
+    entry!(Avro, [AVRO], [0]),
+    entry!(BinaryPlist, [BINARY_PLIST], [0]),
+    entry!(Pickle, [PICKLE_V2, PICKLE_V3, PICKLE_V4, PICKLE_V5], [0]),
+    entry!(Gguf, [GGUF], [0]),
+    entry!(RData, [R_DATA_V2, R_DATA_V3], [0]),
+    // 3D assets and game data
+    entry!(GltfBinary, [GLTF_BINARY], [0]),
+    entry!(FbxBinary, [FBX_BINARY], [0]),
+    entry!(Ply, [PLY], [0]),
+    entry!(DoomWad, [DOOM_WAD], [0]),
+    // Disk images
+    // `Qcow2` must precede `Qcow`: `51 46 49` is a prefix of `51 46 49 FB`.
+    entry!(Qcow2, [QCOW2], [0]),
+    entry!(Qcow, [QCOW], [0]),
+    entry!(VirtualBoxVdi, [VIRTUALBOX_VDI], [0]),
+    entry!(VirtualHd, [VIRTUAL_HD], [0]),
+    // Network capture and transfer
+    entry!(Pcap, [PCAP_LE, PCAP_BE, PCAP_NS_LE, PCAP_NS_BE], [0]),
+    entry!(PcapNg, [PCAP_NG], [0]),
+    entry!(BitTorrent, [BITTORRENT], [0]),
+    // `Zlib` is deliberately last: `78 9C` appears in any deflate stream, so it
+    // must only win when no structural signature matched first.
+    entry!(Zlib, [ZLIB, ZLIB_LOW, ZLIB_BEST, ZLIB_DEFAULT_COMP], [0]),
 ];
+

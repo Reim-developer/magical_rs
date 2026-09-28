@@ -13,6 +13,26 @@ cannot go.
 magical_rs = "0.6"
 ```
 
+Not writing Rust? There are Python bindings. They are not on PyPI yet, so for
+now install from the checkout:
+
+```bash
+pip install ./bindings/python
+```
+
+```python
+from magical_py import FileKind, detect
+
+kind = detect("photo.jpg")
+
+kind is FileKind.Jpg      # a real enum member, not a string to parse
+kind.mime                 # 'image/jpeg'
+kind.extension            # 'jpg'
+```
+
+They detect exactly the 114 formats listed below, through the same detection
+table, with no separate list to keep in step. See
+[`bindings/python`](bindings/python).
 
 ## Quick start
 

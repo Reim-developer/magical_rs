@@ -13,6 +13,7 @@ cannot go.
 magical_rs = "0.6"
 ```
 
+
 ## Quick start
 
 ```rust,no_run
@@ -54,12 +55,21 @@ offset 36,865, so detecting it requires reading that far into the file. If you
 only care about formats with magic at offset 0, pass a smaller value yourself
 and skip ISO. Do not hardcode `2048` and assume you are done.
 
-**Some signatures are still only two bytes.** `Gzip` matches on `1F 8B`,
-`Bitmap` on `BM`, `MSDOS` on `MZ` and `SerializedJavaData` on `AC ED`. Those are
-the values the formats themselves specify, so there is nothing longer to match
-against. It does mean a file beginning with those bytes is reported as that
-type, so treat detection as a strong hint rather than proof, and validate the
-result if a wrong answer would be harmful.
+**Some signatures are still only two bytes.** 9 formats match on nothing but a
+two-byte prefix: `Arj` on `60 EA`, `Bitmap` on `42 4D`, `Gzip` on `1F 8B`,
+`MP3` on one of `FF FB` / `FF F3` / `FF F2`, `MSDOS` on `4D 5A`, `Pcx` on one of
+`0A 00` / `0A 02` / `0A 03` / `0A 05`, `Pickle` on one of `80 02` through
+`80 05`, `SerializedJavaData` on `AC ED`, and `Zlib` on one of `78 9C` /
+`78 01` / `78 DA` / `78 5E`. Those are the values the formats themselves
+specify, so there is nothing longer to match against. It does mean a file
+beginning with those bytes is reported as that type, so treat detection as a
+strong hint rather than proof, and validate the result if a wrong answer would
+be harmful.
+
+Two more are decided by a function rather than a fixed byte pattern, because
+the byte pattern alone would be too broad: `ScriptExecute` requires a `/` later
+on the first line, and `WEBP` requires the full `RIFF....WEBP` layout. Both are
+listed with their `FileKind` names in the tables below.
 
 Three signatures that were **wrong or far too broad** were tightened in
 `0.6.0`, which is a breaking change:

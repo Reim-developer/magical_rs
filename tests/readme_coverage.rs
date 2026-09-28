@@ -6,7 +6,9 @@
 //! itself, so a format added to the table without a readme row fails the build
 //! rather than going unnoticed.
 
-use magical_rs::magical::signatures::SIGNATURE_KIND;
+use {
+    magical_rs::magical::{match_rules::MatchRules, signatures::SIGNATURE_KIND},
+};
 
 const fn readme() -> &'static str {
     include_str!("../readme.md")
@@ -158,3 +160,56 @@ fn every_detectable_kind_has_its_own_table_row() {
     );
 }
 
+/// The readme's two-byte caveat must name exactly the formats that have no
+/// longer signature to fall back on.
+///
+/// The caveat is the part of the readme a user relies on most when deciding
+/// whether detection is trustworthy for their data, and it is written out by
+/// hand. Without this check a format could be tightened to a longer signature
+/// while the readme kept warning about it, or a new short signature could be
+/// added without the caveat mentioning it.
+///
+/// Entries decided by a function rather than a byte pattern are excluded,
+/// because they are not two-byte matches however short the pattern looks:
+/// `WEBP` carries no signature at all, and `ScriptExecute` inspects the whole
+/// first line.
+#[test]
+fn readme_two_byte_caveat_matches_the_table() {
+    let mut short: Vec<String> = SIGNATURE_KIND
+        .iter()
+        .filter(|entry| {
+            matches!(entry.rules, MatchRules::Default)
+                && !entry.signatures.is_empty()
+                && entry.signatures.iter().all(|sig| sig.len() == 2)
+        })
+        .map(|entry| format!("{:?}", entry.kind))
+        .collect();
+    short.sort();
+
+    assert!(
+        short.len() > 1,
+        "only {} entries have two-byte signatures; the readme caveat is about a \
+         meaningful set and this test has probably stopped detecting them",
+        short.len()
+    );
+
+    for kind in &short {
+        assert!(
+            readme().contains(&format!("`{kind}`")),
+            "readme.md does not mention `{kind}` in the two-byte caveat, but its only \
+             signature is two bytes long"
+        );
+    }
+
+    // The count is written into the prose, so it is checked too. A format
+    // being added or tightened must update that number, which is the point:
+    // the number is what tells a reader how much to worry. Whitespace is
+    // collapsed first because the readme wraps that sentence across lines,
+    // and matching the wrapped text would break on any rewrap.
+    let flattened = readme().split_whitespace().collect::<Vec<_>>().join(" ");
+    let phrase = format!("{} formats match on nothing but a two-byte prefix", short.len());
+    assert!(
+        flattened.contains(&phrase),
+        "readme.md should contain \"{phrase}\"; the two-byte set is now {short:?}"
+    );
+}

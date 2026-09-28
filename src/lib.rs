@@ -239,7 +239,7 @@
 //! | Google Chrome Extension           | `0x43, 0x72, 0x32, 0x34`                            at off set `0`                                    |
 //!
 //! ## License
-//! * `magical_rs` is licensed under the GNU General Public License v3.0.
+//! * `magical_rs` is licensed under the MIT License.
 
 #![deny(clippy::pedantic, clippy::all, clippy::nursery, clippy::perf)]
 #![cfg_attr(not(feature = "std"), no_std)]

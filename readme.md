@@ -332,4 +332,4 @@
 
 
 ## License
-* `magical_rs` is licensed under the GNU General Public License v3.0. [See here](LICENSE)
+* `magical_rs` is licensed under the MIT License. [See here](LICENSE)

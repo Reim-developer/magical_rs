@@ -17,7 +17,7 @@ fn readme_quick_start() {
     assert!(FileKind::match_types(&header).is_none());
 }
 
-/// README: "with_bytes_read() returns 36,870 bytes" — this is a factual
+/// README: "`with_bytes_read()` returns 36,870 bytes" — this is a factual
 /// claim in the README, so it gets a test.
 #[test]
 fn readme_documented_read_size_is_accurate() {

@@ -8,7 +8,7 @@
 
 use magical_rs::magical::signatures::SIGNATURE_KIND;
 
-fn readme() -> &'static str {
+const fn readme() -> &'static str {
     include_str!("../readme.md")
 }
 

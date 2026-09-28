@@ -265,6 +265,11 @@ Emit 'for _name, _meta in _META.items():'
 Emit '    setattr(FileKind[_name], "__doc__", _meta[0])'
 
 $out = 'bindings\python\python\magical_py\_kinds.py'
-Set-Content -Path $out -Value $sb.ToString() -Encoding utf8
+# Written without a BOM. PowerShell 5.1's `-Encoding utf8` emits one, and this
+# file ships inside the wheel, where a leading U+FEFF is noise.
+[System.IO.File]::WriteAllText(
+    $out,
+    $sb.ToString(),
+    (New-Object System.Text.UTF8Encoding $false))
 Remove-Item 'bindings\python\python\magical_py\_kinds_data.py' -ErrorAction SilentlyContinue
 Write-Output "wrote $out with $($names.Count) members"

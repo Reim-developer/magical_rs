@@ -22,6 +22,23 @@ from magical_py import _magical_rs
 # sources either, so skip rather than fail when installed from PyPI.
 _REPO_ROOT = pathlib.Path(__file__).resolve().parents[3]
 _README = _REPO_ROOT / "readme.md"
+# The generated enum, by the path gen_kinds.ps1 writes it to.
+_GENERATED = pathlib.Path(__file__).resolve().parents[1] / "python" / "magical_py"
+
+
+def test_generated_enum_is_written_without_a_bom() -> None:
+    """`gen_kinds.ps1` writes this file, and it ships inside the wheel.
+
+    PowerShell 5.1's `Set-Content -Encoding utf8` prepends a UTF-8 BOM, which
+    Python tolerates and nothing else notices. A silent generator regression
+    would put that byte back into every published wheel, so it is asserted.
+    """
+    source = _GENERATED / "_kinds.py"
+    if not source.is_file():
+        pytest.skip("not running from a source checkout")
+    assert not source.read_bytes().startswith(b"\xef\xbb\xbf"), (
+        "_kinds.py starts with a UTF-8 BOM; gen_kinds.ps1 must write it without one"
+    )
 
 
 def test_every_rust_kind_is_a_python_member() -> None:

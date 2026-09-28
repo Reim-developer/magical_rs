@@ -137,9 +137,12 @@ jobs:
           run: |
             uv venv --quiet .wheelcheck
             uv pip install --quiet --python .wheelcheck dist/*.whl
+            # Run through `uv run`, not `.wheelcheck/bin/python`. A venv on
+            # Windows puts the interpreter in `Scripts`, so the hard-coded path
+            # is not executable there and the step fails with exit 127.
             # A wheel that installs but cannot detect anything is worse than no
             # wheel, so the check is a real detection rather than an import.
-            .wheelcheck/bin/python -c "
+            uv run --no-project --python .wheelcheck python -c "
             from magical_py import FileKind, detect_bytes, bytes_read
             assert detect_bytes(b'\x89PNG\r\n\x1a\n' + b'\0' * 40) is FileKind.Png
             assert detect_bytes(b'nothing here') is None

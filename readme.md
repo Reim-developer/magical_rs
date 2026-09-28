@@ -13,7 +13,7 @@ cannot go.
 magical_rs = "0.6"
 ```
 
-Not writing Rust? There are Python bindings. They are not on PyPI yet, so for
+Not writing Rust? There are Python bindings. They are not on `PyPI` yet, so for
 now install from the checkout:
 
 ```bash

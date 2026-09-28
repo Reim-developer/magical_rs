@@ -22,8 +22,8 @@ wheel for every platform we publish for. One `abi3` wheel covers CPython 3.8
 and later, so you will not have to build from source.
 
 `FileKind` covers all 114 formats the Rust crate detects, and the enum is
-declared in Python rather than generated, so your editor completes
-`FileKind.` and `help()` reads like documentation rather than a debug dump.
+declared in Python rather than generated, so it is a real `enum.Enum` and your
+editor completes `FileKind.` with every member and its docstring.
 
 ## Use
 
@@ -59,8 +59,9 @@ except FileNotFoundError:
 
 ## What it looks like
 
-Each member carries its display name, which `help(magical_py.FileKind)` shows
-alongside all 113 others. The same text is available programmatically:
+Each member carries its display name as its `__doc__`, which is the attribute
+the REPL and `help()` read. Python 3.9 and later render it for all 114 members;
+Python 3.8 omits it from `help()`, so on 3.8 read `__doc__` directly as below.
 
 ```python
 >>> FileKind.Png.__doc__

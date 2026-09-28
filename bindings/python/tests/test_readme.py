@@ -15,7 +15,9 @@ from __future__ import annotations
 import contextlib
 import io
 import pathlib
+import pydoc
 import re
+import sys
 
 import pytest
 
@@ -97,21 +99,39 @@ def test_readme_states_the_member_count() -> None:
     assert f"{len(FileKind)} formats" in readme()
 
 
-def test_readme_shows_help_output_that_matches_reality() -> None:
-    """`help()` must list every member with its description, not the class doc.
+def test_member_descriptions_are_reachable_through_pydoc() -> None:
+    """Every member's display name must be readable on every supported version.
 
-    The readme no longer quotes `help()` output verbatim, because pydoc's
-    layout is not reproducible. It still claims the descriptions show up
-    there, so that much is checked directly.
+    `help()` is deliberately not the thing asserted here. `pydoc.Doc.docclass`
+    only rendered a data member's `__doc__` when that member was callable or a
+    data descriptor, and an enum member is neither, so Python 3.8 dropped all
+    114 display names from `help()`. Python 3.9 removed that condition.
+    `pydoc.getdoc` has no such condition, so it holds everywhere from 3.8 on and
+    is what the readme points readers at.
     """
+    for name, description in (("Png", "PNG"), ("ISO", "ISO 9660")):
+        member = FileKind[name]
+        assert pydoc.getdoc(member) == description, f"{name} has no display name"
+
+    assert re.search(r"Python 3\.8 omits it from `help\(\)`", readme()), (
+        "the readme no longer warns that 3.8 hides the descriptions"
+    )
+
+
+def test_help_lists_descriptions_where_cpython_supports_it() -> None:
+    """`help()` carries the display names from Python 3.9 on, and not before."""
     buffer = io.StringIO()
     with contextlib.redirect_stdout(buffer):
         help(FileKind)
     output = buffer.getvalue()
 
-    for name, description in (("Png", "PNG"), ("ISO", "ISO 9660")):
-        assert name in output, f"{name} is missing from help() output"
-        assert description in output, f"{description} is missing from help() output"
+    if sys.version_info >= (3, 9):
+        for name, description in (("Png", "PNG"), ("ISO", "ISO 9660")):
+            assert name in output, f"{name} is missing from help() output"
+            assert description in output, f"{description} is missing from help() output"
+    else:
+        # 3.8 still lists the members, it just cannot render their docstrings.
+        assert "Png" in output, "the member list should still be present on 3.8"
 
 
 def test_readme_claims_about_optional_metadata_hold() -> None:

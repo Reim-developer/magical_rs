@@ -1,3 +1,11 @@
+//! Detection tests that read the fixture files from this checkout.
+//!
+//! Gated on `std` because they open files, which `read_file_header` needs and
+//! a `no_std` build does not have. Without the gate this file fails to compile
+//! rather than skipping, so `cargo test --no-default-features` was never
+//! runnable.
+#![cfg(feature = "std")]
+
 #[test]
 fn test_iso_detect() {
     use magical_rs::magical::bytes_read::DEFAULT_MAX_BYTES_READ;

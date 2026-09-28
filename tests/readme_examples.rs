@@ -1,5 +1,15 @@
 //! Verification harness: every code example in readme.md, compiled and run.
 //! If this file compiles and passes, the README examples are correct.
+//!
+//! Gated on `std` because `read_file_header` is, and these examples read real
+//! files from the checkout. Without the gate this file fails to compile rather
+//! than skipping, so `cargo test --no-default-features` was never actually
+//! runnable and a failure there would have looked like a broken build.
+
+// Each example is a `std` example: they open files, so they cannot be checked
+// against the `no_std` build. The `no_std` guarantee is covered by building
+// for `thumbv7em-none-eabi`, not by these tests.
+#![cfg(feature = "std")]
 
 use magical_rs::magical::bytes_read::{read_file_header, with_bytes_read};
 use magical_rs::magical::magic::FileKind;

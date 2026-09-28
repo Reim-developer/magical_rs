@@ -43,3 +43,10 @@ jobs:
           shell: bash
           run: |
             make test-dyn
+
+        # The readme advertises `no_std` support, and nothing above checks it.
+        # `make test` runs with default features, which include `std`.
+        - name: Test and build without std
+          shell: bash
+          run: |
+            make test-nostd

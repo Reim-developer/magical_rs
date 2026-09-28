@@ -31,6 +31,21 @@ jobs:
         # matrix below covers that separately.
         runs-on: ubuntu-latest
 
+        strategy:
+            fail-fast: false
+            matrix:
+                # The package declares requires-python >= 3.8, so the floor is
+                # tested as well as a current release. A single interpreter
+                # would not do: Python 3.8's pydoc renders `help()` without
+                # enum member docstrings, which 3.9 and later do render, so the
+                # readme claims and the tests only agreed on 3.9+.
+                python-version: [ "3.8", "3.12" ]
+
+        env:
+            # uv picks whichever interpreter it likes when left to itself, which
+            # would quietly make the matrix meaningless.
+            UV_PYTHON: ${{ matrix.python-version }}
+
         steps:
         - name: Checkout code
           uses: actions/checkout@v4
@@ -51,7 +66,7 @@ jobs:
         - name: Set up Python
           uses: actions/setup-python@v5
           with:
-              python-version: "3.12"
+              python-version: ${{ matrix.python-version }}
 
         - name: Lint the Rust binding
           shell: bash

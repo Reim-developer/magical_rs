@@ -81,7 +81,9 @@ jobs:
 
         - name: Run the gates
           shell: bash
-          run: ./bindings/python/gates.sh
+          # Invoked through `bash` rather than `./gates.sh` so the step does not
+          # depend on the executable bit surviving in git.
+          run: bash ./bindings/python/gates.sh
 
     wheels:
         # abi3 means one wheel covers CPython 3.8 and later, so the matrix
@@ -124,9 +126,11 @@ jobs:
           shell: bash
           run: |
             rustup target add ${{ matrix.target }}
+            # `--python`, not `--interpreter`: `uv build` has no such flag and
+            # exits 2 without building anything.
             uv build bindings/python \
               --out-dir dist \
-              --interpreter python
+              --python python
 
         - name: Check the wheel installs and works
           shell: bash

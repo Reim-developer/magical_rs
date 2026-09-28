@@ -7,6 +7,7 @@
   - [Version: 0.3.1, `Minor edits`](#version-031-minor-edits)
   - [Version: 0.4.0 `Major API Update`](#version-040-major-api-update)
   - [Version: 0.4.5 `Major API Update`](#version-045-major-api-update)
+  - [Version: 0.6.0 `Signature Tightening`](#version-060-signature-tightening)
 
 
 ## Version: 0.1.3
@@ -205,4 +206,102 @@ cargo add magical_rs --features magical_async_dyn
     assert_eq!(result, MagicKind::MoeMoe);
     assert_ne!(result, MagicKind::UnknownFallback);
     ```
+
+
+## Version: 0.6.0 `Signature Tightening` and `Format Table Expansion`
+
+**Breaking: three signatures changed.**
+Detection results for the same bytes can differ from `0.5.x`. Review before upgrading.
+
+| Format | `0.5.x` | `0.6.0` | Why |
+| --- | --- | --- | --- |
+| `FileKind::Bzip` | `BZ` | `BZh` | `BZ` is only a prefix. The bzip2 block header is `BZh`, so the old rule reported any file starting with those two letters as bzip2. |
+| `FileKind::ScriptExecute` | `#!` | `#!` plus `/` on the same line | `#!` claimed every file starting with those bytes. A real shebang must name an interpreter by path. |
+| `FileKind::Ply` | `ply` | `ply` plus a line break | `ply` claimed any text file starting with that word. The PLY spec puts a line ending straight after the keyword. |
+
+**What this fixes:**
+* An AMR audio file is now reported as [`FileKind::Amr`] instead of
+  `FileKind::ScriptExecute`. The AMR header `#!AMR` has no path separator, so
+  it no longer matches the narrowed shebang rule.
+* Bzip2 detection no longer produces false positives on files that merely
+  begin with the letters `BZ`.
+* A `#` comment or `#include` line in a source file is no longer reported as a
+  script.
+
+**New public module:** `magical::ext_fn::shebang`, exposing `is_shebang`.
+Entries that rely on a predicate rather than a byte signature are now
+`ScriptExecute` and `WEBP`.
+
+**Known limitation of the new shebang rule:** a relative interpreter name such
+as `#!python` is not detected, because it contains no path separator. Such a
+script is non-portable in practice. Previously it was also undetected for a
+different reason, so no realistic script is lost.
+
+**What was changed:**
+* `magical_rs` is now licensed under the MIT License instead of the GNU General
+  Public License v3.0.
+* The built-in format table grew from 48 to 114 formats (142 distinct magic
+  signatures), defined in the new `src/magical/signatures_ext.rs`.
+* The 65 new rules are **appended** to `SIGNATURE_KIND`, never interleaved.
+  Because `match_types` returns the first match, appending guarantees no
+  pre-existing rule can be shadowed. Behaviour of the original 48 formats is
+  bit-for-bit unchanged.
+* `readme.md` was rewritten and is now the single source of crate
+  documentation, pulled in by `#![doc = include_str!("../readme.md")]`.
+  Previously the README and the crate docs were two separate copies that had
+  drifted apart; the crate docs contained a doctest referencing `async_std`,
+  which is not a dependency, so `cargo test --doc` was already failing on
+  `master`.
+* The 65 new rules are **appended** to `SIGNATURE_KIND`, never interleaved.
+  Because `match_types` returns the first match, appending guarantees no
+  pre-existing rule can be shadowed, apart from the three deliberate changes
+  listed above.
+
+**Bugs found and fixed in the documentation:**
+* The old format table misdescribed 9 signatures, including XML (the docs
+  claimed `<!DOCTYPE` was accepted; the code only matches `<?xml ` with a
+  trailing space) and the environment module format (docs said
+  `MODULE\0\0\0`; the code checks `#%Module`).
+* The level 5 example in the old README did not compile. It referenced
+  `CustomMatchRules::WithFnUnsafe`, which does not exist; the available
+  variants are `AllMatchesUnsafe` and `AnyMatchesUnsafe`.
+* `with_bytes_read()` returns 36,870 bytes, not 2,048, because ISO 9660 stores
+  its magic at offset 36,865. This is now documented and covered by a test.
+
+**New tests:**
+* `tests/signature_coverage.rs` walks `SIGNATURE_KIND` and asserts every entry
+  detects itself, that no signature matches at an undeclared offset, that
+  padding is never misdetected, and that truncated input never panics. Any
+  format added in the future is covered automatically.
+* `tests/signature_tightening.rs` pins the `0.6.0` behaviour change. Each of the
+  three tightened formats is tested both ways: real files are still detected,
+  and the specific over-match the change was made to fix no longer happens.
+* `tests/readme_coverage.rs` checks the README against the code in both
+  directions. Every format the table can return must be named in the README,
+  every `FileKind` the README advertises must be one the table can actually
+  return, and the stated table size must match `SIGNATURE_KIND.len()`. A guard
+  assertion fails the test if the README table layout changes and the parser
+  silently stops matching anything.
+* `tests/readme_examples.rs` compiles and runs every code example in the
+  README.
+* `tests/table_size.rs` reports the live table size.
+
+**Formats evaluated and deliberately excluded:**
+* 3D Studio Max, whose magic is byte-for-byte identical to BigTIFF.
+* Text-based formats, which have no magic bytes.
+
+**Why:**
+* The previous GPL-3.0 license capped adoption. Many organizations block GPL-licensed
+  dependencies in their build and security policy, which ruled out both corporate
+  adoption and the use of `magical_rs` inside permissively licensed tooling.
+* MIT removes that ceiling without changing a single line of library code.
+
+**What this does not change:**
+* `magical_rs` is a single-author project. No other contributor holds copyright,
+  so no third-party consent was required for this relicense.
+* Versions `0.4.5` and earlier were already distributed under the GPL. Those grants
+  are permanent and cannot be revoked, for anyone who already received those
+  versions. Anyone depending on `0.4.5` may continue to use it under GPL terms.
+  Only versions from `0.5.0` onward are MIT-licensed.
+* No API, behavior, feature flag, or `no_std` support was modified by this change.
   

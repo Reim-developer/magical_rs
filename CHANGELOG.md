@@ -1,5 +1,6 @@
 # CHANGELOG
 - [CHANGELOG](#changelog)
+  - [magical-py: Version 0.4.0](#magical-py-version-040)
   - [magical-py: Version 0.3.0](#magical-py-version-030)
   - [magical-py: Version 0.2.0](#magical-py-version-020)
   - [Version: 0.1.3](#version-013)
@@ -13,7 +14,101 @@
   - [Version: 0.6.1 `Documentation and Test Coverage`](#version-061-documentation-and-test-coverage)
   - [Version: 0.6.2 `Overflow Fix and Release Gates`](#version-062-overflow-fix-and-release-gates)
   - [Version: 0.6.3 `Header Padding Fix`](#version-063-header-padding-fix)
+  - [Version: 0.6.4 `Offset Arithmetic and a Wrong Constant`](#version-064-offset-arithmetic-and-a-wrong-constant)
 
+
+## `magical-py`: Version 0.4.0
+**What has been changed:**
+
+Level 1 could tell you what a file was and nothing else. Three of the crate's own
+facts about the table were unreachable from Python, and one question could not be
+asked at all. All of it is additive: nothing existing changed shape.
+
+* **Added `describe(kind)`, `signature_table()`, `Signature` and
+  `FileKind.rule`.** What a format is matched on, entry by entry: the bytes, the
+  offsets they are compared at, and the read size the entry declares.
+  `signature_table()` returns all 114 entries **in the order detection tries
+  them**, so walking it and stopping at the first match reproduces `detect`
+  exactly. That order is the answer to "why did my file come back as this", and
+  it is why the list is not sorted.
+* **Added `FileKind.matches(data)`,** the per-format predicate. `detect` stops at
+  the first entry that matched, so a format whose magic is also another format's
+  is unreachable through it. `Ktx`'s magic is a prefix of `Ktx2`'s, so a KTX2
+  file is reported as KTX2 and is never reported as KTX.
+  `FileKind.Ktx.matches(header)` answers `True`, which is a different and also
+  true answer. `Qcow` is shadowed by `Qcow2` the same way; those two pairs are
+  the only ones in the table, and a test walks all 114 entries to keep it so.
+* **Added `read_limits()`, `ReadLimits` and `DEFAULT_MAX_BYTES_READ`.** The
+  crate's `pub const` read sizes, which nothing in Python could read. The one
+  that matters is the 2,048 floor, and the reason it exists: 113 of the 114
+  entries declare 2,048 or more, so a smaller window drops nearly everything.
+  `MP3` is the single exception, at 262, because a frame header ends well before
+  the second sector.
+* **Fixed a wrong constant in the crate's documentation.** `ISO_MAX_BYTES_READ`
+  is 36,870, and `magic.rs` claimed 32,774. `max_bytes` takes the *largest*
+  offset, and `ISO_OFFSETS` ends at 36,865 rather than the 32,769 it starts with
+  — the comment had the first entry's arithmetic and was out by exactly one
+  sector. Readme and CHANGELOG never carried the figure.
+
+**A predicate entry reports no signatures, and that is the honest answer:**
+
+`ScriptExecute` and `WEBP` are decided by Rust functions over the buffer, not by
+a fixed pattern. `FileKind.ScriptExecute.rule.uses_predicate` is `True` and its
+`signatures` is empty. Listing the bytes those files happen to start with would
+be a claim about how the rule works, and it would be wrong: the shebang rule
+requires a `/` later on the line, which is the whole reason it exists. Without
+that check it claimed `#!AMR`, which is the literal magic of AMR audio.
+
+**`matches` does not honour `max_bytes_read`, and that is deliberate:**
+
+A per-format question has no window to declare. `detect_bytes(PNG,
+max_bytes_read=1)` returns `None` because no rule's declared read size fits in
+one byte, and `FileKind.Png.matches(PNG)` is `True`, because it asks only about
+the comparison.
+
+**`Signature` lives in `_kinds.py` next to the enum, not in `_signatures.py`:**
+
+A `Signature` names a `FileKind`, and a `FileKind` has a `rule` that is a
+`Signature`. Split across two modules they are mutually recursive, and the
+deferred import that breaks the tie is flagged by pyright strict as an import
+cycle. One module is the honest structure. For the same reason neither module
+does `from . import _magical_rs`: that names the package, and the package is in
+the middle of importing them.
+
+## Version: 0.6.4 `Offset Arithmetic and a Wrong Constant`
+**What has been changed:**
+
+* **`Magic::matches` saturates its offset arithmetic.** `offset +
+  signature.len()` was unchecked, and that sum is not a total function on
+  `usize`. An offset near the maximum overflowed: a debug build panicked with
+  `attempt to add with overflow` at `signatures.rs:126`, and a release build
+  wrapped the end to a value below the offset's own start and then sliced a
+  range that was not one. Both are aborts, and both happen for an input that
+  should simply not match. This is the same fix `magic_custom.rs` took in 0.6.2,
+  applied to the function that reaches it first. A saturated end is the largest
+  number it can be, so the length check is false and the rule declines; no
+  signature that could have fitted after the offset was in the buffer, so no
+  match is lost.
+* **Fixed a wrong constant in the documentation.** `magic.rs` documented
+  `ISO_MAX_BYTES_READ` as `~32774` and told readers that ISO "requires
+  `allowed_max_read >= 32774`". It is 36,870. `max_bytes` takes the largest
+  offset, and `ISO_OFFSETS` ends at 36,865, not at the 32,769 it starts with.
+
+**The overflow was not reachable through `SIGNATURE_KIND`, and the test does not
+pretend otherwise:**
+
+The table is a crate-authored `static` with small literal offsets, so no input
+could reach it. The test builds a `Magic` directly with
+`offsets: &[usize::MAX]`, because the arithmetic is the thing under test and the
+table is not. Without the fix that panics in debug and indexes a reversed range
+in release. A second assertion in the same test pins that a saturating sum
+landing exactly on the end of a real buffer still matches, so the fix is not
+"give up on large offsets".
+
+This is the second time this crate has had the same unchecked addition in two
+places. `magic_custom.rs` got the `saturating_add` in 0.6.2; `signatures.rs` had
+the identical expression and did not. Miri is still not in CI, which is why this
+took a manual audit to find rather than a failing build.
 
 ## `magical-py`: Version 0.3.0
 **What has been changed:**

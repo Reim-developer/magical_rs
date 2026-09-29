@@ -16,7 +16,7 @@ checksum = "3eaf3ede3fee6db1a4c2ee091bf8a8b4dccdc6d17f656fb07896ee72867612f2"
 
 [[package]]
 name = "magical-py"
-version = "0.3.0"
+version = "0.4.0"
 dependencies = [
  "magical_rs",
  "pyo3",
@@ -24,7 +24,7 @@ dependencies = [
 
 [[package]]
 name = "magical_rs"
-version = "0.6.3"
+version = "0.6.4"
 
 [[package]]
 name = "once_cell"

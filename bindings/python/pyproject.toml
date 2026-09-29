@@ -4,7 +4,7 @@ build-backend = "maturin"
 
 [project]
 name = "magical-py"
-version = "0.3.0"
+version = "0.4.0"
 description = "Native Python bindings for magical_rs, a zero-dependency file type detection library."
 readme = "README.md"
 license = { text = "MIT" }

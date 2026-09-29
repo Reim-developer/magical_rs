@@ -274,8 +274,13 @@ uv build               # build the wheel and the sdist
 ```
 
 `python/magical_py/_kinds.py` is generated. Edit the metadata table in
-`gen_kinds.ps1` and re-run it; `tests/test_drift.py` fails if the enum and the
-Rust detection table disagree.
+`../../scripts/gen_kinds.ps1` and re-run it; `tests/test_drift.py` fails if the
+enum and the Rust detection table disagree.
+
+The repository's helper scripts live in `../../scripts/`, not next to the code
+they maintain. `gates.sh` is the one this section describes: it runs the build,
+the tests, pyright, rustfmt and clippy in one go, and CI runs the same file, so
+a local run and a CI run cannot disagree about what "green" means.
 
 ## License
 

@@ -42,7 +42,7 @@ fn detect_iso() {
      * In this case, you should use with_bytes_read
      * to ensure result is always correct.
      * For more information, please read:
-     * https://docs.rs/magical_rs/0.6.3/magical_rs/#warning-use-with_bytes_read-for-correct-detection
+     * https://docs.rs/magical_rs/0.6.3/magical_rs/#two-things-to-know-before-you-rely-on-it
      */
     let max_byte_read = with_bytes_read();
 

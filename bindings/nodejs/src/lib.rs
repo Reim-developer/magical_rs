@@ -1,4 +1,4 @@
-//! The WebAssembly module behind the `magical-js` package.
+//! The WebAssembly module behind the `@reim-developer/magical-js` package.
 //!
 //! # What this is, and what it deliberately is not
 //!

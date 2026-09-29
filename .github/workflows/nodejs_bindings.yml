@@ -150,7 +150,11 @@ jobs:
         - name: Check what the tarball contains
           run: |
             cd "$RUNNER_TEMP"
-            tar tzf magical-js-*.tgz | sort > packed.txt
+            # A scoped package drops the `@` and turns the `/` into a `-`, so
+            # `@reim-developer/magical-js` packs to `reim-developer-magical-js-*.tgz`.
+            # The old `magical-js-*.tgz` glob does not match that, and a glob that
+            # matches nothing is not a failure unless something says it is.
+            tar tzf reim-developer-magical-js-*.tgz | sort > packed.txt
             cat packed.txt
             # A `.wasm` missing from `files` installs cleanly everywhere and then
             # throws at first call with a message about a missing file, which is a
@@ -203,7 +207,7 @@ jobs:
               p.type = 'module';
               fs.writeFileSync('package.json', JSON.stringify(p, null, 2));
             "
-            npm install "$RUNNER_TEMP"/magical-js-*.tgz
+            npm install "$RUNNER_TEMP"/reim-developer-magical-js-*.tgz
 
             # A real detection rather than an import: a package that installs and
             # then throws on first call is worse than one that fails to install.
@@ -211,7 +215,7 @@ jobs:
             import {
               detectBytes, allKinds, describe, matchTypes, matchAllTypes,
               neededBytes, readLimits, matches,
-            } from "magical-js";
+            } from "@reim-developer/magical-js";
 
             const png = Uint8Array.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
             const gif = Uint8Array.from([0x47, 0x49, 0x46, 0x38, 0x39, 0x61]);
@@ -252,7 +256,7 @@ jobs:
             # `_wasm.js`'s pointer-returning exports have become public API, and
             # nothing documented their contract.
             node -e "
-              import('magical-js/_wasm.js')
+              import('@reim-developer/magical-js/_wasm.js')
                 .then(() => { console.error('internals are importable'); process.exit(1); })
                 .catch((e) => {
                   if (e.code !== 'ERR_PACKAGE_PATH_NOT_EXPORTED') {

@@ -1,4 +1,4 @@
-# magical-js
+# @reim-developer/magical-js
 
 JavaScript and TypeScript bindings for [`magical_rs`](../../readme.md), a
 zero-dependency file type detection library. 114 formats, 42 KB of WebAssembly
@@ -9,7 +9,7 @@ This is not a port of `file-type` or `python-magic`. The API is designed for
 JavaScript, and the reason to use it over either is in the next section.
 
 ```js
-import { detectPath, describe } from "magical-js";
+import { detectPath, describe } from "@reim-developer/magical-js";
 
 detectPath("photo.png");          // "Png"
 describe("Png").signatures[0];    // Uint8Array [137, 80, 78, 71, 13, 10, 26, 10]
@@ -18,8 +18,12 @@ describe("Png").signatures[0];    // Uint8Array [137, 80, 78, 71, 13, 10, 26, 10
 ## Install
 
 ```sh
-npm install magical-js
+npm install @reim-developer/magical-js
 ```
+
+The scope is there because `magical-js` on npm is a different package that was
+published and then unpublished in 2023; the name is still held, and the registry
+will not release it back.
 
 Node 22 or newer. The package is ESM-only, and the reason is one line of code:
 `_wasm.js` finds the compiled module with `new URL("./magical_js.wasm",
@@ -58,7 +62,7 @@ point: the interesting types are about *your* arguments, and no tool that reads 
 `.wasm` can write them.
 
 ```ts
-import { describe, matchTypes } from "magical-js";
+import { describe, matchTypes } from "@reim-developer/magical-js";
 
 // `describe` carries the name you asked about into the rule it returns, so the
 // answer is `"Png"` rather than the 114-way union.

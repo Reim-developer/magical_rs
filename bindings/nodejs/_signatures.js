@@ -55,14 +55,14 @@ class Reader {
 
   u8() {
     if (this.at + 1 > this.bytes.length) {
-      throw new RangeError(`magical-js: table blob ended at byte ${this.at} reading a u8`);
+      throw new RangeError(`@reim-developer/magical-js: table blob ended at byte ${this.at} reading a u8`);
     }
     return this.bytes[this.at++];
   }
 
   u32() {
     if (this.at + 4 > this.bytes.length) {
-      throw new RangeError(`magical-js: table blob ended at byte ${this.at} reading a u32`);
+      throw new RangeError(`@reim-developer/magical-js: table blob ended at byte ${this.at} reading a u32`);
     }
     // A fresh view rather than a DataView: one per field would be an allocation
     // per field, and this runs 114 times at import. Little endian is what the
@@ -75,7 +75,7 @@ class Reader {
   slice(length) {
     if (this.at + length > this.bytes.length) {
       throw new RangeError(
-        `magical-js: table blob ended at byte ${this.at} reading ${length} bytes`,
+        `@reim-developer/magical-js: table blob ended at byte ${this.at} reading ${length} bytes`,
       );
     }
     const view = this.bytes.subarray(this.at, this.at + length);
@@ -100,7 +100,7 @@ function decode() {
   const magic = String.fromCharCode(...bytes.subarray(0, 4));
   if (magic !== BLOB_MAGIC) {
     throw new Error(
-      `magical-js: the table blob starts with ${JSON.stringify(magic)}, expected ` +
+      `@reim-developer/magical-js: the table blob starts with ${JSON.stringify(magic)}, expected ` +
         `${JSON.stringify(BLOB_MAGIC)}. The compiled module and this decoder are from ` +
         "different builds.",
     );
@@ -112,10 +112,10 @@ function decode() {
   for (let i = 0; i < constantCount; i++) constants[i] = r.u32();
   const constant = (name) => {
     const index = CONSTANT[name];
-    if (index === undefined) throw new Error(`magical-js: no constant slot named ${name}`);
+    if (index === undefined) throw new Error(`@reim-developer/magical-js: no constant slot named ${name}`);
     if (index >= constantCount) {
       throw new Error(
-        `magical-js: constant slot ${name} is ${index}, but the module carries only ` +
+        `@reim-developer/magical-js: constant slot ${name} is ${index}, but the module carries only ` +
           `${constantCount} constants`,
       );
     }
@@ -154,13 +154,13 @@ function decode() {
     }
     if (kind >= count) {
       throw new Error(
-        `magical-js: table entry ${position} claims discriminant ${kind}, but there are ` +
+        `@reim-developer/magical-js: table entry ${position} claims discriminant ${kind}, but there are ` +
           `only ${count} formats. The module and _kinds.js are from different builds.`,
       );
     }
     if (table[kind] !== undefined) {
       throw new Error(
-        `magical-js: two table entries both claim discriminant ${kind}. Every format ` +
+        `@reim-developer/magical-js: two table entries both claim discriminant ${kind}. Every format ` +
           "must appear exactly once, or one of them is invisible.",
       );
     }
@@ -175,7 +175,7 @@ function decode() {
   const missing = table.indexOf(undefined);
   if (missing !== -1) {
     throw new Error(
-      `magical-js: no table entry claims discriminant ${missing} (${
+      `@reim-developer/magical-js: no table entry claims discriminant ${missing} (${
         FILE_KIND_NAMES[missing]
       }). Every format must appear, or \`describe\` would answer for some formats and ` +
         "not others with nothing to tell the two apart.",
@@ -187,7 +187,7 @@ function decode() {
     // same bytes from the other end and asserts the same thing, so a failure here
     // means one of the two decoders drifted from the encoder.
     throw new Error(
-      `magical-js: the table blob has ${bytes.length - r.at} trailing bytes the decoder ` +
+      `@reim-developer/magical-js: the table blob has ${bytes.length - r.at} trailing bytes the decoder ` +
         "did not account for. The module and this decoder are from different builds.",
     );
   }
@@ -244,7 +244,7 @@ export function indexOfKind(kind) {
   const index = FILE_KIND_INDICES.get(kind);
   if (index === undefined) {
     throw new RangeError(
-      `magical-js: ${JSON.stringify(kind)} is not a file kind. There are ` +
+      `@reim-developer/magical-js: ${JSON.stringify(kind)} is not a file kind. There are ` +
         `${FILE_KIND_INDICES.size} of them; \`allKinds()\` lists them.`,
     );
   }
@@ -270,7 +270,7 @@ export function signatureForIndex(index) {
   const name = FILE_KIND_NAMES[index];
   if (name === undefined) {
     throw new RangeError(
-      `magical-js: the table reports a rule for discriminant ${index}, which is not a ` +
+      `@reim-developer/magical-js: the table reports a rule for discriminant ${index}, which is not a ` +
         `file kind. The module and _kinds.js are from different builds; run \`npm run gen\`.`,
     );
   }

@@ -1,4 +1,4 @@
-// magical-js — JavaScript and TypeScript bindings for `magical_rs`.
+// @reim-developer/magical-js - JavaScript and TypeScript bindings for `magical_rs`.
 //
 // This file is the package's whole public surface, and it is a barrel on purpose.
 // Every name below is re-exported from exactly one internal module, so the shape

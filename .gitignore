@@ -23,6 +23,9 @@ __pycache__/
 # file nobody can review. The `.wasm` beside them is an artifact of the build.
 bindings/nodejs/magical_js.wasm
 bindings/nodejs/node_modules/
+# `nodejs_publish.yml` packs into `dist/` and a contributor reproducing the release
+# locally does the same. `bindings/python/dist/` is ignored for the same reason.
+bindings/nodejs/dist/
 
 # Planning notes are working documents, not project documentation, so they do
 # not belong here. They are written to the agent's scratch directory instead.

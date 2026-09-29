@@ -37,11 +37,11 @@ Not writing Rust or Python? There are JavaScript and TypeScript bindings, shippe
 as a 42 KB WebAssembly module with hand-written generics:
 
 ```bash
-npm install magical-js
+npm install @reim-developer/magical-js
 ```
 
 ```ts
-import { detectPath, matchTypes } from "magical-js";
+import { detectPath, matchTypes } from "@reim-developer/magical-js";
 
 detectPath("photo.png");                   // "Png", not a Promise
 
@@ -333,7 +333,7 @@ from both sides.
 The [bindings README](https://github.com/Reim-developer/magical_rs/tree/master/bindings/python#detection-levels)
 sets out what each level costs in Python and when to reach for it.
 
-### The same levels in `magical-js`
+### The same levels in `@reim-developer/magical-js`
 
 The `NodeJS` bindings carry levels 1 and 2, and the reason the other three are
 missing is structural rather than a matter of effort: a level 3 or 4 predicate is
@@ -578,7 +578,7 @@ failure to read the file. Their
 [detection levels](https://github.com/Reim-developer/magical_rs/tree/master/bindings/python#detection-levels)
 section covers levels 2, 3 and 4, the custom rules, and what each one costs.
 
-The [`magical-js`](https://github.com/Reim-developer/magical_rs/tree/master/bindings/nodejs)
+The [`@reim-developer/magical-js`](https://github.com/Reim-developer/magical_rs/tree/master/bindings/nodejs)
 bindings have no `examples/` directory, because everything in
 [`bindings/nodejs/README.md`](https://github.com/Reim-developer/magical_rs/tree/master/bindings/nodejs)
 is four lines long and the README is the example. The [workflow](.github/workflows/nodejs_bindings.yml)

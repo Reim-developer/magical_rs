@@ -26,6 +26,66 @@ import * as api from "../index.js";
 
 const README = readFileSync(fileURLToPath(new URL("../README.md", import.meta.url)), "utf8");
 const WASM = fileURLToPath(new URL("../magical_js.wasm", import.meta.url));
+const PKG = JSON.parse(
+  readFileSync(fileURLToPath(new URL("../package.json", import.meta.url)), "utf8"),
+);
+
+test("the README says the package's real name, and never an old one", () => {
+  // The name is the one thing in a package that is wrong everywhere at once: the
+  // install line, every import, the headings, and the prefix on 25 error messages.
+  // Nothing about a rename makes any of those fail, so the tests all stay green
+  // over a README that tells people to install a package that does not exist.
+  //
+  // It was not hypothetical. `magical-js` — the name this binding was written with
+  // — is held on npm by a different package that was published and then
+  // unpublished in 2023, so the rename to a scope was forced, and every one of
+  // those places needed changing by hand.
+  assert.equal(PKG.name, "@reim-developer/magical-js");
+
+  // The install line, exactly. `npm i` is not accepted as a synonym here because
+  // the README only uses the long form and a synonym would make the assertion
+  // pass on a line nobody writes.
+  assert.match(README, new RegExp(`^npm install ${escape(PKG.name)}$`, "m"));
+  assert.doesNotMatch(README, /^npm install magical-js$/m);
+
+  // The heading is the name a reader sees first, on npmjs.com and in a file
+  // tree alike.
+  assert.match(README, new RegExp(`^# ${escape(PKG.name)}$`, "m"));
+
+  // Every import in the README resolves to this package, or to a Node builtin.
+  // This is the assertion that would have caught the rename, because an unscoped
+  // import line is a copy-paste that still looks right. Nothing else is allowed
+  // because this README documents one package; if it ever grows an example that
+  // imports a third-party module, this list is where that gets admitted.
+  const specifiers = new Set([...README.matchAll(/from "([^"]+)"/g)].map((m) => m[1]));
+  assert.ok(specifiers.size > 0, "the scan no longer finds any import in the README");
+  for (const specifier of specifiers) {
+    assert.ok(
+      specifier === PKG.name || specifier.startsWith("node:"),
+      `the README imports "${specifier}", which is neither this package nor a builtin`,
+    );
+  }
+
+  // And the error prefix carries the name too, because a message that names
+  // `magical-js` now points at somebody else's package. Checked in both
+  // directions: the scoped prefix is present, and the old unscoped one is gone
+  // from every file that throws.
+  //
+  // The unscoped prefix is a *substring* of the scoped one, so the scoped form is
+  // cut out before the search. Testing `"magical-js: " in source` directly would
+  // pass on a file that had done nothing, and fail on a file that was entirely
+  // correct — the assertion would be about the test rather than the code.
+  const prefix = `${PKG.name}: `;
+  for (const file of ["_levels.js", "_signatures.js", "_wasm.js"]) {
+    const source = readFileSync(fileURLToPath(new URL(`../${file}`, import.meta.url)), "utf8");
+    assert.ok(source.includes(prefix), `${file} no longer prefixes errors with the package name`);
+    const unscoped = source.split(prefix).join("");
+    assert.ok(
+      !unscoped.includes("magical-js: "),
+      `${file} still prefixes errors with the unscoped name, which is another package`,
+    );
+  }
+});
 
 test("the counts the README quotes are the ones the module reports", () => {
   // "114 formats", "114 rows", "114 names", "the 114-way union", "the format
@@ -161,4 +221,9 @@ test("the levels the README says are present are the ones that are", () => {
 function claimedKilobytes(pattern) {
   const match = README.match(pattern);
   return match ? Number(match[1]) : 0;
+}
+
+/** Quote a package name for a regular expression; the scope is not a pattern. */
+function escape(text) {
+  return text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }

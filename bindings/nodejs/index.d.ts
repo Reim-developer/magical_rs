@@ -1,4 +1,4 @@
-// The hand-written type surface for magical-js.
+// The hand-written type surface for `@reim-developer/magical-js`.
 //
 // Why hand-written rather than generated: the generics below are the reason this
 // binding exists in TypeScript, and no generator produces them. A tool that reads

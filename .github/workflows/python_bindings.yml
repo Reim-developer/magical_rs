@@ -98,12 +98,16 @@ jobs:
                 include:
                     - os: ubuntu-latest
                       target: x86_64-unknown-linux-gnu
+                      arch: x86_64
                     - os: macos-latest
                       target: aarch64-apple-darwin
+                      arch: arm64
                     - os: macos-latest
                       target: x86_64-apple-darwin
+                      arch: x86_64
                     - os: windows-latest
                       target: x86_64-pc-windows-msvc
+                      arch: amd64
 
         runs-on: ${{ matrix.os }}
 
@@ -127,6 +131,13 @@ jobs:
 
         - name: Build the wheel
           shell: bash
+          env:
+              # `uv build` has no `--target`, so this is how the target reaches
+              # maturin. Without it maturin builds for the *host*, and both
+              # macOS legs run on the same arm64 runner, so both produced a
+              # wheel named `...macosx_11_0_arm64.whl`. Both then passed every
+              # assertion below, on the same architecture, twice.
+              CARGO_BUILD_TARGET: ${{ matrix.target }}
           run: |
             rustup target add ${{ matrix.target }}
             # `--python`, not `--interpreter`: `uv build` has no such flag and
@@ -138,6 +149,31 @@ jobs:
         - name: Check the wheel installs and works
           shell: bash
           run: |
+            # The wheel must be the one this matrix entry was asked for. Testing
+            # it is not evidence of what it is: the assertions below all pass on
+            # an arm64 wheel on an arm64 runner, whatever was asked for.
+            wheels=(dist/*.whl)
+            if [ "${#wheels[@]}" -ne 1 ]; then
+              echo "::error::Expected exactly one wheel in dist, found ${#wheels[@]}."
+              exit 1
+            fi
+            name=$(basename "${wheels[0]}")
+            # The platform tag is whatever follows the last hyphen. `x86_64`
+            # cannot be found by splitting on underscores, because it contains
+            # one: that yields 64.
+            plat="${name%.whl}"; plat="${plat##*-}"
+            echo "built $name -> $plat"
+            # The architecture is bounded by a hyphen or an underscore, since
+            # the platform tag's own components are joined with underscores:
+            # macosx_11_0_arm64, win_amd64, linux_x86_64.
+            case "$plat" in
+              *-"${{ matrix.arch }}"|*_"${{ matrix.arch }}") ;;
+              *)
+                echo "::error::$name has platform tag $plat, which does not end in ${{ matrix.arch }} as ${{ matrix.target }} requires."
+                exit 1
+                ;;
+            esac
+
             uv venv --quiet .wheelcheck
             uv pip install --quiet --python .wheelcheck dist/*.whl
             # Run through `uv run`, not `.wheelcheck/bin/python`. A venv on

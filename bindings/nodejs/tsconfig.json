@@ -1,0 +1,29 @@
+{
+  // Type-checks the hand-written declarations and the generic drift test.
+  //
+  // `noEmit`, because there is nothing to emit: this package ships JavaScript, and
+  // `index.d.ts` is the contract rather than a build output. Running the compiler
+  // at all is the point — a `.d.ts` that no compiler ever reads is a comment.
+  //
+  // `strict`, and `skipLibCheck: false`, because the declarations *are* the thing
+  // under test here. Skipping lib checks would skip them.
+  //
+  // `types: []` so no `@types/node` is needed: the surface is deliberately free of
+  // Node-specific types, since every value in it is a `Uint8Array`, a `number`, a
+  // `string` or `null`. A binding that needed Node's types would not also run in
+  // a browser, and the module has no imports so it does.
+  "compilerOptions": {
+    "target": "es2022",
+    "lib": ["es2023"],
+    "module": "node16",
+    "moduleResolution": "node16",
+    "strict": true,
+    "noEmit": true,
+    "skipLibCheck": false,
+    "exactOptionalPropertyTypes": true,
+    "noUncheckedIndexedAccess": false,
+    "verbatimModuleSyntax": true,
+    "types": []
+  },
+  "include": ["index.d.ts", "_kinds.d.ts", "test/types.ts"]
+}

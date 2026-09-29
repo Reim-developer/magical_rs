@@ -18,6 +18,21 @@ that carries its media type and conventional extension with it.
 Detection reads magic bytes only. The file name and its extension are never
 consulted, so a ``.jpg`` holding PNG data is reported as
 :attr:`FileKind.Png`.
+
+The crate has five detection levels. :func:`detect` and :func:`detect_bytes`
+are level 1, the built-in table. The other four are custom rules, and three of
+them have a Python counterpart:
+
+* Level 2, :class:`MagicCustom` with :func:`match_types_custom`, describes a
+  format as signatures at offsets. A match costs one Rust call.
+* Level 3, :class:`DynMagicCustom` with :func:`match_dyn_types`, hands the
+  decision to a Python callable. Kinds may differ between rules.
+* Level 4, :class:`AsyncDynMagic` with :func:`match_async_dyn_types`, is level 3
+  with a matcher that may await.
+* Level 5, raw pointers, is ``unsafe`` by definition and is not exposed.
+
+:mod:`magical_py._levels` documents what each level costs and where it
+deliberately differs from the crate.
 """
 
 from __future__ import annotations
@@ -27,12 +42,38 @@ from typing import Final
 
 from . import _magical_rs
 from ._kinds import FileKind
+from ._levels import (
+    AsyncDynMagic,
+    AsyncPredicate,
+    DynMagicCustom,
+    MagicCustom,
+    MatchRules,
+    Predicate,
+    match_async_dyn_types,
+    match_async_dyn_types_all,
+    match_dyn_types,
+    match_dyn_types_all,
+    match_types_custom,
+    match_types_custom_all,
+)
 
 __all__ = [
+    "AsyncDynMagic",
+    "AsyncPredicate",
+    "DynMagicCustom",
     "FileKind",
+    "MagicCustom",
+    "MatchRules",
+    "Predicate",
     "bytes_read",
     "detect",
     "detect_bytes",
+    "match_async_dyn_types",
+    "match_async_dyn_types_all",
+    "match_dyn_types",
+    "match_dyn_types_all",
+    "match_types_custom",
+    "match_types_custom_all",
     "version",
 ]
 

@@ -12,6 +12,7 @@ checking the formatting.
 
 from __future__ import annotations
 
+import asyncio
 import contextlib
 import io
 import pathlib
@@ -21,7 +22,21 @@ import sys
 
 import pytest
 
-from magical_py import FileKind, bytes_read, detect, detect_bytes, version
+from magical_py import (
+    AsyncDynMagic,
+    DynMagicCustom,
+    FileKind,
+    MagicCustom,
+    MatchRules,
+    bytes_read,
+    detect,
+    detect_bytes,
+    match_async_dyn_types,
+    match_dyn_types,
+    match_dyn_types_all,
+    match_types_custom,
+    version,
+)
 
 _README = pathlib.Path(__file__).resolve().parents[1] / "README.md"
 
@@ -158,3 +173,112 @@ def test_readme_two_byte_claim_holds() -> None:
 
     for name in ("Arj", "Bitmap", "Gzip", "MSDOS", "SerializedJavaData", "Zlib"):
         assert f"`{name}`" in readme(), f"the readme dropped {name} from the caveat"
+
+
+# --- the detection levels section -----------------------------------------
+#
+# The levels table is a claim about cost, and cost is the reason the levels
+# exist, so the names in it and the outcomes in the snippets are both checked.
+
+
+def test_readme_documents_all_three_custom_levels() -> None:
+    """The table must keep naming the level each entry belongs to."""
+    for name in ("MagicCustom", "DynMagicCustom", "AsyncDynMagic"):
+        assert f"| `{name}` |" in readme(), f"the levels table dropped {name}"
+    for name in (
+        "match_types_custom",
+        "match_dyn_types",
+        "match_dyn_types_all",
+        "match_async_dyn_types",
+    ):
+        assert f"`{name}`" in readme(), f"the levels section never shows {name}"
+
+
+def test_readme_says_level_5_is_not_exposed() -> None:
+    """The crate has five levels and this has three. The reader should know."""
+    assert re.search(r"Level 5 is raw pointers", readme())
+    assert "`unsafe` by definition" in readme()
+
+
+def test_readme_level_2_example_holds() -> None:
+    """The snippet's two results: the match, and the fallback."""
+    png = bytes([0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A])
+    rules = [
+        MagicCustom("gif", [b"GIF87a", b"GIF89a"], [0]),
+        MagicCustom("png", [png], [0]),
+    ]
+    assert match_types_custom(png, rules, "unknown") == "png"
+    assert match_types_custom(b"zzz", rules, "unknown") == "unknown"
+
+
+def test_readme_level_2_predicate_example_holds() -> None:
+    """The readme's `is_utf8` predicate, used the way the readme uses it."""
+
+    def is_utf8(data: bytes) -> bool:
+        try:
+            data.decode("utf-8")
+        except UnicodeDecodeError:
+            return False
+        return True
+
+    rule = MagicCustom("text", rules=MatchRules.all(is_utf8))
+    assert rule.matches("héllo".encode("utf-8")) is True
+    assert rule.matches(b"\xff\xfe\x00") is False
+
+
+def test_readme_level_3_example_holds() -> None:
+    """Both forms, and the mixed-kind claim the section makes in prose."""
+    rules = [
+        DynMagicCustom(lambda data: data.startswith(b"RIFF"), "riff"),
+        DynMagicCustom(lambda data: data[4:8] == b"WEBP", "webp"),
+    ]
+    assert match_dyn_types(b"RIFF____WEBPVP8 ", rules) == "riff"
+    assert match_dyn_types(b"OggS\x00\x00\x00\x00", rules) is None
+    assert match_dyn_types_all(b"OggS\x00\x00\x00\x00", rules) == []
+    # First match wins, so a file that is both is reported as the first rule.
+    assert match_dyn_types_all(b"RIFF____WEBPVP8 ", rules) == ["riff"]
+
+    mixed: list[DynMagicCustom[object]] = [
+        DynMagicCustom(lambda data: True, "a string"),
+        DynMagicCustom(lambda data: True, 42),
+        DynMagicCustom(lambda data: True, None),
+    ]
+    assert match_dyn_types_all(b"anything", mixed) == ["a string", 42, None]
+
+
+def test_readme_level_4_example_holds() -> None:
+    """The async snippet, driven the way the readme drives it."""
+    calls: list[bytes] = []
+
+    async def registered_checksum(data: bytes) -> bool:
+        calls.append(data)
+        return data[:4] == b"\x89PNG"
+
+    rule = AsyncDynMagic(registered_checksum, "verified")
+    png = bytes([0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A]) * 4
+    assert asyncio.run(match_async_dyn_types(png, [rule])) == "verified"
+    assert calls == [png]
+    assert asyncio.run(match_async_dyn_types(b"not a png", [rule])) is None
+
+
+def test_readme_level_4_says_a_coroutine_object_is_a_type_error() -> None:
+    """The readme states a refusal, so the refusal has to be real."""
+
+    async def decide(data: bytes) -> bool:
+        return True
+
+    pending = decide(b"")
+    rule = AsyncDynMagic(pending, "k")  # type: ignore[arg-type]
+    try:
+        with pytest.raises(TypeError, match="not callable"):
+            asyncio.run(rule.matches(b""))
+    finally:
+        pending.close()
+
+    assert "coroutine object" in readme()
+
+
+def test_readme_level_4_claims_no_feature_flag() -> None:
+    """The readme tells a reader there is nothing to install, so check the claim."""
+    assert "no feature flag and no extra dependency" in readme()
+    assert re.search(r"magical_async_dyn", readme())

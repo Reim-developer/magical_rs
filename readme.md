@@ -278,6 +278,29 @@ taking a slice of `unsafe fn(*const ()) -> bool`. There is no
 `WithFnUnsafe` variant — the single-predicate case uses `AllMatchesUnsafe` with
 one element. Multiple unsafe predicates have been supported since `0.4.5`.
 
+### The same levels in `magical_py`
+
+The Python bindings carry levels 1, 2, 3 and 4. Three things about them are not
+just a transliteration of the above.
+
+Level 5 is not there. It is `unsafe` by definition and there is no Python
+counterpart worth shipping.
+
+Levels 3 and 4 need no feature flag and no extra dependency, because they are
+Python and there is nothing to switch on. Level 4 additionally runs on the
+caller's event loop rather than being driven from Rust, since a Python
+awaitable usually needs the loop it was called from.
+
+Level 2 is not this level 2. `MagicCustom` holds `&'static` slices, so a rule
+assembled from Python data at run time could only be `Box::leak`ed, and a
+process that builds rules in a loop would leak without bound. The binding
+reproduces the comparison in Rust instead, and pins it to the behaviour above
+from both sides. The cost is a small and deliberate divergence: an offset near
+`usize::MAX`, which panics here, reports no match there.
+
+The [bindings README](https://github.com/Reim-developer/magical_rs/tree/master/bindings/python#detection-levels)
+sets out what each level costs in Python and when to reach for it.
+
 ## Feature flags
 
 | Flag | Default | Effect |
@@ -499,7 +522,9 @@ bindings carry their own six runnable scripts in
 [`bindings/python/examples/`](https://github.com/Reim-developer/magical_rs/tree/master/bindings/python/examples),
 covering the API that is specific to Python: detecting from a path, from
 memory, walking a directory tree, and telling a `None` result apart from a
-failure to read the file.
+failure to read the file. Their
+[detection levels](https://github.com/Reim-developer/magical_rs/tree/master/bindings/python#detection-levels)
+section covers levels 2, 3 and 4, the custom rules, and what each one costs.
 
 ## Development
 

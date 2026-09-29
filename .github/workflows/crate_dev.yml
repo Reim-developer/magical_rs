@@ -31,7 +31,15 @@ jobs:
         - name: Add Rust component
           shell: bash
           run: |
-            rustup component add clippy
+            rustup component add clippy rustfmt
+
+        # Before the linter, so a formatting failure is not read as a lint
+        # failure. Neither rewrites the checkout: `--check` only reports, and a
+        # contributor fixes it with `make fmt` locally.
+        - name: Format check
+          shell: bash
+          run: |
+            make fmt
 
         - name: Linter check
           shell: bash

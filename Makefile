@@ -1,7 +1,20 @@
-.PHONY: target test linter test-dyn test-unsafe test-nostd build-nostd
+.PHONY: target test linter fmt test-dyn test-unsafe test-nostd build-nostd
 
 test:
 	@cargo test
+
+# Separate from `linter` on purpose. Clippy answers "is this code wrong" and
+# rustfmt answers "is this written the way the tool writes it", so a failure
+# here is one `cargo fmt` away and not a thought. Keeping them apart means a
+# formatting failure is never mistaken for a lint failure, and neither is
+# hidden inside the other.
+#
+# This is a gate rather than a chore because nothing was enforcing it. Until it
+# existed, 17 rustfmt diffs sat in `src/` and `tests/` unseen, because no
+# target in this file and no step in crate_dev.yml ran rustfmt. A format rule
+# nothing checks is a preference.
+fmt:
+	@cargo fmt --check
 
 linter:
 	@cargo clippy \

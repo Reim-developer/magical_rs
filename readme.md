@@ -494,6 +494,13 @@ Runnable examples live in
 | `async_dyn_magic` | Level 4, async rules |
 | `unsafe_context` | Level 5, raw pointer rules |
 
+The [`magical_py`](https://github.com/Reim-developer/magical_rs/tree/master/bindings/python)
+bindings carry their own six runnable scripts in
+[`bindings/python/examples/`](https://github.com/Reim-developer/magical_rs/tree/master/bindings/python/examples),
+covering the API that is specific to Python: detecting from a path, from
+memory, walking a directory tree, and telling a `None` result apart from a
+failure to read the file.
+
 ## Development
 
 ```bash

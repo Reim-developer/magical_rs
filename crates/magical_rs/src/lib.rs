@@ -18,6 +18,7 @@ pub mod magical {
 
     pub mod async_dyn_magic;
     pub mod dyn_magic;
+    pub mod kinds_meta;
     pub mod magic;
     pub mod magic_custom;
     pub mod match_rules;

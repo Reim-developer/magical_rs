@@ -1,6 +1,18 @@
 use crate::magical::signatures::SIGNATURE_KIND;
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+// `Ord` and `Hash` are here for the collections, not for comparing formats.
+//
+// `FileKind` is a fieldless enum, so both derive correctly and neither changes a
+// byte of the layout. What they buy is that a caller can put a kind in a
+// `BTreeSet` or key a `BTreeMap` by one, which is the shape a cache or a
+// per-format configuration table wants and which this enum could not do before:
+// it derived only `PartialEq`, and collecting into a `BTreeSet` is a trait error
+// rather than something type inference sorts out.
+//
+// The ordering they give is declaration order, which is arbitrary and stable.
+// Nothing in this crate sorts by it, and `kinds_meta::ALL_KINDS` exists for the
+// cases that want a list in a deliberate order.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum FileKind {
     Png,
     Bitmap,

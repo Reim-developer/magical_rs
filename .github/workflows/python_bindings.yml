@@ -98,16 +98,17 @@ jobs:
                 include:
                     - os: ubuntu-latest
                       target: x86_64-unknown-linux-gnu
-                      arch: x86_64
                     - os: macos-latest
                       target: aarch64-apple-darwin
-                      arch: arm64
-                    - os: macos-latest
+                    # An Intel runner, because an x86_64 wheel cannot be
+                    # installed on an arm64 one. Both macOS entries cannot
+                    # share `macos-latest`, which is arm64: cross compiling
+                    # produced a correct x86_64 wheel that the test step then
+                    # refused to install.
+                    - os: macos-15-intel
                       target: x86_64-apple-darwin
-                      arch: x86_64
                     - os: windows-latest
                       target: x86_64-pc-windows-msvc
-                      arch: amd64
 
         runs-on: ${{ matrix.os }}
 
@@ -158,18 +159,32 @@ jobs:
               exit 1
             fi
             name=$(basename "${wheels[0]}")
+            # The architecture, derived from the target triple, because the two
+            # spell it differently: the triple says aarch64 and pc-windows-msvc,
+            # the wheel tag says arm64 and win_amd64. A target with no rule here
+            # fails rather than passing unchecked, since a wheel whose
+            # architecture was never verified is the bug this is here to catch.
+            case "${{ matrix.target }}" in
+              aarch64-*)      want=arm64 ;;
+              *-windows-msvc) want=amd64 ;;
+              x86_64-*)       want=x86_64 ;;
+              *)
+                echo "::error::No wheel architecture is known for ${{ matrix.target }}. Add a rule for it."
+                exit 1
+                ;;
+            esac
             # The platform tag is whatever follows the last hyphen. `x86_64`
             # cannot be found by splitting on underscores, because it contains
             # one: that yields 64.
             plat="${name%.whl}"; plat="${plat##*-}"
-            echo "built $name -> $plat"
+            echo "built $name -> $plat (want $want)"
             # The architecture is bounded by a hyphen or an underscore, since
             # the platform tag's own components are joined with underscores:
             # macosx_11_0_arm64, win_amd64, linux_x86_64.
             case "$plat" in
-              *-"${{ matrix.arch }}"|*_"${{ matrix.arch }}") ;;
+              *-"$want"|*_"$want") ;;
               *)
-                echo "::error::$name has platform tag $plat, which does not end in ${{ matrix.arch }} as ${{ matrix.target }} requires."
+                echo "::error::$name has platform tag $plat, which does not end in $want as ${{ matrix.target }} requires."
                 exit 1
                 ;;
             esac

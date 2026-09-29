@@ -1,4 +1,4 @@
-.PHONY: target test linter fmt test-dyn test-unsafe test-nostd build-nostd
+.PHONY: test linter fmt test-dyn test-unsafe test-nostd build-nostd examples
 
 test:
 	@cargo test
@@ -47,3 +47,24 @@ build-nostd:
 test-nostd:
 	@cargo test --no-default-features --lib --tests
 	@$(MAKE) build-nostd
+
+# Run, not build. Every directory under `examples/` is its own crate, and cargo
+# only treats `examples/*.rs` and `examples/*/main.rs` as example targets of the
+# root package, so `--all-targets` in `linter` never reaches a tree laid out as
+# `examples/<name>/src/main.rs`. Nothing here was compiled by anything until this
+# target existed.
+#
+# That is not a theoretical gap. The out-of-bounds read in `unsafe_context`
+# compiled cleanly the whole time; only running it, or Miri, showed it. And
+# `normal_usage` depended on `magical_rs = "0.1.2"` from crates.io, so the most
+# ordinary example in the repository demonstrated a release from 2024 while
+# sitting two directories from the crate. Both are invisible to a build and
+# obvious to a run, which is why this runs them.
+#
+# The `cd` is per example rather than once, because `normal_usage` opens
+# `img/1.png` by relative path and has to be running from its own directory.
+examples:
+	@set -e; for dir in examples/*/; do \
+		echo "  $$dir"; \
+		( cd "$$dir" && cargo run --quiet ); \
+	done

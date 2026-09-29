@@ -44,6 +44,19 @@ from magical_py import detect_bytes
 detect_bytes(header)       # FileKind.Png | None
 ```
 
+`detect` takes anything open for binary reading as readily as a path, so a
+file you already have, a socket, a pipe and a `zipfile.ZipExtFile` all work the
+same way:
+
+```python
+with open("disc.iso", "rb") as handle:
+    kind = detect(handle)
+```
+
+`read_header(source, max_bytes=...)` is the piece that only reads, for when you
+want the bytes rather than a verdict about them. What `detect` and
+`detect_bytes` read is a window, and `max_bytes_read` is how you set it.
+
 Both return `None` when nothing matches, and raise the usual `OSError`
 subclasses when a file cannot be read:
 
@@ -83,9 +96,27 @@ a documentation bug of the same kind as a wrong magic byte, and this project
 does not ship those.
 
 **`detect` reads 36,870 bytes.** ISO 9660 stores its magic at offset 36,865, so
-detecting it means reading that far into the file. `detect` does that for you;
-`magical_py.bytes_read()` reports the figure if you are reading headers
-yourself. Do not hardcode 2048 and assume you are done.
+detecting it means reading that far into the file. `detect` does that for you.
+`magical_py.bytes_read()` reports the figure, `read_header(path, max_bytes=...)`
+spends it, and `max_bytes_read` bounds the read on the detection calls
+themselves. Do not hardcode 2048 and assume you are done.
+
+**A short answer and a wrong answer look alike without a window.** Give
+`detect_bytes` 2,048 bytes cut from an ISO and it returns `None`, because the
+magic sits at offset 36,865 and never entered the buffer. A bare `None` reads
+as "this is not an ISO", which is not what happened. Name the window and the
+same call still returns `None`, and now it means "nothing whose magic fits in
+2,048 bytes matched" — a claim about the read, which a caller can reason from:
+
+```python
+detect_bytes(header[:2048], max_bytes_read=2048)   # None, about the window
+detect("disc.iso", max_bytes_read=2048)            # and reads only 2048 bytes
+```
+
+`max_bytes_read` is keyword-only and defaults to `bytes_read()`. Every format
+in the table declares a read size of at least 2,048, so a window below that
+excludes PNG along with everything else. That is the trade being made: a
+cheaper read, and fewer formats reachable inside it.
 
 **Some signatures are only two bytes.** 9 formats match on nothing but a
 two-byte prefix: `Arj`, `Bitmap`, `Gzip`, `MP3`, `MSDOS`, `Pcx`, `Pickle`,
@@ -235,7 +266,7 @@ python 01_detect_a_file.py
 | Example | Shows |
 | --- | --- |
 | `01_detect_a_file.py` | `detect()` on a path, and the metadata a `FileKind` carries |
-| `02_detect_bytes.py` | `detect_bytes()`, `bytes_read()`, and reading a header rather than a file |
+| `02_detect_bytes.py` | `detect_bytes()`, `read_header()`, what `max_bytes_read` changes, and detecting from an open file |
 | `03_name_does_not_matter.py` | Why the file name is never consulted |
 | `04_list_supported_formats.py` | Enumerating `FileKind`, and which media types are `None` |
 | `05_scan_a_directory.py` | Walking a tree and tallying it by kind |

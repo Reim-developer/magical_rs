@@ -108,9 +108,13 @@ def _expected_claims() -> dict[str, list[str]]:
             f"bytes_read() is {bytes_read()}",
             f"{bytes_read()} bytes of header -> FileKind.{FileKind.ISO.name}",
             f"{bytes_read() - 1} bytes of header -> None",
+            f"36865 bytes of header -> None",
             "2048 bytes of header -> None",
+            "max_bytes_read=2048",
+            f"ISO 9660 needs {bytes_read()}",
             f"{64 * 1024 * 1024:,} byte file, read {bytes_read():,} bytes",
             f"-> FileKind.{FileKind.ISO.name}",
+            f"-> FileKind.{FileKind.ISO.name}, from the open file",
         ],
         "03_name_does_not_matter.py": [
             f"photo.jpg -> {FileKind.Png.name}",

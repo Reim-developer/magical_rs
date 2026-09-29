@@ -180,25 +180,83 @@ define_kind_name!(
     Zstd,
 );
 
-/// Returns the `FileKind` variant name for the first `with_bytes_read` bytes
-/// of a file.
+/// Classifies `data` using only the rules that fit inside `limit` bytes.
+///
+/// This is `FileKind::match_with_max_read_rule`, which the crate compiles only
+/// under `not(feature = "std")` — not the configuration this module builds in.
+/// `SIGNATURE_KIND` and `Magic::matches` are both public, so the filter is
+/// reproduced here rather than the crate's public API being widened to cover a
+/// case only the `no_std` build happened to have. This is the same trade
+/// `signatures_match` makes, and the same price: eight lines that have to stay
+/// in step, pinned by a test on each side rather than trusted.
+///
+/// `limit` is the window the caller claims to hold, not a length `data` is
+/// checked against. A 100-byte file classified with a 2,048-byte window is
+/// ordinary, and both this and the crate's version answer it the same way.
+fn match_within(data: &[u8], limit: usize) -> Option<FileKind> {
+    SIGNATURE_KIND
+        .iter()
+        .filter(|magic| magic.max_bytes_read <= limit)
+        .find(|magic| magic.matches(data))
+        .map(|magic| magic.kind)
+}
+
+/// The classification step both entry points share.
+///
+/// Unbounded by default, which is what `FileKind::match_types` does and what
+/// this module has always done. A limit narrows the table to the rules whose
+/// own `max_bytes_read` fits, so a `None` down that path means "nothing
+/// reachable inside the window you named", which is a different statement from
+/// the unbounded `None` and the reason the limit is worth having.
+fn classify(data: &[u8], max_bytes_read: Option<usize>) -> Option<&'static str> {
+    let kind = max_bytes_read.map_or_else(
+        || FileKind::match_types(data),
+        |limit| match_within(data, limit),
+    );
+    kind.map(file_kind_name)
+}
+
+/// Returns the `FileKind` variant name for the leading bytes of a file.
+///
+/// Reads `max_bytes_read` of them, or `with_bytes_read()` if no limit is
+/// given, so the read is the one the classification is then made over. Asking
+/// for a small read makes the read itself smaller, not only the search.
 ///
 /// # Errors
 ///
 /// Returns a Python `OSError` subclass if the file cannot be opened or read.
 #[pyfunction]
-#[pyo3(signature = (path, /))]
-fn detect_path(path: &str) -> PyResult<Option<&'static str>> {
-    let header =
-        read_file_header(path, with_bytes_read()).map_err(|error| io_error_to_py(&error))?;
-    Ok(FileKind::match_types(&header).map(file_kind_name))
+#[pyo3(signature = (path, /, *, max_bytes_read=None))]
+fn detect_path(path: &str, max_bytes_read: Option<usize>) -> PyResult<Option<&'static str>> {
+    let header = read_file_header(path, max_bytes_read.unwrap_or_else(with_bytes_read))
+        .map_err(|error| io_error_to_py(&error))?;
+    Ok(classify(&header, max_bytes_read))
 }
 
 /// Returns the `FileKind` variant name for an in-memory buffer.
 #[pyfunction]
-#[pyo3(signature = (data, /))]
-fn detect_bytes(data: &[u8]) -> Option<&'static str> {
-    FileKind::match_types(data).map(file_kind_name)
+#[pyo3(signature = (data, /, *, max_bytes_read=None))]
+fn detect_bytes(data: &[u8], max_bytes_read: Option<usize>) -> Option<&'static str> {
+    classify(data, max_bytes_read)
+}
+
+/// Reads up to `max_bytes` bytes from the start of a file, detecting nothing.
+///
+/// This is the crate's `read_file_header` over the `std` boundary. It is here
+/// so a caller that wants to size its own read has a supported way to do it
+/// rather than the `open`/`read`/`close` the examples had to teach, and so the
+/// figure `bytes_read()` reports can be spent instead of only quoted. The
+/// Python layer reads a file object in Python, since a stream has no path to
+/// hand over; see `python/magical_py/__init__.py`.
+///
+/// # Errors
+///
+/// Returns a Python `OSError` subclass if the file cannot be opened or read.
+#[pyfunction]
+#[pyo3(signature = (path, /, *, max_bytes=None))]
+fn read_header(path: &str, max_bytes: Option<usize>) -> PyResult<Vec<u8>> {
+    read_file_header(path, max_bytes.unwrap_or_else(with_bytes_read))
+        .map_err(|error| io_error_to_py(&error))
 }
 
 /// Returns every `FileKind` variant name the detection table can produce.
@@ -270,6 +328,7 @@ fn _magical_rs(module: &Bound<'_, PyModule>) -> PyResult<()> {
     module.add("__version__", env!("CARGO_PKG_VERSION"))?;
     module.add_function(wrap_pyfunction!(detect_path, module)?)?;
     module.add_function(wrap_pyfunction!(detect_bytes, module)?)?;
+    module.add_function(wrap_pyfunction!(read_header, module)?)?;
     module.add_function(wrap_pyfunction!(all_kinds, module)?)?;
     module.add_function(wrap_pyfunction!(bytes_read, module)?)?;
     module.add_function(wrap_pyfunction!(signatures_match, module)?)?;

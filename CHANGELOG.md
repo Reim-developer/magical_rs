@@ -1,5 +1,6 @@
 # CHANGELOG
 - [CHANGELOG](#changelog)
+  - [magical-py: Version 0.3.0](#magical-py-version-030)
   - [magical-py: Version 0.2.0](#magical-py-version-020)
   - [Version: 0.1.3](#version-013)
   - [Version: 0.2.0](#version-020)
@@ -11,6 +12,78 @@
   - [Version: 0.6.0 `Signature Tightening`](#version-060-signature-tightening)
   - [Version: 0.6.1 `Documentation and Test Coverage`](#version-061-documentation-and-test-coverage)
   - [Version: 0.6.2 `Overflow Fix and Release Gates`](#version-062-overflow-fix-and-release-gates)
+  - [Version: 0.6.3 `Header Padding Fix`](#version-063-header-padding-fix)
+
+
+## `magical-py`: Version 0.3.0
+**What has been changed:**
+
+Level 1 could not say how much of a buffer it was entitled to look at, and it
+could only be pointed at a path. Both were gaps in the crate's level 1 that the
+binding had been carrying without noticing, because level 1 was treated as
+finished.
+
+* **Added `max_bytes_read` to `detect` and `detect_bytes`,** keyword-only and
+  defaulting to `bytes_read()`. It is the crate's
+  `FileKind::match_with_max_read_rule`: the table is narrowed to the rules whose
+  own declared read size fits inside the window. Every rule declares at least
+  2,048, so a window below that excludes `Png` as well. That is the trade being
+  made and it is worth stating plainly — a smaller window is a cheaper read and a
+  smaller set of formats reachable inside it.
+* **Added `read_header(source, max_bytes=None)`,** which reads the leading bytes
+  of a path or a stream and detects nothing. `bytes_read()` has always reported a
+  figure that is only useful to a caller reading headers themselves; until now
+  there was no supported way to be that caller, and the examples had to teach the
+  `open`/`read`/`close` themselves.
+* **`detect` now accepts anything open for binary reading,** not only a path. A
+  file already open, a socket's `makefile`, a pipe and a `zipfile.ZipExtFile` all
+  work, and nothing about the path form changed.
+
+**Why the window is not a convenience:**
+
+A 4 KB buffer cut from an ISO 9660 disc came back `None` from `detect_bytes`. A
+bare `None` reads as "this is not an ISO", when the truth is that the magic sits
+at offset 36,865 and was never inside the buffer. Two different situations, one
+answer, and no way for the caller to tell them apart. Naming the window makes
+the `None` a claim about the read rather than about the file, and a claim a
+caller can act on — retry wider, or record the file as undetermined rather than
+unknown. The crate has had the two functions for this since `0.6.0`; the binding
+had neither, and the crate's copies are `no_std`-only, so the binding reproduces
+the filter over the public `SIGNATURE_KIND` the same way it already reproduces
+level 2's comparison in `signatures_match`.
+
+**A bug in the crate that this found:**
+
+`read_file_header` allocated `max_bytes` zeroed and returned the whole buffer
+without truncating to the bytes it had actually read, so a file shorter than the
+limit came back padded with invented zeros. 15 of the 142 signature entries end
+in a zero, so the padding could complete a magic the file did not contain: a
+one-byte file holding a newline was reported as `Pcx`, whose magic is `0A 00`,
+while `detect_bytes` on that same byte said no match. Detection that disagrees
+with itself depending on whether the caller had a path or a buffer is worse than
+the missing read it looked like, so the crate is fixed in `0.6.3`. The binding
+would have shipped those invented bytes to anyone who called `read_header`, which
+is the other reason it could not be left alone.
+
+**Not changed:**
+
+* `FileKind` and every one of its 114 members. No member was added, removed or
+  reordered, and no signature was touched.
+* Levels 2, 3 and 4 are untouched, and `max_bytes_read` on a `MagicCustom`,
+  `DynMagicCustom` or `AsyncDynMagic` rule is unchanged and still advisory. The
+  new parameter is level 1 only, and it means the same thing the crate's
+  `allowed_max_read` does rather than what the rule-level parameter means.
+* Every new parameter has a default, so no existing call site changes behaviour.
+* Level 5 is still not exposed, and `read_header` deliberately is not a
+  translation of the crate's `read_file_header`: it also takes a file object,
+  which has no path to hand over.
+
+**Tests:** 209, up from 185. 21 of the new ones are in `tests/test_detect.py`,
+covering the window, `read_header`, the non-path sources and the agreement
+between a path and its own bytes; 3 are in `tests/test_readme.py` and execute
+this release's documentation claims the way the existing ones do. The crate
+gained 3, in `src/magical/bytes_read.rs`, all of which fail against `0.6.2` and
+name `Some(Pcx)` for the one-byte file.
 
 
 ## `magical-py`: Version 0.2.0
@@ -377,6 +450,66 @@ fix and three gates, none of which a caller can observe except the first.
 **Tests:** 20 in `tests/magic_custom.rs`, up from 16, and the crate's own gates
 are now the ones CI runs. `magical-py` 0.2.0 ships in the same tree and is
 published separately, off a `py-v*` tag.
+
+
+## Version: 0.6.3 `Header Padding Fix`
+**What has been changed:**
+
+`read_file_header` allocated a zeroed buffer of `max_bytes` and returned all of
+it, so a file shorter than the limit came back padded with bytes that were never
+in it.
+
+* **Fixed.** The buffer is now truncated to the number of bytes actually read, so
+  the returned vector is the file's own leading bytes and its length says how
+  many there were. This is what the function's documentation already claimed.
+* The short files above are now reported as no format at all, and a path and the
+  same bytes agree. Before, one of the two ways of asking was wrong and which one
+  depended on the argument.
+
+**The bug that padding could cause:**
+
+A signature is allowed to end in a zero, and 15 of the 142 entries in
+`SIGNATURE_KIND` do. The invented zeros therefore completed magics the file did
+not contain. A one-byte file holding a newline was reported as
+`FileKind::Pcx` — whose magic is `0A 00` — and a three-byte file holding `II*` as
+`FileKind::Tiff`, whose magic is `II*\0`. `FileKind::match_types` on those same
+bytes said no match, so `read_file_header` followed by `match_types` and
+`match_types` alone disagreed about the same file, and which one you got depended
+on whether the caller had a path or a buffer.
+
+The formats that could be reached this way are those whose magic ends in a zero:
+`ICO`, `SQLite`, `RAR`, `TrueTypeFont`, `WindowImagingFormat`,
+`CreativeVoiceFile`, `OpenGLIrisPerformer`, `Xz`, `Tiff`, `Pcx`, `Cursor` and
+`WindowsShortcut`. A file cut short inside one of those was completed by the
+padding rather than rejected, so for a file smaller than its magic a negative
+result was not reliably negative. A magic that merely *begins* with a zero, of
+which `WASM`, `JPEG2000`, `JpegXl` and `MpegProgramStream` are examples, cannot
+be completed this way and was never at risk. The binding surfaced this as
+`magical_py.detect` reporting a one-byte file as a `Pcx` while
+`magical_py.detect_bytes` on the same byte returned `None`.
+
+**Not changed:**
+
+* No signature, no `FileKind` member, no feature flag and no public signature
+  changed. `read_file_header` takes the same two arguments and returns the same
+  type.
+* A file at least `max_bytes` long is unaffected; it was never padded.
+* `with_bytes_read()` and `bytes_read()` are untouched. What a caller should read
+  is still 36,870 bytes.
+* `FileKind::match_types` and the whole detection table are untouched. The
+  padding only ever supplied zeros, so it could complete a magic but never
+  prevent a real one from matching.
+
+**Tests:** 3 added, in `src/magical/bytes_read.rs`. One asserts the header is
+byte-for-byte the file's own, one that a short file and those same bytes agree on
+the kind, and one that the three truncated magics match no format at all. All
+three fail against `0.6.2`, and the failure names `Pcx` directly.
+
+`magical-py` 0.3.0 ships in the same tree and is published separately, off a
+`py-v*` tag. It is the release that carries the binding half of this work, and
+the first that goes out through the Python workflow's trusted publisher rather
+than a stored token.
+
 
 ## Version: 0.6.0 `Signature Tightening` and `Format Table Expansion`
 

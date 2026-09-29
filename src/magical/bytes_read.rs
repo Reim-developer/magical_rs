@@ -132,7 +132,10 @@ use {
 /// # Result
 /// Returns a `Result<Vec<u8, io::Error>`
 ///
-/// * `Ok(Vec<u8>)` - A vector containing the bytes read from file.
+/// * `Ok(Vec<u8>)` - A vector containing the bytes read from file, and
+///   nothing else. A file shorter than `max_bytes` yields a shorter vector
+///   rather than a padded one, so `header.len()` is the number of bytes the
+///   file really has.
 /// * `Err(io::Error)` - An I/O error if the file could not be append or read.
 ///
 /// # Errors
@@ -158,6 +161,23 @@ pub fn read_file_header(file_path: &str, max_bytes: usize) -> Result<Vec<u8>, io
         }
     }
 
+    // The buffer was zero-filled to its capacity, so without this a file
+    // shorter than `max_bytes_read` comes back padded with invented bytes
+    // rather than short, and the returned length says nothing about how much
+    // of it is the file. Two of those invented bytes are enough to complete a
+    // signature, because a format is free to end its magic with a zero: PCX is
+    // `[0x0A, 0x00]` and TIFF is `II*\0`. So a one-byte file holding a
+    // newline was reported as a PCX and a three-byte one as a TIFF, while
+    // `FileKind::match_types` on the very same bytes said no match. Detection
+    // that disagrees with itself depending on whether the caller passed a
+    // path or a buffer is worse than the missing read it looked like, and a
+    // caller handed these bytes has no way to tell which part is the file.
+    //
+    // Truncating cannot cost a real match: the padding supplies only zeros, so
+    // it can only ever complete a signature the file itself did not contain.
+    // A genuine PCX carries both of its bytes and a genuine TIFF all four.
+    buffer.truncate(total_read);
+
     Ok(buffer)
 }
 
@@ -174,4 +194,98 @@ fn test_read_file_header() {
             .unwrap()
             .is_empty()
     );
+}
+
+#[test]
+#[cfg(feature = "std")]
+fn test_read_file_header_is_not_padded() {
+    use crate::magical::bytes_read::{DEFAULT_MAX_BYTES_READ, read_file_header};
+
+    // `II*` is three quarters of the TIFF magic, whose last byte is a zero.
+    // Read into a zero-filled buffer of `DEFAULT_MAX_BYTES_READ` it completed
+    // itself, so a three-byte file was reported as a TIFF.
+    let path = std::env::temp_dir().join(format!(
+        "magical-rs-header-unpadded-{}.bin",
+        std::process::id()
+    ));
+    std::fs::write(&path, b"II*").unwrap();
+
+    let header = read_file_header(path.to_str().unwrap(), DEFAULT_MAX_BYTES_READ).unwrap();
+
+    std::fs::remove_file(&path).unwrap();
+    assert_eq!(header, b"II*");
+    assert_eq!(header.len(), 3);
+}
+
+#[test]
+#[cfg(feature = "std")]
+fn test_a_short_file_and_its_bytes_agree_on_the_kind() {
+    use crate::magical::bytes_read::{DEFAULT_MAX_BYTES_READ, read_file_header};
+    use crate::magical::magic::FileKind;
+
+    // Detection must not depend on whether the caller had a path or a buffer.
+    // These are the prefixes the padding used to complete: PCX is
+    // `[0x0A, 0x00]`, TIFF is `II*\0` and RAR is `Rar!\x1a\x07\0`, so each
+    // was one byte short of a real format and the invented zero finished it.
+    // The last two are complete magics, kept here so the test would notice if
+    // truncation had started cutting matches it should not.
+    let cases: [&[u8]; 5] = [
+        b"\x0a",
+        b"II*",
+        b"Rar!\x1a\x07",
+        b"\x00\x00\x02\x00",
+        b"\x00\x01\x00\x00\x00",
+    ];
+
+    for content in cases {
+        let path = std::env::temp_dir().join(format!(
+            "magical-rs-header-agree-{}-{}.bin",
+            std::process::id(),
+            content.len()
+        ));
+        std::fs::write(&path, content).unwrap();
+
+        let header = read_file_header(path.to_str().unwrap(), DEFAULT_MAX_BYTES_READ).unwrap();
+
+        std::fs::remove_file(&path).unwrap();
+        assert_eq!(header, content, "the header is not the file's own bytes");
+        assert_eq!(
+            FileKind::match_types(&header),
+            FileKind::match_types(content),
+            "a path and the same bytes disagree about {content:?}"
+        );
+    }
+}
+
+#[test]
+#[cfg(feature = "std")]
+fn test_truncated_magics_are_not_formats() {
+    use crate::magical::bytes_read::{DEFAULT_MAX_BYTES_READ, read_file_header};
+    use crate::magical::magic::FileKind;
+
+    // The three prefixes from the test above, on their own: with the padding in
+    // place a lone newline was a PCX, which is how a one-byte file could be
+    // reported as a graphics format.
+    for content in [
+        b"\x0a".as_slice(),
+        b"II*".as_slice(),
+        b"Rar!\x1a\x07".as_slice(),
+    ] {
+        let path = std::env::temp_dir().join(format!(
+            "magical-rs-header-truncated-{}-{}.bin",
+            std::process::id(),
+            content.len()
+        ));
+        std::fs::write(&path, content).unwrap();
+
+        let header = read_file_header(path.to_str().unwrap(), DEFAULT_MAX_BYTES_READ).unwrap();
+
+        std::fs::remove_file(&path).unwrap();
+        assert_eq!(
+            FileKind::match_types(&header),
+            None,
+            "{content:?} is {} bytes and matches no format",
+            content.len()
+        );
+    }
 }

@@ -4,8 +4,12 @@ on:
     push:
         branches: [ "dev"]
       
+    # dev is the branch that has to be green before anything reaches master, so
+    # a pull request into either of them is checked. Without master here, a PR
+    # that lands the crate on master would carry no crate check at all, and
+    # requiring one in branch protection would make every merge impossible.
     pull_request:
-        branches: ["dev"]
+        branches: [ "dev", "master"]
 
 env:
   CARGO_TERM_COLOR: always

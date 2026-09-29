@@ -10,13 +10,13 @@ on:
             - "tests/**"
             - ".github/workflows/python_bindings.yml"
 
+    # No `paths` filter here, deliberately, and not for cost reasons. These
+    # jobs are required status checks on master, and a required check that
+    # never reports is a merge that is blocked forever. A pull request that
+    # touches only CHANGELOG.md would skip a filtered workflow entirely, and
+    # GitHub would wait on a check that was never going to arrive. The filter
+    # stays on `push` above, where nothing is waiting on a result.
     pull_request:
-        paths:
-            - "bindings/**"
-            - "src/**"
-            - "readme.md"
-            - "tests/**"
-            - ".github/workflows/python_bindings.yml"
 
 env:
   CARGO_TERM_COLOR: always

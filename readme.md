@@ -368,7 +368,7 @@ Building with `--no-default-features` gives a `no_std` library with only levels
 ## Supported formats
 
 Magic bytes and offsets below are read directly from `SIGNATURE_KIND` in
-[`src/magical/signatures.rs`](https://github.com/Reim-developer/magical_rs/blob/master/src/magical/signatures.rs).
+[`crates/magical_rs/src/magical/signatures.rs`](https://github.com/Reim-developer/magical_rs/blob/master/crates/magical_rs/src/magical/signatures.rs).
 "Offset" is the byte position the magic is compared at.
 
 | Format | `FileKind` | Magic | Offset |
@@ -424,10 +424,10 @@ Magic bytes and offsets below are read directly from `SIGNATURE_KIND` in
 
 Two entries are not matched by a byte signature alone. WebP uses a dedicated
 function in
-[`src/magical/ext_fn/webp.rs`](https://github.com/Reim-developer/magical_rs/blob/master/src/magical/ext_fn/webp.rs)
+[`crates/magical_rs/src/magical/ext_fn/webp.rs`](https://github.com/Reim-developer/magical_rs/blob/master/crates/magical_rs/src/magical/ext_fn/webp.rs)
 because the format requires checking the `RIFF` header and the file size field
 together. Shebangs use
-[`src/magical/ext_fn/shebang.rs`](https://github.com/Reim-developer/magical_rs/blob/master/src/magical/ext_fn/shebang.rs)
+[`crates/magical_rs/src/magical/ext_fn/shebang.rs`](https://github.com/Reim-developer/magical_rs/blob/master/crates/magical_rs/src/magical/ext_fn/shebang.rs)
 to require a path separator, which is what separates `#!/bin/sh` from the
 `#!AMR` audio header.
 
@@ -441,7 +441,7 @@ rule.
 ### Extended formats
 
 Added in `0.5.0` and `0.6.0`, defined in
-[`src/magical/signatures_ext.rs`](https://github.com/Reim-developer/magical_rs/blob/master/src/magical/signatures_ext.rs).
+[`crates/magical_rs/src/magical/signatures_ext.rs`](https://github.com/Reim-developer/magical_rs/blob/master/crates/magical_rs/src/magical/signatures_ext.rs).
 
 **Archives and compression**
 
@@ -587,6 +587,11 @@ Windows, so the published shape is checked rather than assumed.
 
 ## Development
 
+The repository is a cargo workspace. `crates/magical_rs` is the library this
+readme documents, `crates/magical-file` is the `file` command, and the two
+bindings under `bindings/` and the examples under `examples/` are separate
+workspaces of their own, which is why the root manifest has an `exclude` list.
+
 ```bash
 cargo build
 cargo test
@@ -594,19 +599,41 @@ cargo test --all-features
 cargo clippy --all-targets --all-features -- -D warnings
 ```
 
-Verify `no_std` still holds:
+Or through the `Makefile`, which is what CI runs, so a local run and a CI run
+cannot disagree about what green means:
 
 ```bash
-cargo build --no-default-features --target thumbv7em-none-eabi
+make test        # cargo test, over the whole workspace
+make linter      # clippy with --all-targets --all-features
+make fmt         # rustfmt --check
 ```
 
-And that the WebAssembly claim in the first paragraph still holds:
+Verify `no_std` still holds. Scoped to the library with `-p`, because
+`magical-file` is a filesystem program and neither `std::env` nor `std::fs`
+exists on a bare-metal target:
 
 ```bash
-cargo build --target wasm32-unknown-unknown
+cargo build -p magical_rs --no-default-features --target thumbv7em-none-eabi
 ```
 
-The `NodeJS` bindings have their own gate, which also needs
+And that the WebAssembly claim in the first paragraph still holds, which is
+about the library for the same reason:
+
+```bash
+cargo build -p magical_rs --target wasm32-unknown-unknown
+```
+
+`make examples` runs every crate under `examples/`. They are run rather than
+built because `cargo test` at the root does not reach them, and an example that
+compiles and is wrong is invisible to a build.
+
+The Python bindings have their own gate:
+
+```bash
+bash ./scripts/gates.sh
+```
+
+The `NodeJS` bindings have one too, which also needs
 `rustup target add wasm32-unknown-unknown`:
 
 ```bash
@@ -615,9 +642,25 @@ bash ./bindings/nodejs/scripts/gates.sh
 
 It regenerates the format list from `pub enum FileKind`, runs the binding's own
 Rust tests, builds the module and checks it declares no imports, type-checks the
-hand-written declarations, runs the test suite, then runs rustfmt and clippy. The
-root `Cargo.toml` has no `[workspace]`, so `make fmt` and `make linter` cannot
-see this crate — this script is the only thing that holds it to the same bar.
+hand-written declarations, runs the test suite, then runs rustfmt and clippy.
+
+Two tests exist because the layout above is a thing that can drift, and neither
+kind of drift is caught by a build:
+
+- `crates/magical_rs/tests/workspace.rs` checks that every crate under
+  `bindings/` and `examples/` is named in `exclude`, and that each one reaches
+  the library at its new home. An unlisted crate fails to build *on its own*,
+  and not from `cargo test` at the root, which never looks at it.
+- `crates/magical_rs/tests/packaging.rs` checks the copies of `LICENSE` and
+  `CHANGELOG.md` that sit beside the crate's manifest. Cargo will not package a
+  file from outside the package — `include = ["../../LICENSE"]` is silently
+  ignored, while `readme = "../../readme.md"` works — so those two are copied
+  and this test is what keeps the copies honest.
+
+`scripts/gen_kinds.ps1` regenerates the bindings' format metadata from the
+tables in this readme plus a MIME and extension table of its own. A format
+added to `SIGNATURE_KIND` without a row here fails the build, because
+`tests/readme_coverage.rs` compares both directions.
 
 ## License
 

@@ -25,7 +25,12 @@ const bindingDir = join(scriptDir, "..");
 const repoRoot = join(bindingDir, "..", "..");
 
 const EXPECTED_KINDS = 114;
-const ENUM_SOURCE = join(repoRoot, "src", "magical", "magic.rs");
+// The library moved from the repository root into `crates/magical_rs`, and this
+// path is what reads the `FileKind` declaration out of it. The count check below
+// is the reason it is worth reading: a path that no longer resolves throws, and
+// one that resolves to a file without the enum in it answers with an empty list,
+// which the same check turns into a failure naming the count it expected.
+const ENUM_SOURCE = join(repoRoot, "crates", "magical_rs", "src", "magical", "magic.rs");
 
 // Reads the variant names out of `pub enum FileKind { ... }` in declaration order.
 //

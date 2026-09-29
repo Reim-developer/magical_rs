@@ -22,7 +22,7 @@ crate-type = ["cdylib", "rlib"]
 [dependencies]
 # Path dependency, not a registry dependency: the binding always builds against
 # the checkout it sits next to, so the two cannot drift apart.
-magical_rs = { path = "../..", default-features = false, features = ["std"] }
+magical_rs = { path = "../../crates/magical_rs", default-features = false, features = ["std"] }
 
 [profile.release]
 # Two things pull in opposite directions here and the size wins, because the

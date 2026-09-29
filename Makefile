@@ -1,3 +1,7 @@
+# The `test`, `linter` and `fmt` targets above are deliberately unscoped. The
+# root is a virtual workspace now, so they cover every crate in it, which is how
+# the CLI comes to be tested and linted at all without a target of its own. Only
+# the cross-compiled targets are scoped, and each of those says why in place.
 .PHONY: test linter fmt test-dyn test-unsafe test-nostd build-nostd build-wasm examples
 
 test:
@@ -33,9 +37,16 @@ test-unsafe:
 
 # The `no_std` claim is the one this crate makes that a default-features test
 # run cannot check at all, so it gets its own target rather than being assumed.
+#
+# `-p magical_rs` rather than the whole workspace, and the reason is the CLI.
+# `magical-file` is a filesystem program: it reads `std::env::args` and calls
+# `std::fs`, and neither exists on `thumbv7em-none-eabi`, so an unscoped build
+# would fail on the CLI and say nothing about whether the library still honours
+# the claim. Scoping it to the library keeps the target answering the question
+# it was written to answer.
 build-nostd:
 	@rustup target add thumbv7em-none-eabi
-	@cargo build --no-default-features --target thumbv7em-none-eabi
+	@cargo build -p magical_rs --no-default-features --target thumbv7em-none-eabi
 
 # Doctests are excluded here, and that is deliberate rather than convenient.
 # The readme's quick start and the `bytes_read` examples all call
@@ -45,7 +56,7 @@ build-nostd:
 # compile in `build-nostd` is what actually proves the `no_std` build works;
 # this target proves the rest of the suite still passes without `std`.
 test-nostd:
-	@cargo test --no-default-features --lib --tests
+	@cargo test -p magical_rs --no-default-features --lib --tests
 	@$(MAKE) build-nostd
 
 # The readme's first paragraph claims this crate works in WebAssembly builds,
@@ -71,9 +82,15 @@ test-nostd:
 # stray `std` in a core path either. `build-nostd` catches that, against a
 # target with no `std` at all. Between them the crate's `std` half is compiled
 # for wasm exactly once, and this is it.
+#
+# `-p magical_rs` again because of the CLI. It would *compile* here, which is the
+# problem rather than the reassurance: wasm32's `std` shim declares `std::env`
+# and `std::fs` and then fails them at runtime, so a green build of a
+# command-line program for wasm says that nothing and reads like evidence. The
+# claim this target checks is the library's, so it builds the library.
 build-wasm:
 	@rustup target add wasm32-unknown-unknown
-	@cargo build --target wasm32-unknown-unknown
+	@cargo build -p magical_rs --target wasm32-unknown-unknown
 
 # Run, not build. Every directory under `examples/` is its own crate, and cargo
 # only treats `examples/*.rs` and `examples/*/main.rs` as example targets of the

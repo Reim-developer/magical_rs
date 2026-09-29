@@ -1,4 +1,7 @@
-#![doc = include_str!("../readme.md")]
+// The repository's readme, three levels up from this file: `src/`, then the
+// crate, then `crates/`. It is the crate's documentation and it is checked in
+// as the same file, so there is no second copy of it to fall behind.
+#![doc = include_str!("../../../readme.md")]
 #![deny(clippy::pedantic, clippy::all, clippy::nursery, clippy::perf)]
 #![cfg_attr(not(feature = "std"), no_std)]
 

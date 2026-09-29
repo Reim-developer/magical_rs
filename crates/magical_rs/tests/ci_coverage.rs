@@ -48,20 +48,38 @@ struct Makefile {
     invokes: BTreeMap<String, BTreeSet<String>>,
 }
 
+/// The repository root, found by walking up from this crate.
+///
+/// Not a fixed number of `..` segments. The crate sits in `crates/magical_rs`
+/// and the root is two levels above it, but a depth that is correct today is a
+/// second thing to update when the layout changes again, and the failure is a
+/// panic in a test whose name says nothing about paths. Walking up until the
+/// marker is found is correct wherever the crate ends up, and the marker is
+/// unambiguous: only the repository root has a `Makefile` that a workflow runs.
+fn repo_root() -> std::path::PathBuf {
+    let manifest = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
+    manifest
+        .ancestors()
+        .find(|dir| dir.join("Makefile").is_file())
+        .unwrap_or_else(|| {
+            panic!(
+                "no ancestor of {} holds a Makefile, so the repository root cannot be located",
+                manifest.display()
+            )
+        })
+        .to_path_buf()
+}
+
 /// Reads a file from the repository root, naming the path when it is not there.
 ///
-/// `env!("CARGO_MANIFEST_DIR")` rather than a relative path, because cargo does
-/// not promise to run a test binary from the manifest directory, and a test that
-/// answers differently depending on where it was launched from is not a test.
-///
 /// This is a failure and not a skip. `Cargo.toml`'s `include` is
-/// `["LICENSE", "src/**/*.rs", "CHANGELOG.md"]`, so neither file ships to
-/// crates.io and this test never runs for someone who installed the package. A
-/// missing file here means a checkout that was pruned, and returning quietly
-/// would make a broken tree look like a passing one, which is the failure this
-/// whole file exists to make impossible.
+/// `["src/**/*.rs", "LICENSE", "CHANGELOG.md"]`, so neither this file nor the
+/// `Makefile` it reads ships to crates.io and it never runs for someone who
+/// installed the package. A missing file here means a checkout that was pruned,
+/// and returning quietly would make a broken tree look like a passing one,
+/// which is the failure this whole file exists to make impossible.
 fn read(rel: &str) -> String {
-    let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join(rel);
+    let path = repo_root().join(rel);
     std::fs::read_to_string(&path).unwrap_or_else(|e| panic!("cannot read {}: {e}", path.display()))
 }
 

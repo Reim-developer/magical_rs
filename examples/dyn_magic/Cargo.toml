@@ -15,4 +15,4 @@ edition = "2024"
 #
 # Or, use cargo:
 # cargo add magical_rs --features magical_dyn
-magical_rs = { path = "../../", features = ["magical_dyn"] }
+magical_rs = { path = "../../crates/magical_rs", features = ["magical_dyn"] }

@@ -4,4 +4,4 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
-magical_rs = { path = "../../", features = ["unsafe_context"] }
+magical_rs = { path = "../../crates/magical_rs", features = ["unsafe_context"] }

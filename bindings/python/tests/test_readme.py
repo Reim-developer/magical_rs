@@ -35,6 +35,7 @@ from magical_py import (
     match_dyn_types,
     match_dyn_types_all,
     match_types_custom,
+    read_header,
     version,
 )
 
@@ -44,6 +45,18 @@ _README = pathlib.Path(__file__).resolve().parents[1] / "README.md"
 # so the example and the test cannot disagree.
 _JPEG = bytes([0xFF, 0xD8, 0xFF, 0xE0]) + b"\x00" * 32
 _PNG = bytes([0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A]) + b"\x00" * 32
+
+# The ISO 9660 disc the readme uses to talk about the read window. Its magic
+# is at 36,865, which is what makes 2,048 bytes an interesting place to cut.
+_ISO_MAGIC = b"CD001"
+_ISO_OFFSET = 36_865
+
+
+def _iso(size: int) -> bytes:
+    """Return *size* zero bytes carrying the ISO 9660 magic at its offset."""
+    data = bytearray(size)
+    data[_ISO_OFFSET : _ISO_OFFSET + len(_ISO_MAGIC)] = _ISO_MAGIC
+    return bytes(data)
 
 
 def readme() -> str:
@@ -282,3 +295,45 @@ def test_readme_level_4_claims_no_feature_flag() -> None:
     """The readme tells a reader there is nothing to install, so check the claim."""
     assert "no feature flag and no extra dependency" in readme()
     assert re.search(r"magical_async_dyn", readme())
+
+
+def test_readme_open_file_claim_holds(tmp_path: pathlib.Path) -> None:
+    """The readme shows `detect` on an open file, so an open file has to work."""
+    assert "with open(\"disc.iso\", \"rb\") as handle:" in readme()
+
+    disc = tmp_path / "disc.iso"
+    disc.write_bytes(_iso(bytes_read()))
+    with disc.open("rb") as handle:
+        assert detect(handle) is FileKind.ISO
+
+
+def test_readme_read_header_claim_holds(tmp_path: pathlib.Path) -> None:
+    """The readme says `read_header` spends the figure `bytes_read` reports."""
+    assert "read_header(path, max_bytes=...)" in readme()
+
+    disc = tmp_path / "disc.iso"
+    disc.write_bytes(_iso(bytes_read()))
+    assert len(read_header(disc)) == bytes_read()
+    assert len(read_header(disc, max_bytes=2_048)) == 2_048
+
+
+def test_readme_short_answer_claim_holds() -> None:
+    """A 2,048-byte ISO slice is a no match, and naming the window says why.
+
+    Both halves of the readme's argument, because the point is that they are
+    the same `None` and mean different things. The readme says nothing whose
+    magic fits in 2,048 bytes matched, which is only true while ISO is out of
+    reach — so the test pins the reach as well as the answer.
+    """
+    assert "nothing whose magic fits in" in readme()
+
+    window = bytes_read()
+    short = _iso(window)[:2_048]
+    assert detect_bytes(short) is None
+    assert detect_bytes(short, max_bytes_read=2_048) is None
+    # The same bytes over a window that does reach the magic, so the difference
+    # is the window and not the data.
+    assert detect_bytes(_iso(window), max_bytes_read=window) is FileKind.ISO
+    # And PNG is out of reach below 2,048, which is the readme's own caveat.
+    assert detect_bytes(_PNG, max_bytes_read=2_048) is FileKind.Png
+    assert detect_bytes(_PNG, max_bytes_read=2_047) is None

@@ -100,7 +100,12 @@ jobs:
                       target: x86_64-unknown-linux-gnu
                     - os: macos-latest
                       target: aarch64-apple-darwin
-                    - os: macos-latest
+                    # An Intel runner, because an x86_64 wheel cannot be
+                    # installed on an arm64 one. Both macOS entries cannot
+                    # share `macos-latest`, which is arm64: cross compiling
+                    # produced a correct x86_64 wheel that the test step then
+                    # refused to install.
+                    - os: macos-15-intel
                       target: x86_64-apple-darwin
                     - os: windows-latest
                       target: x86_64-pc-windows-msvc
@@ -127,6 +132,13 @@ jobs:
 
         - name: Build the wheel
           shell: bash
+          env:
+              # `uv build` has no `--target`, so this is how the target reaches
+              # maturin. Without it maturin builds for the *host*, and both
+              # macOS legs run on the same arm64 runner, so both produced a
+              # wheel named `...macosx_11_0_arm64.whl`. Both then passed every
+              # assertion below, on the same architecture, twice.
+              CARGO_BUILD_TARGET: ${{ matrix.target }}
           run: |
             rustup target add ${{ matrix.target }}
             # `--python`, not `--interpreter`: `uv build` has no such flag and
@@ -138,6 +150,45 @@ jobs:
         - name: Check the wheel installs and works
           shell: bash
           run: |
+            # The wheel must be the one this matrix entry was asked for. Testing
+            # it is not evidence of what it is: the assertions below all pass on
+            # an arm64 wheel on an arm64 runner, whatever was asked for.
+            wheels=(dist/*.whl)
+            if [ "${#wheels[@]}" -ne 1 ]; then
+              echo "::error::Expected exactly one wheel in dist, found ${#wheels[@]}."
+              exit 1
+            fi
+            name=$(basename "${wheels[0]}")
+            # The architecture, derived from the target triple, because the two
+            # spell it differently: the triple says aarch64 and pc-windows-msvc,
+            # the wheel tag says arm64 and win_amd64. A target with no rule here
+            # fails rather than passing unchecked, since a wheel whose
+            # architecture was never verified is the bug this is here to catch.
+            case "${{ matrix.target }}" in
+              aarch64-*)      want=arm64 ;;
+              *-windows-msvc) want=amd64 ;;
+              x86_64-*)       want=x86_64 ;;
+              *)
+                echo "::error::No wheel architecture is known for ${{ matrix.target }}. Add a rule for it."
+                exit 1
+                ;;
+            esac
+            # The platform tag is whatever follows the last hyphen. `x86_64`
+            # cannot be found by splitting on underscores, because it contains
+            # one: that yields 64.
+            plat="${name%.whl}"; plat="${plat##*-}"
+            echo "built $name -> $plat (want $want)"
+            # The architecture is bounded by a hyphen or an underscore, since
+            # the platform tag's own components are joined with underscores:
+            # macosx_11_0_arm64, win_amd64, linux_x86_64.
+            case "$plat" in
+              *-"$want"|*_"$want") ;;
+              *)
+                echo "::error::$name has platform tag $plat, which does not end in $want as ${{ matrix.target }} requires."
+                exit 1
+                ;;
+            esac
+
             uv venv --quiet .wheelcheck
             uv pip install --quiet --python .wheelcheck dist/*.whl
             # Run through `uv run`, not `.wheelcheck/bin/python`. A venv on

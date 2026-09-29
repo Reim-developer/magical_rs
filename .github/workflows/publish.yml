@@ -1,0 +1,224 @@
+name: Publish to PyPI.
+
+on:
+    # A tag is the only trigger, and it is a tag naming the Python package
+    # specifically. The Rust crate carries its own `v` tags, so publishing is
+    # keyed on `py-v` and the two artifacts cannot collide.
+    #
+    # There is deliberately no `workflow_dispatch`. A publish that can be
+    # triggered by a button is a publish that will eventually be triggered by a
+    # button by accident, and PyPI does not let a version be reused.
+    push:
+        tags: [ "py-v*" ]
+
+env:
+    CARGO_TERM_COLOR: always
+    # The extension has no Python dependency to link against, so nothing here
+    # should reach for one.
+    PYO3_NO_PYTHON: "1"
+
+jobs:
+    guard:
+        # Two mistakes that cannot be undone once the version is on PyPI, so
+        # they are checked in seconds before anything is built. Everything
+        # else in this workflow assumes these hold.
+        name: Check the tag against the package
+        runs-on: ubuntu-latest
+
+        steps:
+        - name: Checkout code
+          uses: actions/checkout@v4
+          with:
+              # The next step needs master to be present, not just the tag.
+              fetch-depth: 0
+
+        - name: The tag must name the version that is in pyproject.toml
+          shell: bash
+          run: |
+            tag_version="${GITHUB_REF_NAME#py-v}"
+            package_version="$(python3 -c '
+            import tomllib
+            with open("bindings/python/pyproject.toml", "rb") as f:
+                print(tomllib.load(f)["project"]["version"])
+            ')"
+            echo "tag says    : $tag_version"
+            echo "package says: $package_version"
+            if [ "$tag_version" != "$package_version" ]; then
+              echo "::error::Tag $GITHUB_REF_NAME does not match the version in pyproject.toml."
+              exit 1
+            fi
+
+        - name: The tag must be on master
+          shell: bash
+          run: |
+            # A release of something that never reached master is a release of
+            # code the ruleset on master has not seen.
+            if ! git merge-base --is-ancestor "$GITHUB_SHA" origin/master; then
+              echo "::error::$GITHUB_REF_NAME is not on master. Merge it first."
+              git log --oneline -1 "$GITHUB_SHA"
+              exit 1
+            fi
+            echo "on master, as it should be"
+
+    wheels:
+        # abi3 means one wheel covers CPython 3.8 and later, so the matrix
+        # varies the platform and the Python used to *build* it, not the
+        # minimum it runs on. All four are published, because a Linux wheel
+        # alone would leave Windows and macOS users building from source.
+        strategy:
+            fail-fast: false
+            matrix:
+                include:
+                    - os: ubuntu-latest
+                      target: x86_64-unknown-linux-gnu
+                    - os: macos-latest
+                      target: aarch64-apple-darwin
+                    - os: macos-latest
+                      target: x86_64-apple-darwin
+                    - os: windows-latest
+                      target: x86_64-pc-windows-msvc
+
+        runs-on: ${{ matrix.os }}
+
+        steps:
+        - name: Checkout code
+          uses: actions/checkout@v4
+
+        - name: Install Rust
+          shell: bash
+          run: |
+            curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
+            echo "$HOME/.cargo/bin:$PATH" >> "$GITHUB_PATH"
+
+        - name: Install uv
+          uses: astral-sh/setup-uv@v5
+
+        - name: Set up Python
+          uses: actions/setup-python@v5
+          with:
+              python-version: "3.12"
+
+        - name: Build the wheel
+          shell: bash
+          run: |
+            rustup target add ${{ matrix.target }}
+            # `--python`, not `--interpreter`: `uv build` has no such flag and
+            # exits 2 without building anything.
+            uv build bindings/python \
+              --out-dir dist \
+              --python python
+
+        - name: Check the wheel installs and works
+          shell: bash
+          run: |
+            uv venv --quiet .wheelcheck
+            uv pip install --quiet --python .wheelcheck dist/*.whl
+            # Run through `uv run`, not `.wheelcheck/bin/python`. A venv on
+            # Windows puts the interpreter in `Scripts`, so the hard-coded path
+            # is not executable there and the step fails with exit 127.
+            # A wheel that installs but cannot detect anything is worse than no
+            # wheel, so the check is a real detection rather than an import.
+            uv run --no-project --python .wheelcheck python -c "
+            from magical_py import FileKind, detect_bytes, bytes_read
+            assert detect_bytes(b'\x89PNG\r\n\x1a\n' + b'\0' * 40) is FileKind.Png
+            assert detect_bytes(b'nothing here') is None
+            assert bytes_read() == 36_870
+            assert len(FileKind) == 114
+            print('wheel OK')
+            "
+
+        - name: Upload the wheel
+          uses: actions/upload-artifact@v4
+          with:
+              name: wheel-${{ matrix.target }}
+              path: dist/*.whl
+
+    sdist:
+        # Built once, from linux, and published alongside the wheels so that a
+        # platform nobody here builds for is still installable.
+        name: Build the sdist
+        runs-on: ubuntu-latest
+
+        steps:
+        - name: Checkout code
+          uses: actions/checkout@v4
+
+        - name: Install Rust
+          shell: bash
+          run: |
+            curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
+            echo "$HOME/.cargo/bin:$PATH" >> "$GITHUB_PATH"
+
+        - name: Install uv
+          uses: astral-sh/setup-uv@v5
+
+        - name: Set up Python
+          uses: actions/setup-python@v5
+          with:
+              python-version: "3.12"
+
+        - name: Build the sdist
+          shell: bash
+          run: uv build bindings/python --sdist --out-dir dist --python python
+
+        - name: Upload the sdist
+          uses: actions/upload-artifact@v4
+          with:
+              name: sdist
+              path: dist/*.tar.gz
+
+    publish:
+        # The tagged commit reached master through a pull request that the
+        # ruleset would not let through unless all seven checks passed, so the
+        # gates have already run against this exact tree. Repeating them here
+        # would add ten minutes to every release to re-establish a fact the
+        # guard step above just checked.
+        name: Publish
+        needs: [ guard, wheels, sdist ]
+        runs-on: ubuntu-latest
+
+        # The environment is what PyPI's trusted publisher is bound to. The
+        # token is minted per run and expires with the job, so there is no
+        # long-lived secret in this repository to leak or rotate.
+        environment: pypi
+        permissions:
+            id-token: write
+
+        steps:
+        - name: Install uv
+          uses: astral-sh/setup-uv@v5
+
+        - name: Collect the artifacts
+          uses: actions/download-artifact@v4
+          with:
+              pattern: "wheel-*/sdist"
+              path: dist
+              merge-multiple: true
+
+        - name: Show what is about to be published
+          shell: bash
+          run: |
+            # One wheel per platform, one sdist. Two artifacts claiming the same
+            # filename would make the upload fail, so the list is printed
+            # rather than assumed.
+            ls -l dist
+            count=$(ls dist | wc -l)
+            echo "$count files"
+            if [ "$count" -ne 5 ]; then
+              echo "::error::Expected 4 wheels and 1 sdist, found $count."
+              exit 1
+            fi
+
+        - name: Check the upload is accepted before making it
+          shell: bash
+          run: uv publish --directory dist --dry-run
+
+        - name: Publish
+          shell: bash
+          run: uv publish --directory dist
+
+        - name: Report
+          shell: bash
+          run: |
+            echo "::notice::Published $GITHUB_REF_NAME to PyPI."
+            echo "https://pypi.org/project/magical-py/$GITHUB_REF_NAME/"

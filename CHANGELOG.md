@@ -505,6 +505,11 @@ byte-for-byte the file's own, one that a short file and those same bytes agree o
 the kind, and one that the three truncated magics match no format at all. All
 three fail against `0.6.2`, and the failure names `Pcx` directly.
 
+`magical-py` 0.3.0 ships in the same tree and is published separately, off a
+`py-v*` tag. It is the release that carries the binding half of this work, and
+the first that goes out through the Python workflow's trusted publisher rather
+than a stored token.
+
 
 ## Version: 0.6.0 `Signature Tightening` and `Format Table Expansion`
 

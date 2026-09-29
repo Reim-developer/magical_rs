@@ -1,0 +1,242 @@
+name: Publish to npm.
+
+on:
+    # A tag is the only trigger, and it is a tag naming the npm package
+    # specifically. The Rust crate carries `v` tags and the Python binding carries
+    # `py-v` tags, so publishing is keyed on `npm-v` and the three artifacts
+    # cannot collide.
+    #
+    # There is deliberately no `workflow_dispatch`. A publish that can be
+    # triggered by a button is a publish that will eventually be triggered by a
+    # button by accident, and npm does not let a version be reused.
+    push:
+        tags: [ "npm-v*" ]
+
+env:
+    CARGO_TERM_COLOR: always
+
+jobs:
+    guard:
+        # Two mistakes that cannot be undone once the version is on npm, so they
+        # are checked in seconds before anything is built. Everything else in this
+        # workflow assumes these hold.
+        name: Check the tag against the package
+        runs-on: ubuntu-latest
+
+        steps:
+        - name: Checkout code
+          uses: actions/checkout@v4
+          with:
+              # The next step needs master to be present, not just the tag.
+              fetch-depth: 0
+
+        - name: Set up Node
+          uses: actions/setup-node@v4
+          with:
+              # Only to read `package.json` reliably. The runner's own Node would
+              # do, and pinning it means the file is parsed by a known version
+              # rather than by whatever the image happens to ship.
+              node-version: "24"
+
+        - name: The tag must name the version that is in package.json
+          shell: bash
+          run: |
+            tag_version="${GITHUB_REF_NAME#npm-v}"
+            package_version="$(node -p "require('./bindings/nodejs/package.json').version")"
+            echo "tag says    : $tag_version"
+            echo "package says: $package_version"
+            if [ "$tag_version" != "$package_version" ]; then
+              echo "::error::Tag $GITHUB_REF_NAME does not match the version in package.json."
+              exit 1
+            fi
+
+        - name: The tag must be on master
+          shell: bash
+          run: |
+            # A release of something that never reached master is a release of
+            # code the ruleset on master has not seen.
+            if ! git merge-base --is-ancestor "$GITHUB_SHA" origin/master; then
+              echo "::error::$GITHUB_REF_NAME is not on master. Merge it first."
+              git log --oneline -1 "$GITHUB_SHA"
+              exit 1
+            fi
+            echo "on master, as it should be"
+
+    publish:
+        # The tagged commit reached master through a pull request that the
+        # ruleset would not let through unless every check passed, so the gates
+        # have already run against this exact tree. They are not repeated here
+        # because what is *not* covered is the WebAssembly module: this job
+        # compiles its own rather than downloading the one the pull request
+        # tested, and a release is exactly the moment to find out that a fresh
+        # compile of the same source is not the same module. So the JavaScript
+        # half of the gate runs below against the bytes that are about to ship.
+        name: Publish
+        needs: guard
+        runs-on: ubuntu-latest
+
+        # The environment is what npm's trusted publisher is bound to. The token
+        # is minted per run and expires with the job, so there is no long-lived
+        # secret in this repository to leak or rotate.
+        environment: npm
+        permissions:
+            id-token: write
+
+        steps:
+        - name: Checkout code
+          uses: actions/checkout@v4
+
+        - name: Install Rust
+          shell: bash
+          run: |
+            curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
+            echo "$HOME/.cargo/bin:$PATH" >> "$GITHUB_PATH"
+
+        - name: Add Rust target
+          shell: bash
+          run: rustup target add wasm32-unknown-unknown
+
+        - name: Set up Node
+          uses: actions/setup-node@v4
+          with:
+              # 24, not the 22 that `nodejs_bindings.yml` tests. 22 is the floor the
+              # *package* declares and the floor the *tests* run against, and it is
+              # the right version to gate code with. It is the wrong version to
+              # publish from: npm's trusted publishing needs npm 11.5.1 or newer,
+              # and Node 22 bundles npm 10. On Node 22 the job would build and test
+              # a perfect package and then fail the upload with ENEEDAUTH, having
+              # spent four minutes proving the code was fine.
+              node-version: "24"
+              # `registry-url` writes an `.npmrc` whose `_authToken` is the
+              # undefined `NODE_AUTH_TOKEN`, which resolves to empty. That token
+              # is never read: npm's OIDC logic exchanges `id-token` for a
+              # registry token automatically when the runner provides
+              # `ACTIONS_ID_TOKEN_REQUEST_URL` and the repo is public — the
+              # `provenance` config is auto-enabled and does not need to be set
+              # by the package. Omitting `provenance` from `publishConfig` also
+              # keeps the first publish working even before a trusted publisher
+              # is configured (a local publish would otherwise fail with
+              # "Automatic provenance generation not supported").
+              registry-url: "https://registry.npmjs.org"
+              # npm's documentation is explicit that release builds do not use the
+              # dependency cache: a stale tarball in a cache is a class of bug that
+              # reproduces nowhere except in the one run that matters.
+              cache: false
+
+        - name: Check the npm version can publish without a token
+          shell: bash
+          run: |
+            # Trusted publishing landed in npm 11.5.1, and an older npm does not
+            # fail with anything that says so — it falls back to the token in
+            # `.npmrc`, finds it empty, and reports a generic authentication
+            # failure at the last step of the job. Checking the version up front
+            # turns that into a message naming the actual cause.
+            have="$(npm --version)"
+            echo "npm $have"
+            if [ "$(printf '11.5.1\n%s\n' "$have" | sort -V | head -n1)" != "11.5.1" ]; then
+              echo "::error::npm $have is too old to publish with a trusted publisher. Need 11.5.1 or newer."
+              exit 1
+            fi
+
+        - name: Install dev dependencies
+          working-directory: bindings/nodejs
+          run: npm ci
+
+        - name: Build the module
+          working-directory: bindings/nodejs
+          run: npm run build
+
+        - name: Test the bytes that are about to be published
+          working-directory: bindings/nodejs
+          # `build` and `test:only`, which is the JavaScript half of `gates` with
+          # the Rust generator left out: the generator was already checked on the
+          # pull request, and the wasm it checks *is* in the tarball. Both halves
+          # are here because both are in the tarball — a `.d.ts` that no longer
+          # compiles, or a test that only passed against the artifact download,
+          # is a bug in the release.
+          run: npm run types && npm run test:only
+
+        - name: Pack
+          # `working-directory` rather than `npm --prefix bindings/nodejs pack`,
+          # which looks like the same thing and is not. `npm pack` ignores
+          # `--prefix` and searches the current directory for `package.json`, so
+          # from the repository root -- which has none -- it fails with:
+          #
+          #   npm error enoent Could not read package.json
+          #   npm error path /home/runner/work/magical_rs/magical_rs/package.json
+          #
+          # `npm run` and `npm ci` honour `--prefix`, so a step that uses it
+          # works while this one does not, and the two look interchangeable.
+          #
+          # `mkdir -p dist` first, because `--pack-destination` does not create the
+          # directory it is given. `nodejs_bindings.yml` packs into `$RUNNER_TEMP`,
+          # which always exists, so this was never a question there; here `dist` is
+          # fresh off a checkout and the pack fails with an `enoent` about a
+          # tarball that was never written.
+          working-directory: bindings/nodejs
+          run: |
+            mkdir -p dist
+            npm pack --pack-destination dist
+
+        - name: Show what is about to be published
+          # The working directory matters here, because `dist` is created by the
+          # `Pack` step above, which runs in `bindings/nodejs`. Counted from the
+          # repository root this reports zero files for a tarball that was written
+          # correctly one directory over.
+          working-directory: bindings/nodejs
+          shell: bash
+          run: |
+            # A scoped package drops the `@` and turns the `/` into a `-`, so
+            # `@reim-developer/magical-js` packs to
+            # `reim-developer-magical-js-0.1.0.tgz`. Listing what is here rather
+            # than what was expected is the point: a tarball missing the
+            # WebAssembly module installs cleanly everywhere and then throws on
+            # its first call, which is the worst possible first impression and a
+            # miserable bug report.
+            #
+            # `dist` is counted even when it does not exist, so that collecting
+            # nothing produces the message written for that case. A bare
+            # `ls dist | wc -l` under `set -e` with `pipefail` — which is what
+            # `shell: bash` runs — dies on `ls` with its own exit code 2, and the
+            # explanation that was written for this exact situation never prints.
+            # The `|| true` is inside the subshell so `pipefail` has nothing to
+            # fail on.
+            count=$( (ls dist 2>/dev/null || true) | wc -l)
+            echo "$count files"
+            if [ "$count" -ne 1 ]; then
+              echo "::error::Expected exactly one tarball, found $count."
+              exit 1
+            fi
+            tar tzf dist/*.tgz | sort
+            du -h dist/*.tgz
+
+        - name: Check the upload is accepted before making it
+          working-directory: bindings/nodejs
+          # Weaker than it looks, and deliberately. `npm publish --dry-run` builds
+          # and inspects the tarball and does not authenticate, so this step
+          # cannot catch a missing trusted publisher or a name the registry will
+          # refuse. It is here to catch the ordinary mistake — a `files` entry or
+          # a `prepack` that has started failing — before the upload rather than
+          # during it. The trusted publisher itself is checked at the real step
+          # and nowhere earlier, because nothing earlier can check it.
+          run: npm publish --dry-run
+
+        - name: Publish
+          working-directory: bindings/nodejs
+          # From the directory rather than from `dist/*.tgz`. Both publish the same
+          # bytes, and the directory form runs `prepack` again, which re-checks
+          # that the module is present and is a module — the one guard against a
+          # tarball that installs and then throws. `--tag` is left to npm's default
+          # of `latest` so that `publishConfig` stays the single place that decides
+          # which dist-tag a release gets.
+          run: npm publish
+
+        - name: Report
+          shell: bash
+          run: |
+            # The tag is `npm-v0.1.0` and the version is `0.1.0`. Using the ref
+            # name straight in the URL linked to a page that does not exist, so
+            # the same prefix strip the guard job does is done here.
+            version="${GITHUB_REF_NAME#npm-v}"
+            echo "::notice::Published $version to npm as $GITHUB_REF_NAME."
+            echo "https://www.npmjs.com/package/@reim-developer/magical-js/v/$version"

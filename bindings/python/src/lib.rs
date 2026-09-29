@@ -5,6 +5,13 @@
 //! objects, because the rich `FileKind` enum is declared on the Python side.
 //! See `python/magical_py/_kinds.py`.
 //!
+//! Custom rules are split the same way. Level 1 needs this module because the
+//! signature table lives in Rust. Level 2 needs it for one primitive,
+//! [`signatures_match`], so that matching a declarative rule costs no Python
+//! call; levels 3 and 4 need nothing here, because their matchers are Python
+//! callables and the work is in the Python layer. See
+//! `python/magical_py/_levels.py`.
+//!
 //! I/O errors are surfaced as Python's own `OSError` subclasses rather than a
 //! library-specific exception, so `detect("missing.png")` raising
 //! `FileNotFoundError` behaves the way callers already expect from `open()`.
@@ -217,6 +224,40 @@ fn bytes_read() -> usize {
     with_bytes_read()
 }
 
+/// Reports whether any signature appears at any of the offsets in `data`.
+///
+/// This mirrors the `CustomMatchRules::Default` arm of
+/// `magical_rs::magical::magic_custom::MagicCustom::matches_custom`, which is
+/// the crate's own definition of level 2 matching and the one this function
+/// re-exports. The crate cannot be called directly here: `MagicCustom` holds
+/// `&'static [&'static [u8]]` and `&'static [usize]`, because a level 2 rule is
+/// meant to be a `static`. A rule built from Python data at run time would have
+/// to be `Box::leak`ed, and a process that builds rules in a loop would leak
+/// without bound. Copying the comparison instead keeps the cost in Rust — which
+/// is what separates level 2 from level 3, where the matcher is a Python
+/// callable — at the price of eight lines that have to stay in step.
+///
+/// `tests/magic_custom.rs` in the main crate pins that arm's behaviour, and
+/// `tests/test_levels.py` pins this function against every branch of it, so a
+/// change on either side shows up as a test failure rather than as a detection
+/// that quietly stops working.
+// The two `Vec`s are taken by value because that is the only form pyo3 can
+// extract: `&[Vec<u8>]` does not implement `PyFunctionArgument`, so the lint's
+// suggested `&[Vec<u8>]` cannot be written here. One extraction into owned
+// values is also cheaper than walking the Python sequence item by item.
+#[allow(clippy::needless_pass_by_value)]
+#[pyfunction]
+#[pyo3(signature = (data, signatures, offsets, /))]
+fn signatures_match(data: &[u8], signatures: Vec<Vec<u8>>, offsets: Vec<usize>) -> bool {
+    signatures.iter().any(|signature| {
+        let signature = signature.as_slice();
+        offsets.iter().any(|&offset| {
+            let end = offset.saturating_add(signature.len());
+            data.len() >= end && data.get(offset..end) == Some(signature)
+        })
+    })
+}
+
 #[pymodule]
 #[pyo3(name = "_magical_rs")]
 fn _magical_rs(module: &Bound<'_, PyModule>) -> PyResult<()> {
@@ -225,5 +266,6 @@ fn _magical_rs(module: &Bound<'_, PyModule>) -> PyResult<()> {
     module.add_function(wrap_pyfunction!(detect_bytes, module)?)?;
     module.add_function(wrap_pyfunction!(all_kinds, module)?)?;
     module.add_function(wrap_pyfunction!(bytes_read, module)?)?;
+    module.add_function(wrap_pyfunction!(signatures_match, module)?)?;
     Ok(())
 }

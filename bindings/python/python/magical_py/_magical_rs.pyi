@@ -23,3 +23,13 @@ def all_kinds() -> list[str]:
 
 def bytes_read() -> int:
     """Return the header size needed to classify any supported format."""
+
+def signatures_match(
+    data: bytes, signatures: list[bytes], offsets: list[int], /
+) -> bool:
+    """Report whether any signature appears at any of the offsets in ``data``.
+
+    Mirrors the ``CustomMatchRules::Default`` arm of the crate's level 2
+    matching, reimplemented here because ``MagicCustom`` holds ``'static``
+    slices and a rule built from Python data cannot be one.
+    """

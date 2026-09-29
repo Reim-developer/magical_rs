@@ -59,6 +59,15 @@ audit, nothing to keep up to date, no version conflicts in your tree.
 **`no_std` support.** Levels 1 and 2 build for bare-metal targets. Verified
 against `thumbv7em-none-eabi`.
 
+**WebAssembly.** The 114-entry table is about 5.7 KB of wasm — 2.3 KB gzipped.
+It is data rather than code, so there is nothing left to optimize: a module
+exporting `FileKind::match_types` measures 5,858 bytes against a 73-byte
+baseline, and moves 243 bytes between `opt-level` `z` and `3`. Both the `std`
+build and the bare build compile for `wasm32-unknown-unknown`. The dynamic
+levels are not part of that — 3 and 4 call back into a host language, which in
+a browser would mean JavaScript and a different API. A `wasm-bindgen` wrapper
+depends on `wasm-bindgen`, so the zero-dependency promise above is untouched.
+
 **Detection is just bytes in, enum out.** `FileKind::match_types` takes a
 `&[u8]` and returns `Option<FileKind>`. There is no handle, no session, no async
 runtime requirement. First match wins, so it is allocation-free and
@@ -538,6 +547,12 @@ Verify `no_std` still holds:
 
 ```bash
 cargo build --no-default-features --target thumbv7em-none-eabi
+```
+
+And that the WebAssembly claim in the first paragraph still holds:
+
+```bash
+cargo build --target wasm32-unknown-unknown
 ```
 
 ## License

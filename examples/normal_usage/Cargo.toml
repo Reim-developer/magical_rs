@@ -7,6 +7,7 @@ edition = "2024"
 # A path dependency, like the other four examples. This one was pinned to
 # `magical_rs = "0.1.2"` from crates.io, so the most ordinary example in the
 # repository was building and running against a release from 2024 while the
-# crate next to it was on 0.6.2. `make linter` never saw it, because this is a
-# separate crate, and the lock file never moved when the local version changed.
+# crate next to it was already on 0.6. `make linter` never saw it, because this
+# is a separate crate, and the lock file never moved when the local version
+# changed.
 magical_rs = { path = "../../" }

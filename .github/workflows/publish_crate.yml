@@ -20,8 +20,9 @@ name: Publish to crates.io.
 #
 # The crate already exists on crates.io, which is a prerequisite: a trusted
 # publisher can only be attached to a crate that is already there. Versions up
-# to and including 0.6.2 were published with a long-lived API token, and the
-# token in `~/.cargo/credentials.toml` can be deleted once this has run once.
+# to and including 0.6.2 were published with a long-lived API token; 0.6.3 is
+# the first to go through this workflow, so the token in
+# `~/.cargo/credentials.toml` can be deleted once that run reports success.
 
 on:
     # A tag is the only trigger, and it is a tag naming the Rust crate. The

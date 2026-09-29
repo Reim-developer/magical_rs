@@ -62,15 +62,15 @@ The Python bindings now carry the crate's custom detection levels. Level 1,
   matches, which is the crate's behaviour rather than an oversight: its arm is
   `signatures.any(offsets.any(...))`, so either side being empty means no.
 
-**One behavioural difference, and it is a fix:**
+**A bug in the crate that this found:**
 
-`match_types_custom` computes `offset + signature.len()` and panics when that
-overflows, at `src/magical/magic_custom.rs:593`, so an offset near `usize::MAX`
-aborts the process. An offset reaching the binding is a Python integer, is not
-the crate's to trust, and can be arbitrarily large, so the addition saturates
-and a signature that cannot be there reports no match. The crate's behaviour is
-left alone here: it is a published library and changing it is a separate
-decision.
+`match_types_custom` computed `offset + signature.len()`, and a signature near
+`usize::MAX` overflowed that. In a debug build it panicked; in a release build
+it wrapped to a small number, so the length check passed and the slice index
+went out of range. Both paths aborted the caller's process over an offset the
+caller cannot have meant. The binding already saturated, because an offset
+reaching it is a Python integer; the crate is fixed in `0.6.2` and both sides
+now agree.
 
 **Also:**
 

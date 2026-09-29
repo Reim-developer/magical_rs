@@ -295,8 +295,7 @@ Level 2 is not this level 2. `MagicCustom` holds `&'static` slices, so a rule
 assembled from Python data at run time could only be `Box::leak`ed, and a
 process that builds rules in a loop would leak without bound. The binding
 reproduces the comparison in Rust instead, and pins it to the behaviour above
-from both sides. The cost is a small and deliberate divergence: an offset near
-`usize::MAX`, which panics here, reports no match there.
+from both sides.
 
 The [bindings README](https://github.com/Reim-developer/magical_rs/tree/master/bindings/python#detection-levels)
 sets out what each level costs in Python and when to reach for it.

@@ -39,5 +39,5 @@ def signatures_match(
     a tuple, a list or any other sequence, and taking the argument by value is
     the only form it can. The addition of offset and signature length
     saturates, so a nonsensical offset reports no match instead of aborting
-    the process, which is what the crate does with one.
+    the process, as the crate's does since ``0.6.2``.
     """

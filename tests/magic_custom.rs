@@ -204,6 +204,31 @@ mod default_arm {
         assert!(!matches(b"xxxxACAD", &[ACAD], &[99]));
     }
 
+    /// The offsets a caller can actually type, and the one they cannot.
+    ///
+    /// A debug build panicked on `attempt to add with overflow` and a release
+    /// build indexed a slice out of range, because `offset + signature.len()`
+    /// is not a total function on `usize`. A caller who writes an offset near
+    /// the maximum has made a mistake, and the most useful thing a detection
+    /// library can do with it is report no match rather than take the process
+    /// with it. That is what the saturating addition buys.
+    #[test]
+    fn a_nonsensical_offset_reports_no_match_instead_of_panicking() {
+        assert!(!matches(b"xxxxACAD", &[ACAD], &[usize::MAX]));
+        assert!(!matches(b"xxxxACAD", &[ACAD], &[usize::MAX - 1]));
+        // The largest offset that could still be legitimate, one byte early.
+        assert!(!matches(b"xxxxACAD", &[ACAD], &[usize::MAX - 3]));
+        assert!(!matches(b"", &[], &[usize::MAX]));
+    }
+
+    /// A zero-length signature sits at every valid offset, including the
+    /// overflowing one, because `usize::MAX.saturating_add(0)` is itself.
+    #[test]
+    fn an_empty_signature_at_an_overflowing_offset_still_does_not_panic() {
+        assert!(!matches(b"xxxxACAD", &[b""], &[usize::MAX]));
+        assert!(matches(b"xxxxACAD", &[b""], &[0]));
+    }
+
     #[test]
     fn rejects_a_signature_one_byte_short() {
         // The bound is on the signature, not on the offset: three bytes of

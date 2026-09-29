@@ -278,16 +278,30 @@ jobs:
             fi
             ls -l dist
 
+        # No `--directory` on either of these. It is a global uv option meaning
+        # "change to this directory first", not "publish the contents of this
+        # directory", and uv publish already defaults its file list to
+        # `dist/*`. So `--directory dist` changed into dist and then looked for
+        # `dist/*` again, one level down, and said:
+        #
+        #     error: No files found to publish
+        #
+        # Reproduced locally with a real wheel and a real sdist in dist/:
+        # `--directory dist` exits 2, the bare form checks both files.
         - name: Check the upload is accepted before making it
           shell: bash
-          run: uv publish --directory dist --dry-run
+          run: uv publish --dry-run
 
         - name: Publish
           shell: bash
-          run: uv publish --directory dist
+          run: uv publish
 
         - name: Report
           shell: bash
           run: |
-            echo "::notice::Published $GITHUB_REF_NAME to PyPI."
-            echo "https://pypi.org/project/magical-py/$GITHUB_REF_NAME/"
+            # The tag is `py-v0.1.0` and the version is `0.1.0`. Using the ref
+            # name straight in the URL linked to a page that does not exist, so
+            # the same prefix strip the guard job does is done here.
+            version="${GITHUB_REF_NAME#py-v}"
+            echo "::notice::Published $version to PyPI as $GITHUB_REF_NAME."
+            echo "https://pypi.org/project/magical-py/$version/"

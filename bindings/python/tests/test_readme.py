@@ -23,6 +23,7 @@ import sys
 import pytest
 
 from magical_py import (
+    DEFAULT_MAX_BYTES_READ,
     AsyncDynMagic,
     DynMagicCustom,
     FileKind,
@@ -36,6 +37,8 @@ from magical_py import (
     match_dyn_types_all,
     match_types_custom,
     read_header,
+    read_limits,
+    signature_table,
     version,
 )
 
@@ -337,3 +340,90 @@ def test_readme_short_answer_claim_holds() -> None:
     # And PNG is out of reach below 2,048, which is the readme's own caveat.
     assert detect_bytes(_PNG, max_bytes_read=2_048) is FileKind.Png
     assert detect_bytes(_PNG, max_bytes_read=2_047) is None
+
+
+# --- "Asking the table a question" -----------------------------------------
+
+
+# A KTX2 header. Its three-byte prefix is `Ktx`'s whole magic, which is what
+# makes the readme's shadowing example work.
+_KTX2 = bytes([0xAB, 0x4B, 0x54, 0x58, 0x20, 0x32, 0x30, 0xBB, 0x0D, 0x0A, 0x1A, 0x0A])
+
+
+def test_readme_rule_property_example_holds() -> None:
+    """The readme shows `FileKind.ISO.rule.offsets` and the PNG signatures."""
+    assert "FileKind.ISO.rule.offsets" in readme()
+    assert FileKind.ISO.rule.offsets == (32_769, 34_817, 36_865)
+    assert FileKind.Png.rule.signatures == (_PNG[:8],)
+    assert FileKind.Png.rule.max_bytes_read == 2_048
+
+
+def test_readme_shadowing_example_holds() -> None:
+    """KTX2 matches both `Ktx2` and `Ktx`; only `Ktx2` is ever detected.
+
+    The readme's whole argument is that `matches` answers a question `detect`
+    structurally cannot, so both halves are checked: the two `matches` calls
+    return `True`, and `detect_bytes` names only the shadower.
+    """
+    assert "is shadowed by" in readme() or "unreachable as KTX" in readme()
+    assert FileKind.Ktx2.matches(_KTX2) is True
+    assert FileKind.Ktx.matches(_KTX2) is True
+    assert detect_bytes(_KTX2) is FileKind.Ktx2
+
+
+def test_readme_matches_ignores_the_window_claim_holds() -> None:
+    """A per-format question has no window to declare.
+
+    The readme says `matches` ignores `max_bytes_read`. It has to be saying
+    something, and what it says is that a rule which `detect_bytes` filters out
+    for want of a declared read size still answers `True` when asked directly.
+    """
+    assert "ignores `max_bytes_read`" in readme()
+    assert detect_bytes(_PNG, max_bytes_read=1) is None
+    assert FileKind.Png.matches(_PNG) is True
+
+
+def test_readme_read_limits_example_holds() -> None:
+    """The three figures the readme quotes, and the fresh-object claim."""
+    assert "limits.default_max_bytes_read" in readme()
+
+    limits = read_limits()
+    assert (limits.default_max_bytes_read, limits.iso_max_bytes_read) == (2_048, 36_870)
+    assert limits.tar_max_bytes_read == 262
+    assert limits == read_limits()
+    assert limits is not read_limits()
+
+
+def test_readme_default_max_bytes_read_constant_claim_holds() -> None:
+    assert "DEFAULT_MAX_BYTES_READ" in readme()
+    assert DEFAULT_MAX_BYTES_READ == read_limits().default_max_bytes_read == 2_048
+
+
+def test_readme_predicate_entry_claim_holds() -> None:
+    """The readme says the two function-decided rules report no signatures."""
+    assert "uses_predicate" in readme()
+    for kind in (FileKind.ScriptExecute, FileKind.WEBP):
+        rule = kind.rule
+        assert rule.uses_predicate is True
+        assert rule.signatures == ()
+
+
+def test_readme_table_order_claim_holds() -> None:
+    """Walking the table and stopping at the first match reproduces `detect`.
+
+    That is the justification for `signature_table` returning the table's order
+    rather than a sorted one, so it is checked over every entry's own magic
+    rather than on a single hand-picked format.
+    """
+    assert "in the order detection tries" in readme()
+
+    table = signature_table()
+    for entry in table:
+        if entry.uses_predicate or not entry.signatures:
+            continue
+        for signature in entry.signatures:
+            for offset in entry.offsets:
+                buf = bytearray(b"\x2a" * (offset + len(signature)))
+                buf[offset : offset + len(signature)] = signature
+                first = next(e for e in table if e.matches(bytes(buf)))
+                assert first.kind is detect_bytes(bytes(buf))

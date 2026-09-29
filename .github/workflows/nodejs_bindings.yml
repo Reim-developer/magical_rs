@@ -64,7 +64,13 @@ jobs:
               node-version: "22"
 
         - name: Install dev dependencies
-          run: npm --prefix bindings/nodejs ci
+          # `working-directory`, not `npm --prefix`. The two are not the same and
+          # the difference is worth knowing: `--prefix` works for `npm run` and
+          # `npm ci`, and is silently ignored by `npm pack`, which looks for
+          # `package.json` in the *current* directory. See the `Pack` step below,
+          # which fails exactly there.
+          working-directory: bindings/nodejs
+          run: npm ci
 
         # `gates.sh` runs generate, cargo test, build, tsc, node --test, rustfmt
         # and clippy, in that order. One step, so a local run and a CI run cannot
@@ -125,8 +131,21 @@ jobs:
               path: bindings/nodejs
 
         - name: Pack
-          run: |
-            npm --prefix bindings/nodejs pack --pack-destination "$RUNNER_TEMP"
+          # `working-directory` rather than `npm --prefix bindings/nodejs pack`,
+          # which looks like the same thing and is not. `npm pack` ignores
+          # `--prefix` and searches the current directory for `package.json`, so
+          # from the repository root -- which has none -- it fails with:
+          #
+          #   npm error enoent Could not read package.json
+          #   npm error path /home/runner/work/magical_rs/magical_rs/package.json
+          #
+          # `npm run` and `npm ci` honour `--prefix`, which is why the `gates` job
+          # above was green while this one was not, and why a local run of
+          # `npm --prefix bindings/nodejs pack` from inside the directory appears
+          # to work. Set the working directory and the two spellings cannot
+          # disagree again.
+          working-directory: bindings/nodejs
+          run: npm pack --pack-destination "$RUNNER_TEMP"
 
         - name: Check what the tarball contains
           run: |

@@ -242,12 +242,11 @@ fn bytes_read() -> usize {
 /// change on either side shows up as a test failure rather than as a detection
 /// that quietly stops working.
 ///
-/// One deliberate difference: the crate computes `offset + signature.len()` and
-/// panics when that overflows, so an offset near `usize::MAX` aborts the whole
-/// process. Offsets here arrive as Python integers, which can be arbitrarily
-/// large and are not the crate's to trust, so the addition saturates and a
-/// nonsensical offset reports no match instead of taking the interpreter with
-/// it. `tests/test_levels.py` asserts that.
+/// The addition saturates, as the crate's does since `0.6.2`. An offset near
+/// `usize::MAX` used to be a debug panic here and a release slice index there;
+/// it is now a no-match on both sides. Offsets arrive as Python integers, which
+/// can be arbitrarily large and are not the crate's to trust, so this is the
+/// more likely place for one to be nonsense. `tests/test_levels.py` asserts it.
 // The two `Vec`s are taken by value because that is the only form pyo3 can
 // extract: `&[Vec<u8>]` does not implement `PyFunctionArgument`, so the lint's
 // suggested `&[Vec<u8>]` cannot be written here. One extraction into owned

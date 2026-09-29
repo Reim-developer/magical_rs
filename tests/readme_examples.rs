@@ -18,7 +18,7 @@ use magical_rs::{all_matches, magic_custom, match_custom};
 #[cfg(feature = "unsafe_context")]
 use core::slice;
 #[cfg(feature = "unsafe_context")]
-use magical_rs::magical::magic_custom::{match_types_custom, CustomMatchRules, MagicCustom};
+use magical_rs::magical::magic_custom::{CustomMatchRules, MagicCustom, match_types_custom};
 
 /// README: Quick start
 #[test]
@@ -120,7 +120,7 @@ fn readme_level_3() {
 #[cfg(feature = "magical_async_dyn")]
 #[test]
 fn readme_level_4() {
-    use magical_rs::magical::async_dyn_magic::{match_dyn_types_as, AsyncDynMagic};
+    use magical_rs::magical::async_dyn_magic::{AsyncDynMagic, match_dyn_types_as};
 
     // Minimal executor, so this test needs no async runtime dependency.
     fn block_on<F: std::future::Future>(mut fut: F) -> F::Output {
@@ -137,7 +137,9 @@ fn readme_level_4() {
 
         // Safety-relevant: single-poll, never-pending future.
         loop {
-            if let Poll::Ready(out) = unsafe { std::pin::Pin::new_unchecked(&mut fut) }.poll(&mut cx) {
+            if let Poll::Ready(out) =
+                unsafe { std::pin::Pin::new_unchecked(&mut fut) }.poll(&mut cx)
+            {
                 return out;
             }
         }

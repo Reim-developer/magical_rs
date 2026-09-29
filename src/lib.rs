@@ -1,5 +1,4 @@
-﻿#![doc = include_str!("../readme.md")]
-
+#![doc = include_str!("../readme.md")]
 #![deny(clippy::pedantic, clippy::all, clippy::nursery, clippy::perf)]
 #![cfg_attr(not(feature = "std"), no_std)]
 

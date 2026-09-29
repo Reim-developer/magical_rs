@@ -111,16 +111,21 @@ def test_an_empty_signature_matches_at_offset_zero() -> None:
 
 
 def test_a_nonsensical_offset_reports_no_match_rather_than_panicking() -> None:
-    """The one deliberate difference from the crate.
+    """An offset a caller cannot have meant must not take the process with it.
 
-    ``match_types_custom`` computes ``offset + signature.len()`` and panics
-    when that overflows, so an offset anywhere near ``usize::MAX`` aborts the
-    process. An offset here is a Python integer, which can be arbitrarily large
-    and is not the crate's to trust, so the addition saturates and a signature
-    that cannot possibly be there reports no match. The crate has no test for
-    this, because there the answer is a panic rather than a result.
+    Both sides saturate. The crate needed fixing, because ``offset +
+    signature.len()`` was a debug panic and a release slice index; an offset is
+    a value the caller supplies and a mistake in it is not worth aborting a
+    process over. ``tests/magic_custom.rs`` pins the crate's behaviour and this
+    pins the copy, with the same table of offsets.
     """
+    # 2**64 - 1 is 2**64 - 1, which is the same number as the crate's
+    # `usize::MAX` on every platform this binding ships a wheel for. It is
+    # written in decimal rather than as a name so the test says what it means
+    # on a 32-bit host too, where it is far past the end of the word.
     assert MagicCustom("k", [ACAD], [2**64 - 1]).matches(b"xxxxACAD") is False
+    assert MagicCustom("k", [ACAD], [2**64 - 2]).matches(b"xxxxACAD") is False
+    assert MagicCustom("k", [b""], [2**64 - 1]).matches(b"xxxxACAD") is False
 
 
 def test_a_matcher_receives_the_whole_buffer() -> None:

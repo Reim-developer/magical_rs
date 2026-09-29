@@ -590,7 +590,23 @@ impl<K: Clone> MagicCustom<'_, K> {
         match &self.rules {
             CustomMatchRules::Default => self.signatures.iter().any(|&signature| {
                 self.offsets.iter().any(|&offset| {
-                    let offset_end = offset + signature.len();
+                    /*
+                     * `saturating_add`, not `+`.
+                     *
+                     * `offset` and `signature.len()` are both `usize`, and a
+                     * signature near `usize::MAX` made `offset + signature.len()`
+                     * overflow. In a debug build that panicked; in a release
+                     * build it wrapped to a small number, so the length check
+                     * below passed and the slice index went out of range. Both
+                     * paths abort the caller's process, over a value the caller
+                     * cannot have meant.
+                     *
+                     * Saturating makes the impossible offset compare as the
+                     * larger number it is, so `bytes.len() >= offset_end` is
+                     * false and the rule reports no match. A signature that
+                     * cannot fit after the offset is not in the buffer.
+                     */
+                    let offset_end = offset.saturating_add(signature.len());
 
                     bytes.len() >= offset_end && &bytes[offset..offset_end] == signature
                 })

@@ -12,6 +12,10 @@ on:
             # the same gate as editing the code it releases.
             - ".github/workflows/python_bindings.yml"
             - ".github/workflows/publish.yml"
+            # `gates.sh` is what this workflow runs, and it lives here rather
+            # than beside the crate it gates, so editing it has to count as
+            # editing the bindings.
+            - "scripts/**"
 
     # No `paths` filter here, deliberately, and not for cost reasons. These
     # jobs are required status checks on master, and a required check that
@@ -86,7 +90,7 @@ jobs:
           shell: bash
           # Invoked through `bash` rather than `./gates.sh` so the step does not
           # depend on the executable bit surviving in git.
-          run: bash ./bindings/python/gates.sh
+          run: bash ./scripts/gates.sh
 
     wheels:
         # abi3 means one wheel covers CPython 3.8 and later, so the matrix

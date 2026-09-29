@@ -100,6 +100,31 @@ requires a `/` later on the first line, so a bare `#!` does not count;
 exists because `#!AMR` is the literal magic of AMR audio: without the `/`
 check, the script rule claimed those files and they became undetectable.
 
+## Examples
+
+Six runnable scripts live in
+[`bindings/python/examples/`](https://github.com/Reim-developer/magical_rs/tree/master/bindings/python/examples).
+Each one builds the files it reads from the magic bytes in the format tables
+above and writes them to a temporary directory, so nothing has to be checked in
+and every example runs from a bare install:
+
+```bash
+python 01_detect_a_file.py
+```
+
+| Example | Shows |
+| --- | --- |
+| `01_detect_a_file.py` | `detect()` on a path, and the metadata a `FileKind` carries |
+| `02_detect_bytes.py` | `detect_bytes()`, `bytes_read()`, and reading a header rather than a file |
+| `03_name_does_not_matter.py` | Why the file name is never consulted |
+| `04_list_supported_formats.py` | Enumerating `FileKind`, and which media types are `None` |
+| `05_scan_a_directory.py` | Walking a tree and tallying it by kind |
+| `06_handle_errors.py` | A kind, `None` and an exception as three different outcomes |
+
+`tests/test_examples.py` runs every one of them and checks the values they
+print, so an example that stops working fails the suite instead of quietly
+misleading someone.
+
 ## Type checking
 
 The package ships a `py.typed` marker and stubs for the compiled module, and it

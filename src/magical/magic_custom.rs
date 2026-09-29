@@ -313,10 +313,21 @@ pub enum CustomMatchRules<'a> {
     ///         UnknownFallback,
     ///     }
     ///
+    ///     // How many bytes the predicate below reads. Declared on the caller's
+    ///     // side, because the callee is handed a `*const ()` and no length, and
+    ///     // so has nothing to check a promise against.
+    ///     const READ_LEN: usize = 100;
+    ///
     ///     fn is_shoujo_girl(data: *const ()) -> bool {
     ///         unsafe {
     ///             let slice_ptr = data.cast::<u8>();
-    ///             let slice = slice::from_raw_parts(slice_ptr, 100);
+    ///             // SAFETY: the code below passes a `[u8; READ_LEN]`, and
+    ///             // `match_types_custom` hands the predicate a pointer into
+    ///             // the buffer it was given, so `READ_LEN` bytes are readable
+    ///             // from it. A caller passing a shorter buffer turns this into
+    ///             // a read out of bounds, which is what the `unsafe fn` in the
+    ///             // signature is asking you to promise against.
+    ///             let slice = slice::from_raw_parts(slice_ptr, READ_LEN);
     ///
     ///             slice.starts_with(b"MagicalGirl")
     ///         }
@@ -332,7 +343,13 @@ pub enum CustomMatchRules<'a> {
     ///         },
     ///     }];
     ///
-    ///     let result = match_types_custom(b"MagicalGirl", rules, MagicKind::UnknownFallback);
+    ///     // The buffer has to be at least `READ_LEN` bytes. A `b"MagicalGirl"`
+    ///     // literal is 11, and reading 100 out of it is out of bounds even when
+    ///     // the allocator happens to leave the following bytes mapped.
+    ///     let mut data = [0u8; READ_LEN];
+    ///     data[..b"MagicalGirl".len()].copy_from_slice(b"MagicalGirl");
+    ///
+    ///     let result = match_types_custom(&data, rules, MagicKind::UnknownFallback);
     ///
     ///     assert_eq!(result, MagicKind::MoeMoe);
     ///     assert_ne!(result, MagicKind::UnknownFallback);
@@ -412,10 +429,21 @@ pub enum CustomMatchRules<'a> {
     ///         UnknownFallback,
     ///     }
     ///
+    ///     // How many bytes the predicates below read. Declared on the caller's
+    ///     // side, because the callee is handed a `*const ()` and no length, and
+    ///     // so has nothing to check a promise against.
+    ///     const READ_LEN: usize = 100;
+    ///
     ///     fn is_shoujo_girl(data: *const ()) -> bool {
     ///         unsafe {
     ///             let slice_ptr = data.cast::<u8>();
-    ///             let slice = slice::from_raw_parts(slice_ptr, 100);
+    ///             // SAFETY: the code below passes a `[u8; READ_LEN]`, and
+    ///             // `match_types_custom` hands the predicate a pointer into
+    ///             // the buffer it was given, so `READ_LEN` bytes are readable
+    ///             // from it. A caller passing a shorter buffer turns this into
+    ///             // a read out of bounds, which is what the `unsafe fn` in the
+    ///             // signature is asking you to promise against.
+    ///             let slice = slice::from_raw_parts(slice_ptr, READ_LEN);
     ///
     ///             slice.starts_with(b"MagicalGirl")
     ///         }
@@ -424,7 +452,13 @@ pub enum CustomMatchRules<'a> {
     ///     fn is_not_shoujo_girl(data: *const ()) -> bool {
     ///         unsafe {
     ///             let slice_ptr = data.cast::<u8>();
-    ///             let slice = slice::from_raw_parts(slice_ptr, 100);
+    ///             // SAFETY: the code below passes a `[u8; READ_LEN]`, and
+    ///             // `match_types_custom` hands the predicate a pointer into
+    ///             // the buffer it was given, so `READ_LEN` bytes are readable
+    ///             // from it. A caller passing a shorter buffer turns this into
+    ///             // a read out of bounds, which is what the `unsafe fn` in the
+    ///             // signature is asking you to promise against.
+    ///             let slice = slice::from_raw_parts(slice_ptr, READ_LEN);
     ///
     ///             !slice.starts_with(b"MagicalGirl")
     ///         }
@@ -439,7 +473,13 @@ pub enum CustomMatchRules<'a> {
     ///                 &[is_shoujo_girl, is_not_shoujo_girl]),
     ///     }];
     ///
-    ///     let result = match_types_custom(b"MagicalGirl", rules, MagicKind::UnknownFallback);
+    ///     // The buffer has to be at least `READ_LEN` bytes. A `b"MagicalGirl"`
+    ///     // literal is 11, and reading 100 out of it is out of bounds even when
+    ///     // the allocator happens to leave the following bytes mapped.
+    ///     let mut data = [0u8; READ_LEN];
+    ///     data[..b"MagicalGirl".len()].copy_from_slice(b"MagicalGirl");
+    ///
+    ///     let result = match_types_custom(&data, rules, MagicKind::UnknownFallback);
     ///
     ///     assert_eq!(result, MagicKind::MoeMoe);
     ///     assert_ne!(result, MagicKind::UnknownFallback);
@@ -493,7 +533,7 @@ pub enum CustomMatchRules<'a> {
     ///
     /// # Examples:
     /// ```rust
-    /// fn any_unsafe_fn() {
+    /// fn all_unsafe_fn() {
     ///     use core::slice;
     ///     use magical_rs::magical::magic_custom::match_types_custom;
     ///     use magical_rs::magical::magic_custom::{CustomMatchRules, MagicCustom};
@@ -504,10 +544,21 @@ pub enum CustomMatchRules<'a> {
     ///         UnknownFallback,
     ///     }
     ///
+    ///     // How many bytes the predicates below read. Declared on the caller's
+    ///     // side, because the callee is handed a `*const ()` and no length, and
+    ///     // so has nothing to check a promise against.
+    ///     const READ_LEN: usize = 100;
+    ///
     ///     fn is_shoujo_girl(data: *const ()) -> bool {
     ///         unsafe {
     ///             let slice_ptr = data.cast::<u8>();
-    ///             let slice = slice::from_raw_parts(slice_ptr, 100);
+    ///             // SAFETY: the code below passes a `[u8; READ_LEN]`, and
+    ///             // `match_types_custom` hands the predicate a pointer into
+    ///             // the buffer it was given, so `READ_LEN` bytes are readable
+    ///             // from it. A caller passing a shorter buffer turns this into
+    ///             // a read out of bounds, which is what the `unsafe fn` in the
+    ///             // signature is asking you to promise against.
+    ///             let slice = slice::from_raw_parts(slice_ptr, READ_LEN);
     ///
     ///             slice.starts_with(b"MagicalGirl")
     ///         }
@@ -516,7 +567,13 @@ pub enum CustomMatchRules<'a> {
     ///     fn is_not_shoujo_girl(data: *const ()) -> bool {
     ///         unsafe {
     ///             let slice_ptr = data.cast::<u8>();
-    ///             let slice = slice::from_raw_parts(slice_ptr, 100);
+    ///             // SAFETY: the code below passes a `[u8; READ_LEN]`, and
+    ///             // `match_types_custom` hands the predicate a pointer into
+    ///             // the buffer it was given, so `READ_LEN` bytes are readable
+    ///             // from it. A caller passing a shorter buffer turns this into
+    ///             // a read out of bounds, which is what the `unsafe fn` in the
+    ///             // signature is asking you to promise against.
+    ///             let slice = slice::from_raw_parts(slice_ptr, READ_LEN);
     ///
     ///             !slice.starts_with(b"MagicalGirl")
     ///         }
@@ -531,7 +588,13 @@ pub enum CustomMatchRules<'a> {
     ///                 &[is_shoujo_girl, is_not_shoujo_girl]),
     ///     }];
     ///
-    ///     let result = match_types_custom(b"MagicalGirl", rules, MagicKind::UnknownFallback);
+    ///     // The buffer has to be at least `READ_LEN` bytes. A `b"MagicalGirl"`
+    ///     // literal is 11, and reading 100 out of it is out of bounds even when
+    ///     // the allocator happens to leave the following bytes mapped.
+    ///     let mut data = [0u8; READ_LEN];
+    ///     data[..b"MagicalGirl".len()].copy_from_slice(b"MagicalGirl");
+    ///
+    ///     let result = match_types_custom(&data, rules, MagicKind::UnknownFallback);
     ///
     ///     assert_ne!(result, MagicKind::MoeMoe);
     ///     assert_eq!(result, MagicKind::UnknownFallback);

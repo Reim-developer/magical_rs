@@ -6,6 +6,12 @@
 * Only use in case of critical performance.
 * To use, run the following command with `Cargo`:
 * cargo add magical_rs --features unsafe_context
+*
+* The feature hands your predicate a `*const ()` and no length. There is
+* nothing on the predicate's side to check your promise against, so the promise
+* is the whole safety argument: the buffer you pass has to be at least as long
+* as the predicate reads. This example reads `READ_LEN` bytes and passes a
+* buffer of exactly that many.
 */
 
 use core::slice;
@@ -18,21 +24,23 @@ enum MagicKind {
     UnknownFallback,
 }
 
+/// How many bytes `is_shoujo_girl` reads.
+const READ_LEN: usize = 100;
+
 fn is_shoujo_girl(data: *const ()) -> bool {
-    unsafe {
-        let slice_ptr = data.cast::<u8>();
+    let slice_ptr = data.cast::<u8>();
+    // SAFETY: `main` passes a `[u8; READ_LEN]`, and `match_types_custom` hands
+    // the predicate a pointer into the buffer it was given, so `READ_LEN`
+    // bytes are readable from it. A caller that passes a shorter buffer makes
+    // this line a read out of bounds, which is why the function is `unsafe fn`
+    // and why this comment is part of the contract rather than decoration.
+    let slice = unsafe { slice::from_raw_parts(slice_ptr, READ_LEN) };
 
-        let slice_len: usize = 100; /* Here you need to make sure that your slice length is correct. */
+    assert_eq!(slice.len(), READ_LEN);
+    assert!(!slice.is_empty());
+    assert!(slice.starts_with(b"MagicalGirl"));
 
-        let slice = slice::from_raw_parts(slice_ptr, slice_len);
-
-        assert_ne!(slice.len(), slice_len + 1); /* Wrong slice len. */
-        assert_eq!(slice.len(), 100);
-        assert!(!slice.is_empty());
-        assert!(slice.starts_with(b"MagicalGirl"));
-
-        slice.starts_with(b"MagicalGirl")
-    }
+    slice.starts_with(b"MagicalGirl")
 }
 
 fn main() {
@@ -46,8 +54,13 @@ fn main() {
         },
     }];
 
-    let my_bytes = b"MagicalGirl";
-    let result = match_types_custom(my_bytes, rules, MagicKind::UnknownFallback);
+    /* The buffer has to be at least `READ_LEN` bytes. A `&[u8]` literal like
+     * `b"MagicalGirl"` is 11, and reading 100 out of it is out of bounds even
+     * when the allocator happens to leave the following bytes mapped. */
+    let mut data = [0u8; READ_LEN];
+    data[..b"MagicalGirl".len()].copy_from_slice(b"MagicalGirl");
+
+    let result = match_types_custom(&data, rules, MagicKind::UnknownFallback);
 
     assert_eq!(result, MagicKind::MoeMoe);
     assert_ne!(result, MagicKind::UnknownFallback);

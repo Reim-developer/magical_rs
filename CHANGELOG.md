@@ -10,6 +10,7 @@
   - [Version: 0.4.5 `Major API Update`](#version-045-major-api-update)
   - [Version: 0.6.0 `Signature Tightening`](#version-060-signature-tightening)
   - [Version: 0.6.1 `Documentation and Test Coverage`](#version-061-documentation-and-test-coverage)
+  - [Version: 0.6.2 `Overflow Fix and Release Gates`](#version-062-overflow-fix-and-release-gates)
 
 
 ## `magical-py`: Version 0.2.0
@@ -323,6 +324,59 @@ the repository was checking, and a readme whose claims no test agreed with.
 
 **Not part of this release:** the Python bindings are a separate package,
 `magical-py`, and are not reachable through this crate.
+
+## Version: 0.6.2 `Overflow Fix and Release Gates`
+
+**No API change, and no format added or removed.** The signature table is
+byte-for-byte the one in `0.6.1`, the twelve public items are the same twelve,
+and detection results for any real file are unchanged. What follows is one bug
+fix and three gates, none of which a caller can observe except the first.
+
+**What this fixes:**
+
+* `match_types_custom` no longer takes the caller's process down over an offset
+  the caller cannot have meant. It computed `offset + signature.len()`, which is
+  not a total function on `usize`: an offset near `usize::MAX` with any
+  signature at all overflowed the sum. A debug build then panicked with
+  `attempt to add with overflow`, and a release build wrapped the sum to a small
+  number, so the length check passed and `&bytes[offset..offset_end]` indexed a
+  range starting at the maximum and ending below its own start. Both are aborts,
+  and both happen for an input that should simply not match. The addition
+  saturates now, so an impossible offset compares as the large number it is,
+  `bytes.len() >= offset_end` is false, and the rule declines. No signature that
+  could not fit after the offset was ever in the buffer, so no match is lost.
+
+  This was found while writing the Python binding, whose copy of the same
+  comparison had always saturated because an offset reaching it is a Python
+  integer and is not the crate's to trust. The two had quietly disagreed; they
+  do not now, and `tests/magic_custom.rs` pins the same table of offsets from
+  both sides.
+
+* Formatting is gated. `make fmt` runs `cargo fmt --check` and `crate_dev.yml`
+  runs it as its own step before the linter. Nothing ran rustfmt before this,
+  which is why 17 diffs sat in `src/` and `tests/` through two releases; they
+  are applied in this release. One of the 17 was not whitespace: `src/lib.rs`
+  began with a UTF-8 BOM, and rustfmt removed it. `readme.md` never had one, so
+  nothing was absorbed into the crate documentation and no doctest changed.
+
+* The helper scripts moved to `scripts/`, so a reader looking for them finds them
+  rather than finding them next to code they do not maintain. `gates.sh` and
+  `gen_kinds.ps1` were both in `bindings/python/`. `gen_kinds.ps1` also had a bug
+  the move exposed: `Set-Location` moves PowerShell's location but not the
+  process working directory that .NET's `WriteAllText` resolves a relative path
+  against, so the generator only ever worked when run from the repository root
+  and otherwise failed after parsing the whole table. Both paths are absolute
+  now.
+
+* crates.io publishing is a workflow, `.github/workflows/publish_crate.yml`,
+  rather than a command typed on one machine. It uses crates.io's trusted
+  publishing, so no registry token is stored in this repository. It needs a
+  one-time registration on the crate's crates.io settings page and the four
+  fields for it are written at the top of the file.
+
+**Tests:** 20 in `tests/magic_custom.rs`, up from 16, and the crate's own gates
+are now the ones CI runs. `magical-py` 0.2.0 ships in the same tree and is
+published separately, off a `py-v*` tag.
 
 ## Version: 0.6.0 `Signature Tightening` and `Format Table Expansion`
 

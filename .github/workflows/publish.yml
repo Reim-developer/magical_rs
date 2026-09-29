@@ -191,7 +191,19 @@ jobs:
         - name: Collect the artifacts
           uses: actions/download-artifact@v4
           with:
-              pattern: "wheel-*/sdist"
+              # `pattern` is a glob against the artifact *name*, and the `/` in
+              # an earlier version of this line was read as a path separator
+              # rather than as "or". No artifact name contains a `/`, so
+              # `wheel-*/sdist` matched nothing, the download reported success
+              # having downloaded zero artifacts, and the next step failed on a
+              # missing directory instead of on a missing upload.
+              #
+              # Every artifact in this run is either a wheel or the sdist, so
+              # `*` is the whole set, and the count check below is what proves
+              # it. If an artifact is ever added that is neither, this step
+              # sweeps it in and that check fails loudly rather than the file
+              # being published by accident.
+              pattern: "*"
               path: dist
               merge-multiple: true
 
@@ -201,13 +213,17 @@ jobs:
             # One wheel per platform, one sdist. Two artifacts claiming the same
             # filename would make the upload fail, so the list is printed
             # rather than assumed.
-            ls -l dist
-            count=$(ls dist | wc -l)
+            #
+            # `dist` is counted even when it does not exist, so that collecting
+            # nothing produces the message written for that case. Letting `ls`
+            # fail first hid it behind "No such file or directory".
+            count=$(ls dist 2>/dev/null | wc -l)
             echo "$count files"
             if [ "$count" -ne 5 ]; then
               echo "::error::Expected 4 wheels and 1 sdist, found $count."
               exit 1
             fi
+            ls -l dist
 
         - name: Check the upload is accepted before making it
           shell: bash

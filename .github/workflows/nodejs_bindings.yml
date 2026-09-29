@@ -1,0 +1,245 @@
+name: Test the NodeJS bindings.
+
+on:
+    push:
+        branches: [ "master", "dev" ]
+        paths:
+            - "bindings/**"
+            - "src/**"
+            - "readme.md"
+            - "tests/**"
+            # The release machinery is part of the bindings, so editing it gets
+            # the same gate as editing the code it releases.
+            - ".github/workflows/nodejs_bindings.yml"
+            - ".github/workflows/publish.yml"
+            # `gates.sh` is what this workflow runs, and it lives beside the
+            # binding it gates, so editing it has to count as editing the binding.
+            - "scripts/**"
+
+    # No `paths` filter here, deliberately, and not for cost reasons. These jobs
+    # are required status checks on master, and a required check that never reports
+    # is a merge that is blocked forever. A pull request that touches only
+    # CHANGELOG.md would skip a filtered workflow entirely, and GitHub would wait on
+    # a check that was never going to arrive. The filter stays on `push` above,
+    # where nothing is waiting on a result.
+    pull_request:
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+    gates:
+        # One platform is enough. The module is WebAssembly, so it is the same
+        # bytes on every host, and what differs between platforms is Node and the
+        # host linker — neither of which has a different *answer* to give. The
+        # `package` job below covers the platforms, and it asks a different
+        # question: whether `files`, `exports` and the tarball itself are right.
+        runs-on: ubuntu-latest
+
+        steps:
+        - name: Checkout code
+          uses: actions/checkout@v4
+
+        - name: Install Rust
+          shell: bash
+          run: |
+            curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
+            echo "$HOME/.cargo/bin:$PATH" >> "$GITHUB_PATH"
+
+        - name: Add Rust component and target
+          shell: bash
+          run: |
+            rustup component add clippy
+            # The binding builds a `wasm32-unknown-unknown` cdylib. Nothing else
+            # here needs a second target: the crate's own tests link the `rlib`
+            # half on the host.
+            rustup target add wasm32-unknown-unknown
+
+        - name: Set up Node
+          uses: actions/setup-node@v4
+          with:
+              # The package declares `engines.node >= 22`, so the floor is tested
+              # rather than a current release: `node --test`'s glob support arrived
+              # in 22 and the test script depends on it.
+              node-version: "22"
+
+        - name: Install dev dependencies
+          run: npm --prefix bindings/nodejs ci
+
+        # `gates.sh` runs generate, cargo test, build, tsc, node --test, rustfmt
+        # and clippy, in that order. One step, so a local run and a CI run cannot
+        # disagree about what "green" means.
+        - name: Run the gates
+          shell: bash
+          # Invoked through `bash` rather than `./gates.sh` so the step does not
+          # depend on the executable bit surviving in git.
+          run: bash ./bindings/nodejs/scripts/gates.sh
+
+        # The three `package` legs need the compiled module and have no Rust
+        # toolchain. An artifact is how they get it: jobs do not share a
+        # filesystem, so the alternative was a full `wasm32-unknown-unknown`
+        # compile on every platform, which would test the same code three more
+        # times and make the job about Rust rather than about packaging.
+        - name: Upload the compiled module
+          uses: actions/upload-artifact@v4
+          with:
+              name: magical-js-wasm
+              path: bindings/nodejs/magical_js.wasm
+              if-no-files-found: error
+
+    package:
+        # Does the published artefact work? Not "does the source work" — the
+        # `gates` job above covers that. The questions here are the ones only an
+        # install can answer: is the `.wasm` in `files`, is the `exports` map
+        # closed, and does a real consumer import and detect something.
+        #
+        # `needs: gates` so the tarball is packed from a tree that passed, and so
+        # a failing gate does not produce a package check that also fails for an
+        # unrelated reason.
+        needs: gates
+
+        strategy:
+            fail-fast: false
+            matrix:
+                os: [ ubuntu-latest, macos-latest, windows-latest ]
+
+        runs-on: ${{ matrix.os }}
+
+        defaults:
+            run:
+                shell: bash
+
+        steps:
+        - name: Checkout code
+          uses: actions/checkout@v4
+
+        - name: Set up Node
+          uses: actions/setup-node@v4
+          with:
+              node-version: "22"
+
+        - name: Download the compiled module
+          uses: actions/download-artifact@v4
+          with:
+              name: magical-js-wasm
+              path: bindings/nodejs
+
+        - name: Pack
+          run: |
+            npm --prefix bindings/nodejs pack --pack-destination "$RUNNER_TEMP"
+
+        - name: Check what the tarball contains
+          run: |
+            cd "$RUNNER_TEMP"
+            tar tzf magical-js-*.tgz | sort > packed.txt
+            cat packed.txt
+            # A `.wasm` missing from `files` installs cleanly everywhere and then
+            # throws at first call with a message about a missing file, which is a
+            # bad first impression and a worse bug report. Asserted by name, and
+            # nothing else, so adding an internal module does not fail the build.
+            # The list carries the `package/` prefix so the `::error::` below prints
+            # the exact path to paste into `files`.
+            for wanted in \
+              package/index.js \
+              package/index.d.ts \
+              package/_kinds.js \
+              package/_kinds.d.ts \
+              package/_levels.js \
+              package/_signatures.js \
+              package/_wasm.js \
+              package/magical_js.wasm \
+              package/README.md
+            do
+              # `-F`, not a pattern: a file named with a `.` or a `+` is a path,
+              # not a regular expression, and `index.js` quietly matching
+              # `indexXjs` is the kind of check that passes forever without ever
+              # having checked.
+              if ! grep -Fxq "$wanted" packed.txt; then
+                echo "::error::$wanted is not in the tarball."
+                exit 1
+              fi
+            done
+            # And nothing that should not be. `target/` in particular is hundreds
+            # of megabytes of build output that would be uploaded to the registry,
+            # and the tests are not worth shipping: they import from `../`, which
+            # does not exist in an installed package.
+            for unwanted in package/target package/node_modules package/Cargo.toml package/test; do
+              if grep -Fq "$unwanted" packed.txt; then
+                echo "::error::$unwanted is in the tarball."
+                exit 1
+              fi
+            done
+
+        - name: Install the tarball into a fresh project and use it
+          run: |
+            cd "$RUNNER_TEMP"
+            mkdir -p consumer
+            cd consumer
+            npm init -y > /dev/null
+            # ESM-only, and the consumer has to agree or the import is a syntax
+            # error before any of the package's own code runs.
+            node -e "
+              const fs = require('fs');
+              const p = JSON.parse(fs.readFileSync('package.json', 'utf8'));
+              p.type = 'module';
+              fs.writeFileSync('package.json', JSON.stringify(p, null, 2));
+            "
+            npm install "$RUNNER_TEMP"/magical-js-*.tgz
+
+            # A real detection rather than an import: a package that installs and
+            # then throws on first call is worse than one that fails to install.
+            cat > use.mjs <<'EOF'
+            import {
+              detectBytes, allKinds, describe, matchTypes, matchAllTypes,
+              neededBytes, readLimits, matches,
+            } from "magical-js";
+
+            const png = Uint8Array.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
+            const gif = Uint8Array.from([0x47, 0x49, 0x46, 0x38, 0x39, 0x61]);
+
+            if (detectBytes(png) !== "Png") throw new Error("PNG did not detect");
+            if (detectBytes(gif) !== "GIF") throw new Error("GIF did not detect");
+            if (detectBytes(Uint8Array.from([1, 2, 3])) !== null) throw new Error("junk detected");
+            if (allKinds().length !== 114) throw new Error("format count moved");
+            if (describe("Png").kind !== "Png") throw new Error("describe is wrong");
+            if (!matches("Png", png)) throw new Error("matches is wrong");
+            if (neededBytes() !== 36870) throw new Error("neededBytes is wrong");
+            if (readLimits().defaultMaxBytesRead !== 2048) throw new Error("limits are wrong");
+
+            const rules = [{ kind: "House", signatures: [png], offsets: [0] }];
+            if (matchTypes(rules, png) !== "House") throw new Error("matchTypes is wrong");
+            if (matchAllTypes(rules, png).join() !== "House") throw new Error("matchAllTypes is wrong");
+
+            // The synchronous promise: a kind, not a promise for one.
+            if (typeof detectBytes(png) !== "string") throw new Error("detectBytes is async");
+
+            // A buffer large enough to reach the module's own data. This is the
+            // regression that made `input_ptr` necessary, and it only shows up for
+            // buffers bigger than the table — a suite of short fixtures never sees
+            // it, which is exactly why it needs asserting from outside.
+            const big = new Uint8Array(4 * 1024 * 1024);
+            big.set(png);
+            if (detectBytes(big) !== "Png") throw new Error("large buffer broke detection");
+            if (detectBytes(png) !== "Png") throw new Error("large buffer broke the next call");
+
+            console.log("tarball OK");
+            EOF
+            node use.mjs
+
+        - name: The internals are not importable from outside
+          run: |
+            cd "$RUNNER_TEMP/consumer"
+            # `exports` is a closed map, so this must fail. If it ever succeeds,
+            # `_wasm.js`'s pointer-returning exports have become public API, and
+            # nothing documented their contract.
+            node -e "
+              import('magical-js/_wasm.js')
+                .then(() => { console.error('internals are importable'); process.exit(1); })
+                .catch((e) => {
+                  if (e.code !== 'ERR_PACKAGE_PATH_NOT_EXPORTED') {
+                    console.error('failed for the wrong reason:', e.code);
+                    process.exit(1);
+                  }
+                  console.log('internals blocked');
+                });
+            "

@@ -1,0 +1,68 @@
+#!/usr/bin/env bash
+# Every check the NodeJS bindings have to pass, in one place.
+#
+# CI runs this so a local run and a CI run cannot disagree about what "green"
+# means. Run it from anywhere; paths are resolved relative to this script.
+#
+# The order is not arbitrary and not alphabetical. Each step narrows what the next
+# can be:
+#
+#   1. Generate the kinds files. `scripts/gen_kinds.mjs` reads
+#      `src/magical/magic.rs` and fails if the format count is not 114, so a
+#      changed enum is caught before anything is built against it.
+#   2. Build the WebAssembly module, which also asserts the module has no imports
+#      and exports everything `_wasm.js` calls. A missing export is a `TypeError`
+#      for a caller; a *renamed* one is a failing build instead.
+#   3. Type-check the hand-written declarations, because `tsc` is the only thing
+#      that can see whether the generics still narrow.
+#   4. Run the tests, which compare `_kinds.js` against the compiled module's own
+#      discriminants and exercise the memory ABI.
+#   5. rustfmt and clippy on the binding's Rust, last, because they are the
+#      slowest and say nothing about whether the package works.
+#
+# `npm test` would run 1 to 4, but spelled out here so a failure names the step.
+set -euo pipefail
+
+here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+bindings="$(cd "$here/.." && pwd)"
+
+echo "== generating the kinds files =="
+node "$bindings/scripts/gen_kinds.mjs"
+
+echo "== cargo test (the binding's own Rust) =="
+# Before the build, not after: the crate is `rlib` as well as `cdylib`, so this
+# links the exports and calls them directly as Rust functions, which is what makes
+# the ABI testable with no wasm runtime in the loop.
+cargo test --manifest-path "$bindings/Cargo.toml"
+
+echo "== building the WebAssembly module =="
+node "$bindings/scripts/build.mjs"
+
+echo "== type-checking the declarations =="
+npm --prefix "$bindings" run --silent types
+
+echo "== node --test =="
+# Through the npm script, not `node --test "$bindings/test/"`, so this and a
+# contributor running `npm test` run the same command. A directory argument also
+# picks up `test/fixtures.js` and `test/types.ts` as test files, which is not what
+# they are: the glob in the script is `test/*.test.js`.
+npm --prefix "$bindings" run --silent test:only
+
+echo "== rustfmt =="
+cargo fmt --manifest-path "$bindings/Cargo.toml" --check
+
+echo "== clippy =="
+# The same lint groups the main crate's Makefile denies and that
+# `scripts/gates.sh` denies for the Python binding. All three are held to the same
+# bar, so a stricter standard never drifts in one direction.
+cargo clippy \
+  --manifest-path "$bindings/Cargo.toml" \
+  --all-targets -- \
+  -D clippy::all \
+  -D clippy::pedantic \
+  -D clippy::nursery \
+  -D clippy::perf \
+  -D warnings
+
+echo
+echo "all gates passed"

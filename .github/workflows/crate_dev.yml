@@ -56,6 +56,14 @@ jobs:
           run: |
             make test-dyn
 
+        # This one was in the Makefile from 2025-08-07 and was never added here.
+        # `make linter` compiles it, because clippy runs with --all-features, so
+        # the code was always built; nothing ever ran the tests against it.
+        - name: Test feature unsafe_context
+          shell: bash
+          run: |
+            make test-unsafe
+
         # The readme advertises `no_std` support, and nothing above checks it.
         # `make test` runs with default features, which include `std`.
         - name: Test and build without std

@@ -1,4 +1,4 @@
-.PHONY: target test linter fmt test-dyn test-unsafe test-nostd build-nostd
+.PHONY: test linter fmt test-dyn test-unsafe test-nostd build-nostd
 
 test:
 	@cargo test

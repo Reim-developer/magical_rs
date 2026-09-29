@@ -1,5 +1,6 @@
 # CHANGELOG
 - [CHANGELOG](#changelog)
+  - [magical-py: Version 0.2.0](#magical-py-version-020)
   - [Version: 0.1.3](#version-013)
   - [Version: 0.2.0](#version-020)
   - [Version: 0.2.1:](#version-021)
@@ -9,6 +10,92 @@
   - [Version: 0.4.5 `Major API Update`](#version-045-major-api-update)
   - [Version: 0.6.0 `Signature Tightening`](#version-060-signature-tightening)
   - [Version: 0.6.1 `Documentation and Test Coverage`](#version-061-documentation-and-test-coverage)
+
+
+## `magical-py`: Version 0.2.0
+**What has been changed:**
+
+The Python bindings now carry the crate's custom detection levels. Level 1,
+`detect` and `detect_bytes`, was already there; this adds levels 2, 3 and 4.
+
+| Level | Rule | A match costs | Kinds | Nothing matches |
+| ----- | ---- | ------------- | ----- | --------------- |
+| 2 | `MagicCustom` | one Rust call | one type across the set | your `fallback` |
+| 3 | `DynMagicCustom` | a trip into Python | any, mixed freely | `None` |
+| 4 | `AsyncDynMagic` | an awaited call on your loop | any, mixed freely | `None` |
+
+* Added `MagicCustom` and `MatchRules`, with `all`, `any` and `with_fn` to
+  mirror the crate's `all_matches!`, `any_matches!` and `with_fn_matches!`, plus
+  `match_types_custom` and `match_types_custom_all`.
+* Added `DynMagicCustom` with `match_dyn_types` and `match_dyn_types_all`, for
+  rules that are not known when the code is written.
+* Added `AsyncDynMagic` with `match_async_dyn_types` and
+  `match_async_dyn_types_all`. The two level 3 and level 4 pairs have different
+  names because a single Python namespace cannot hold both, the way two Rust
+  modules can.
+* Added `Predicate` and `AsyncPredicate`, for annotating your own matchers.
+* Added `signatures_match` to the compiled module, the one new Rust function.
+
+**Three places this deliberately differs from the crate:**
+
+* **Level 2 does not call `MagicCustom`.** That struct holds `&'static` slices,
+  because a level 2 rule is meant to be a `static`. A rule assembled from
+  Python data at run time would have to be `Box::leak`ed, and a process that
+  builds rules in a loop would leak without bound. The comparison from the
+  `CustomMatchRules::Default` arm is reproduced in Rust instead, with no
+  allocation per rule, so level 2 still costs no Python call. `tests/magic_custom.rs`
+  in the crate pins the original and `tests/test_levels.py` pins the copy, so a
+  change to either side is a test failure.
+* **Level 4 runs on your event loop.** The crate takes a closure returning a
+  future and depends on no async runtime. A Python awaitable nearly always needs
+  the caller's loop, so the matcher is awaited where you await it. Polling it
+  from a worker thread would add a thread, a channel and a loop handle to do
+  what `await rule.matches(data)` does in three characters, and would deadlock
+  on any matcher that touches the loop. Level 4 therefore needs no feature flag
+  and no extra dependency, unlike `cargo add magical_rs --features
+  magical_async_dyn`.
+* **Construction is validated more strictly.** The crate ignores a rule's
+  signatures and offsets when `rules` is set, because its fields are `&'static`
+  and it cannot report the mistake usefully. Here that raises `ValueError`, as
+  does signatures without offsets or the reverse, and a negative offset or
+  `max_bytes_read`. An empty rule with neither is still legal and still never
+  matches, which is the crate's behaviour rather than an oversight: its arm is
+  `signatures.any(offsets.any(...))`, so either side being empty means no.
+
+**One behavioural difference, and it is a fix:**
+
+`match_types_custom` computes `offset + signature.len()` and panics when that
+overflows, at `src/magical/magic_custom.rs:593`, so an offset near `usize::MAX`
+aborts the process. An offset reaching the binding is a Python integer, is not
+the crate's to trust, and can be arbitrarily large, so the addition saturates
+and a signature that cannot be there reports no match. The crate's behaviour is
+left alone here: it is a published library and changing it is a separate
+decision.
+
+**Also:**
+
+* A pre-made coroutine is not accepted as a level 4 matcher. A rule is matched
+  against many buffers and a coroutine can only be awaited once, so accepting
+  one would turn a reused rule into a rule that fails on its second call, with a
+  message from the event loop that says nothing about the cause. The matcher is
+  a callable returning an awaitable, which is what the annotation already said.
+* A level 2 rule with signatures and no offsets is rejected rather than
+  accepted-and-never-matching, because a caller who passed them meant to use
+  them. The comparison underneath is unchanged, and its behaviour with an empty
+  side is pinned through the primitive in both crates' test suites.
+
+**Not changed:**
+
+* `FileKind` and every one of its 114 members. No member was added, removed or
+  reordered, and no signature was touched.
+* `detect`, `detect_bytes`, `bytes_read` and `version`, including their
+  signatures and their return values.
+
+**Tests:** 185, up from 91. 86 of the new ones cover the levels case by case
+and 8 check the claims this release's documentation makes, all built from
+literal byte strings with no fixture file checked in. The package is checked
+with `pyright` in strict mode at `pythonVersion` 3.8, so every annotation in
+the new module is 3.8-compatible.
 
 
 ## Version: 0.1.3

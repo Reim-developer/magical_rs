@@ -44,9 +44,11 @@ from . import _magical_rs
 from ._kinds import FileKind
 from ._levels import (
     AsyncDynMagic,
+    AsyncPredicate,
     DynMagicCustom,
     MagicCustom,
     MatchRules,
+    Predicate,
     match_async_dyn_types,
     match_async_dyn_types_all,
     match_dyn_types,
@@ -57,10 +59,12 @@ from ._levels import (
 
 __all__ = [
     "AsyncDynMagic",
+    "AsyncPredicate",
     "DynMagicCustom",
     "FileKind",
     "MagicCustom",
     "MatchRules",
+    "Predicate",
     "bytes_read",
     "detect",
     "detect_bytes",

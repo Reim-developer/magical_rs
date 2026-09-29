@@ -70,9 +70,11 @@ from ._magical_rs import signatures_match
 
 __all__ = [
     "AsyncDynMagic",
+    "AsyncPredicate",
     "DynMagicCustom",
     "MagicCustom",
     "MatchRules",
+    "Predicate",
     "match_async_dyn_types",
     "match_async_dyn_types_all",
     "match_dyn_types",
@@ -345,10 +347,15 @@ class AsyncDynMagic(Generic[K_co]):
 
     :param matcher: Called with the whole buffer, returning an awaitable that
         yields a ``bool``. An ``async def`` function qualifies, and so does any
-        other callable returning an awaitable, including a coroutine object you
-        already have.
+        other callable returning an awaitable.
     :param kind: What a match yields. Any object.
     :param max_bytes_read: How many bytes are worth reading. Advisory.
+
+    A coroutine *object* is not accepted as the matcher, only something that
+    produces one per call. A rule is meant to be matched against many buffers,
+    and an awaitable that was built when the rule was built can only be awaited
+    once; accepting one would turn a rule that is reused into a rule that fails
+    on its second call. Pass the function and it is called per match.
 
     The matcher is awaited on the caller's event loop, not on a thread this
     library owns. See the module docstring for why.

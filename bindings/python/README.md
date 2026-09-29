@@ -11,15 +11,12 @@ extension with it.
 
 ## Install
 
-Not released to PyPI yet. From a checkout of this repository:
-
 ```bash
-pip install ./bindings/python
+pip install magical-py
 ```
 
-Once published this becomes `pip install magical-py`, and there is a binary
-wheel for every platform we publish for. One `abi3` wheel covers CPython 3.8
-and later, so you will not have to build from source.
+There is a binary wheel for every platform we publish for. One `abi3` wheel
+covers CPython 3.8 and later, so you will not have to build from source.
 
 `FileKind` covers all 114 formats the Rust crate detects, and the enum is
 declared in Python rather than generated, so it is a real `enum.Enum` and your

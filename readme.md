@@ -13,11 +13,10 @@ cannot go.
 magical_rs = "0.6"
 ```
 
-Not writing Rust? There are Python bindings. They are not on `PyPI` yet, so for
-now install from the checkout:
+Not writing Rust? There are Python bindings, published as `magical-py`:
 
 ```bash
-pip install ./bindings/python
+pip install magical-py
 ```
 
 ```python

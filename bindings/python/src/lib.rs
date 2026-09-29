@@ -209,10 +209,10 @@ fn match_within(data: &[u8], limit: usize) -> Option<FileKind> {
 /// reachable inside the window you named", which is a different statement from
 /// the unbounded `None` and the reason the limit is worth having.
 fn classify(data: &[u8], max_bytes_read: Option<usize>) -> Option<&'static str> {
-    let kind = match max_bytes_read {
-        Some(limit) => match_within(data, limit),
-        None => FileKind::match_types(data),
-    };
+    let kind = max_bytes_read.map_or_else(
+        || FileKind::match_types(data),
+        |limit| match_within(data, limit),
+    );
     kind.map(file_kind_name)
 }
 

@@ -1,5 +1,5 @@
 {
-  "include": ["python", "tests"],
+  "include": ["python", "tests", "examples"],
   "exclude": ["**/__pycache__", "**/.pytest_cache", "target", ".venv", "**/node_modules"],
 
   "typeCheckingMode": "strict",

@@ -8,6 +8,7 @@
   - [Version: 0.4.0 `Major API Update`](#version-040-major-api-update)
   - [Version: 0.4.5 `Major API Update`](#version-045-major-api-update)
   - [Version: 0.6.0 `Signature Tightening`](#version-060-signature-tightening)
+  - [Version: 0.6.1 `Documentation and Test Coverage`](#version-061-documentation-and-test-coverage)
 
 
 ## Version: 0.1.3
@@ -207,6 +208,34 @@ cargo add magical_rs --features magical_async_dyn
     assert_ne!(result, MagicKind::UnknownFallback);
     ```
 
+
+## Version: 0.6.1 `Documentation and Test Coverage`
+
+**No API change, and no format added or removed.** The signature table is
+byte-for-byte the one in `0.6.0`, and the twelve public items are the same
+twelve. This release exists because `0.6.0` shipped a crate that nothing in
+the repository was checking, and a readme whose claims no test agreed with.
+
+**What this fixes:**
+
+* The readme is now the single source of the crate's documentation. `src/lib.rs`
+  carries `#![doc = include_str!("../readme.md")]` instead of 242 lines of
+  duplicated doc comment, so the two can no longer disagree. Nothing but
+  documentation was removed from the crate.
+* The format table is checked rather than asserted. `tests/table_size.rs`,
+  `tests/signature_coverage.rs` and `tests/readme_coverage.rs` fail if the
+  built-in table and the readme stop matching, and the nine two-byte-only
+  signatures are listed and checked individually.
+* The `no_std` claim is verified instead of asserted. `make test-nostd` runs
+  the suite without `std` and cross compiles to `thumbv7em-none-eabi`. It
+  excludes doctests deliberately, since the readme's quick start calls a
+  `std`-gated function; the cross compile is the real gate.
+* `crate_dev.yml` now runs on pull requests into `master`, not only into
+  `dev`. It had not run at all on the code that shipped as `0.6.0`, because
+  `dev` had not moved since the commit before it.
+
+**Not part of this release:** the Python bindings are a separate package,
+`magical-py`, and are not reachable through this crate.
 
 ## Version: 0.6.0 `Signature Tightening` and `Format Table Expansion`
 

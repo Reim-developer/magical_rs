@@ -131,21 +131,30 @@ jobs:
               python-version: "3.12"
 
         - name: Build the wheel
-          shell: bash
-          env:
-              # `uv build` has no `--target`, so this is how the target reaches
-              # maturin. Without it maturin builds for the *host*, and both
-              # macOS legs run on the same arm64 runner, so both produced a
-              # wheel named `...macosx_11_0_arm64.whl`. Both then passed every
+          uses: PyO3/maturin-action@v1
+          with:
+              # `uv build` emits `linux_x86_64`, which PyPI rejects: a Linux
+              # wheel has to be manylinux, and so has to be built inside a
+              # manylinux container. This action does that for Linux, builds on
+              # the host for macOS and Windows, and installs the Rust target
+              # itself. Receiving the target directly is also what removes the
+              # `--target` plumbing: `uv build` had no such option, so the
+              # target had to go in through CARGO_BUILD_TARGET, and without that
+              # both macOS legs built the arm64 host wheel and both passed every
               # assertion below, on the same architecture, twice.
-              CARGO_BUILD_TARGET: ${{ matrix.target }}
-          run: |
-            rustup target add ${{ matrix.target }}
-            # `--python`, not `--interpreter`: `uv build` has no such flag and
-            # exits 2 without building anything.
-            uv build bindings/python \
-              --out-dir dist \
-              --python python
+              target: ${{ matrix.target }}
+              # 2_17, not `auto`, so the tag cannot drift when the action's
+              # default changes. glibc 2.17 is the oldest Rust supports on this
+              # target, and the lower the requirement the more machines can
+              # install the wheel without compiling it.
+              manylinux: "2_17"
+              # `--compatibility pypi` runs PyPI's own platform tag validation
+              # as part of the build, so a tag PyPI would refuse fails the build
+              # here rather than the upload in the release workflow.
+              args: >-
+                  --out dist
+                  --compatibility pypi
+                  --manifest-path bindings/python/Cargo.toml
 
         - name: Check the wheel installs and works
           shell: bash
@@ -180,7 +189,7 @@ jobs:
             echo "built $name -> $plat (want $want)"
             # The architecture is bounded by a hyphen or an underscore, since
             # the platform tag's own components are joined with underscores:
-            # macosx_11_0_arm64, win_amd64, linux_x86_64.
+            # macosx_11_0_arm64, win_amd64, manylinux_2_17_x86_64.
             case "$plat" in
               *-"$want"|*_"$want") ;;
               *)

@@ -8,7 +8,10 @@ on:
             - "src/**"
             - "readme.md"
             - "tests/**"
+            # The release machinery is part of the bindings, so editing it gets
+            # the same gate as editing the code it releases.
             - ".github/workflows/python_bindings.yml"
+            - ".github/workflows/publish.yml"
 
     # No `paths` filter here, deliberately, and not for cost reasons. These
     # jobs are required status checks on master, and a required check that

@@ -1,0 +1,61 @@
+{
+  "name": "magical-js",
+  "version": "0.1.0",
+  "description": "JavaScript and TypeScript bindings for magical_rs, a zero-dependency file type detection library.",
+  "keywords": [
+    "file-type",
+    "magic",
+    "mime",
+    "detection",
+    "no-dependency",
+    "wasm",
+    "webassembly",
+    "typescript"
+  ],
+  "license": "MIT",
+  "type": "module",
+  "main": "./index.js",
+  "types": "./index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./index.d.ts",
+      "default": "./index.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "index.js",
+    "index.d.ts",
+    "_kinds.js",
+    "_kinds.d.ts",
+    "_levels.js",
+    "_signatures.js",
+    "_wasm.js",
+    "magical_js.wasm",
+    "README.md"
+  ],
+  "engines": {
+    "node": ">=22"
+  },
+  "sideEffects": false,
+  "scripts": {
+    "build": "node scripts/build.mjs",
+    "gen": "node scripts/gen_kinds.mjs",
+    "test": "npm run build && npm run test:only",
+    "test:only": "node --test --test-reporter=tap \"test/*.test.js\"",
+    "types": "tsc --noEmit --project tsconfig.json",
+    "gates": "npm run gen && npm run build && npm run types && npm run test:only"
+  },
+  "devDependencies": {
+    "typescript": "^5.6.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Reim-developer/magical_rs.git",
+    "directory": "bindings/nodejs"
+  },
+  "homepage": "https://github.com/Reim-developer/magical_rs/blob/master/bindings/nodejs",
+  "bugs": {
+    "url": "https://github.com/Reim-developer/magical_rs/issues"
+  }
+}

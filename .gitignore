@@ -13,6 +13,17 @@ bindings/python/.venv/
 __pycache__/
 .pytest_cache/
 
+# NodeJS bindings build artifacts.
+#
+# `bindings/nodejs/index.d.ts` and `bindings/nodejs/_kinds.d.ts` are deliberately
+# NOT ignored. The first is a hand-written type declaration, and `test/types.ts`
+# checks its generics against real call sites; the second is generated but
+# checked in, because `test/kinds.test.js` compares it against the compiled
+# module's own discriminants, and a generated file nobody can diff is a generated
+# file nobody can review. The `.wasm` beside them is an artifact of the build.
+bindings/nodejs/magical_js.wasm
+bindings/nodejs/node_modules/
+
 # Planning notes are working documents, not project documentation, so they do
 # not belong here. They are written to the agent's scratch directory instead.
 # `PLAN.md` has no leading slash, so this matches the name at any depth.

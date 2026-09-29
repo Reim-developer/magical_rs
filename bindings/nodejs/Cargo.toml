@@ -1,0 +1,40 @@
+[package]
+name = "magical-js"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.85"
+license = "MIT"
+description = "JavaScript and TypeScript bindings for magical_rs, a zero-dependency file type detection library."
+repository = "https://github.com/Reim-developer/magical_rs"
+homepage = "https://github.com/Reim-developer/magical_rs/blob/master/bindings/nodejs"
+documentation = "https://docs.rs/magical_rs"
+# This crate is published to npm, not to crates.io. It exists to be a path
+# dependency next to the crate it wraps, and to keep that crate dependency-free.
+publish = false
+
+[lib]
+# `cdylib` is the WebAssembly module Node loads. `rlib` is kept so the crate's
+# own tests can link it and call the exports directly as Rust functions, which is
+# what makes the ABI testable without a wasm runtime in the loop.
+name = "magical_js"
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+# Path dependency, not a registry dependency: the binding always builds against
+# the checkout it sits next to, so the two cannot drift apart.
+magical_rs = { path = "../..", default-features = false, features = ["std"] }
+
+[profile.release]
+# Two things pull in opposite directions here and the size wins, because the
+# whole point of shipping a wasm module is how much of it a browser or a Node
+# process downloads. `opt-level = "s"` over `z` because the table is data: the
+# measured difference between them is 243 bytes, and `s` keeps the matching loop
+# faster for a caller that is scanning a directory rather than one file.
+opt-level = "s"
+lto = true
+codegen-units = 1
+# A wasm module that panics has nowhere to unwind to, and the only useful thing
+# it can do is trap. Every entry point below is written not to panic; this is the
+# backstop, not the mechanism.
+panic = "abort"
+strip = true

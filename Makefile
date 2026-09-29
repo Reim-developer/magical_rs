@@ -1,4 +1,4 @@
-.PHONY: test linter fmt test-dyn test-unsafe test-nostd build-nostd examples
+.PHONY: test linter fmt test-dyn test-unsafe test-nostd build-nostd build-wasm examples
 
 test:
 	@cargo test
@@ -47,6 +47,33 @@ build-nostd:
 test-nostd:
 	@cargo test --no-default-features --lib --tests
 	@$(MAKE) build-nostd
+
+# The readme's first paragraph claims this crate works in WebAssembly builds,
+# and nothing was checking it. `build-nostd` does not cover that claim:
+# thumbv7em-none-eabi is a bare-metal ARM target, and one target compiling says
+# nothing about a different one.
+#
+# The teeth here are narrower than the target name suggests, which is worth
+# stating rather than letting a reader assume otherwise. wasm32-unknown-unknown
+# ships a `std` whose file-system, process, network and thread calls all
+# *compile* and then fail at runtime. Measured, all of these compile clean for
+# wasm32: `std::process::Command`, `std::net::TcpStream`, `std::thread::spawn`,
+# `std::env::var`, `std::time::SystemTime::now`, and `AtomicU64::fetch_add`.
+# So this build catches much less than "it builds for wasm" sounds like.
+#
+# What it does catch is target-gated `std`: `std::os::unix` and
+# `std::os::windows` resolve on a host that is one of them and not on wasm32.
+# That is a real class and a small one, and it is the class a contributor adding
+# platform code to the one `std` file in this crate would land in.
+#
+# It is the default-features build for the same reason. A `--no-default-features`
+# one would be strictly weaker: wasm32 has a `std` shim, so it cannot catch a
+# stray `std` in a core path either. `build-nostd` catches that, against a
+# target with no `std` at all. Between them the crate's `std` half is compiled
+# for wasm exactly once, and this is it.
+build-wasm:
+	@rustup target add wasm32-unknown-unknown
+	@cargo build --target wasm32-unknown-unknown
 
 # Run, not build. Every directory under `examples/` is its own crate, and cargo
 # only treats `examples/*.rs` and `examples/*/main.rs` as example targets of the

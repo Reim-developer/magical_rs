@@ -70,3 +70,12 @@ jobs:
           shell: bash
           run: |
             make test-nostd
+
+        # Last, because it is the slowest and the least likely to be the thing
+        # that broke. Each example is a separate crate, so nothing above it
+        # compiles any of them; they are run rather than built, which is the
+        # only thing that catches an example that compiles and is wrong.
+        - name: Run the examples
+          shell: bash
+          run: |
+            make examples

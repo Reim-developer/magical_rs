@@ -1,0 +1,213 @@
+name: Publish to crates.io.
+
+# ONE-TIME SETUP, before the first tag this workflow handles:
+#
+#   1. crates.io -> crate `magical_rs` -> Settings -> Trusted Publishing -> Add
+#        Repository owner:   Reim-developer
+#        Repository name:    magical_rs
+#        Workflow filename:  publish_crate.yml
+#        Environment:        crates-io
+#
+#      The workflow filename is the one field that ties the credential to this
+#      file, so a trusted publisher registered against a different name never
+#      activates. It is not the `name:` at the top of this file and it is not
+#      the path; it is `publish_crate.yml`.
+#
+#   2. GitHub -> Settings -> Environments -> New environment -> `crates-io`.
+#      Optional. Without protection rules the environment is just a name for
+#      the OIDC claim, which is all this needs; adding required reviewers makes
+#      every publish wait for a human.
+#
+# The crate already exists on crates.io, which is a prerequisite: a trusted
+# publisher can only be attached to a crate that is already there. Versions up
+# to and including 0.6.2 were published with a long-lived API token, and the
+# token in `~/.cargo/credentials.toml` can be deleted once this has run once.
+
+on:
+    # A tag is the only trigger, and it is a tag naming the Rust crate. The
+    # Python package publishes off `py-v*`, which does not match `v*`, so
+    # neither trigger can start the other's workflow and the two artifacts
+    # cannot collide on a name.
+    #
+    # There is deliberately no `workflow_dispatch`, for the reason
+    # `publish.yml` gives: a publish that can be triggered by a button is a
+    # publish that will eventually be triggered by a button by accident, and
+    # crates.io does not let a version be reused either.
+    push:
+        tags: [ "v*" ]
+
+env:
+    CARGO_TERM_COLOR: always
+
+jobs:
+    guard:
+        # Three things that cannot be undone once the version is on crates.io,
+        # each of which takes seconds to check. Everything downstream assumes
+        # they hold.
+        name: Check the tag against the crate
+        runs-on: ubuntu-latest
+        outputs:
+            # Read by the publish job. A version already on crates.io is a
+            # no-op rather than a failure, and the step says why.
+            already_published: ${{ steps.probe.outputs.already_published }}
+
+        steps:
+        - name: Checkout code
+          uses: actions/checkout@v4
+          with:
+              # The next step needs master to be present, not just the tag.
+              fetch-depth: 0
+
+        - name: The tag must name the version that is in Cargo.toml
+          shell: bash
+          run: |
+            tag_version="${GITHUB_REF_NAME#v}"
+            crate_version="$(python3 -c '
+            import tomllib
+            with open("Cargo.toml", "rb") as f:
+                print(tomllib.load(f)["package"]["version"])
+            ')"
+            echo "tag says: $tag_version"
+            echo "crate says: $crate_version"
+            if [ "$tag_version" != "$crate_version" ]; then
+              echo "::error::Tag $GITHUB_REF_NAME does not match the version in Cargo.toml."
+              exit 1
+            fi
+
+        - name: The tag must be on master
+          shell: bash
+          run: |
+            # A release of something that never reached master is a release of
+            # code the ruleset on master has not seen.
+            if ! git merge-base --is-ancestor "$GITHUB_SHA" origin/master; then
+              echo "::error::$GITHUB_REF_NAME is not on master. Merge it first."
+              git log --oneline -1 "$GITHUB_SHA"
+              exit 1
+            fi
+            echo "on master, as it should be"
+
+        # Placed after the two checks above, not before them, because it is the
+        # only one of the three that can legitimately say "nothing to do". A tag
+        # that does not match Cargo.toml is wrong whatever crates.io says, and
+        # checking that first is what keeps the no-op from hiding a mistag.
+        - name: Is this version already on crates.io?
+          id: probe
+          shell: bash
+          run: |
+            set -euo pipefail
+            version="${GITHUB_REF_NAME#v}"
+            # A public read of a public endpoint, unauthenticated, which is all
+            # an existence check needs. crates.io refuses API requests that
+            # carry no User-Agent, so one is sent.
+            status="$(curl -sS -o /dev/null -w '%{http_code}' \
+              -H 'User-Agent: magical_rs publish workflow' \
+              "https://crates.io/api/v1/crates/magical_rs/$version")"
+            echo "crates.io answered $status for $version"
+            case "$status" in
+              200)
+                # There are two ways to arrive here and they are the same fact:
+                # the tag was pushed after a publish that did not go through
+                # this workflow, which is how 0.6.2 shipped, or the tag was
+                # pushed twice and the first run already uploaded. A version on
+                # crates.io cannot be replaced, so failing would report a
+                # problem where there is none and hide the real state behind a
+                # red mark.
+                echo "already_published=true" >> "$GITHUB_OUTPUT"
+                echo "::notice::$version is already on crates.io. Nothing to upload."
+                ;;
+              404)
+                echo "already_published=false" >> "$GITHUB_OUTPUT"
+                ;;
+              *)
+                # A rate limit, an outage or a redirect. Guessing which way to
+                # go means either skipping a publish that should have happened
+                # or failing one that had nothing to do.
+                echo "::error::crates.io answered $status, which is neither 200 nor 404. Refusing to guess."
+                exit 1
+                ;;
+            esac
+
+    publish:
+        # The tagged commit reached master through a pull request, and the
+        # ruleset would not let that through unless the crate job's checks
+        # passed. `make test`, `test-dyn`, `test-unsafe`, `test-nostd`,
+        # `linter` and `fmt` have therefore already run against this exact
+        # tree. Repeating them here would add minutes to every release to
+        # re-establish a fact the ruleset just enforced.
+        name: Publish
+        needs: [ guard ]
+        runs-on: ubuntu-latest
+
+        # The name crates.io's trusted publisher is bound to, and one of the
+        # four fields on the setup block at the top of this file. The token is
+        # minted per run and expires with the job, so this repository holds no
+        # long-lived registry token to leak or rotate.
+        environment: crates-io
+        permissions:
+            # The only write this job has, and what lets Actions issue the OIDC
+            # token the next step trades for a registry token. `contents: read`
+            # is the implicit default and is all the checkout needs.
+            id-token: write
+
+        steps:
+        - name: Checkout code
+          # On a tag push this resolves to the tag, so the crate published is
+          # the one the tag names rather than whatever the default branch has
+          # become since.
+          uses: actions/checkout@v4
+
+        - name: Install Rust
+          shell: bash
+          run: |
+            curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
+            echo "$HOME/.cargo/bin:$PATH" >> $GITHUB_PATH
+
+        - name: Show what is about to be published
+          if: needs.guard.outputs.already_published != 'true'
+          shell: bash
+          run: |
+            # The packaged file list, printed rather than assumed, because
+            # `include` in Cargo.toml is what decides it and a file left out of
+            # a published version cannot be added to it afterwards. `cargo
+            # publish` verifies the build of whatever this lists; the listing
+            # itself is here so a change to `include` is visible in the log
+            # before the upload rather than after.
+            cargo package --locked --list
+
+        - name: Mint a short-lived registry token
+          # Pinned to a commit rather than to `v1`, unlike every other action
+          # in this repository. This is the one step whose output is a
+          # credential, so a moved tag is the difference between a publish and
+          # a leak. The other actions here only read the repository.
+          if: needs.guard.outputs.already_published != 'true'
+          id: auth
+          uses: rust-lang/crates-io-auth-action@c6f97d42243bad5fab37ca0427f495c86d5b1a18 # v1.0.5
+
+        - name: Publish
+          if: needs.guard.outputs.already_published != 'true'
+          shell: bash
+          env:
+              # Job-level `env` cannot read a step output, so the token is
+              # bound to the one step that uses it and is not in the
+              # environment of the checkout or the toolchain install above.
+              CARGO_REGISTRY_TOKEN: ${{ steps.auth.outputs.token }}
+          run: |
+            # `--locked`, so the `Cargo.lock` that is published is the one that
+            # was tested rather than one cargo rewrote on the way out. This
+            # crate has no dependencies, so the lockfile is a formality, but a
+            # release is not the place to find out it can be rewritten.
+            cargo publish --locked
+
+        - name: Report
+          shell: bash
+          run: |
+            # The tag is `v0.6.2` and the version is `0.6.2`. Using the ref
+            # name straight in the URL linked to a page that does not exist, so
+            # the same prefix strip the guard job does is done here.
+            version="${GITHUB_REF_NAME#v}"
+            if [ "${{ needs.guard.outputs.already_published }}" = "true" ]; then
+              echo "::notice::$version was already on crates.io; this run changed nothing."
+            else
+              echo "::notice::Published $version to crates.io as $GITHUB_REF_NAME."
+            fi
+            echo "https://crates.io/crates/magical_rs/$version"

@@ -20,12 +20,18 @@
 
 use {
     magical_rs::magical::{
-        bytes_read::{read_file_header, with_bytes_read},
+        bytes_read::{
+            DEFAULT_MAX_BYTES_READ, DEFAULT_OFFSET, ISO_MAX_BYTES_READ, ISO_OFFSETS,
+            TAR_MAX_BYTES_READ, TAR_OFFSETS, max_bytes, read_file_header, with_bytes_read,
+        },
         magic::FileKind,
+        match_rules::MatchRules,
         signatures::SIGNATURE_KIND,
     },
     pyo3::{
-        exceptions::{PyFileNotFoundError, PyIsADirectoryError, PyOSError, PyPermissionError},
+        exceptions::{
+            PyFileNotFoundError, PyIsADirectoryError, PyOSError, PyPermissionError, PyValueError,
+        },
         prelude::*,
     },
     std::io,
@@ -46,24 +52,38 @@ fn io_error_to_py(error: &io::Error) -> PyErr {
     }
 }
 
-/// Defines the `FileKind` to variant-name mapping.
+/// Defines the `FileKind` to variant-name mapping, and back.
 ///
 /// `stringify!` is what makes this worth doing: each variant's name is
 /// written exactly once, and the returned string is derived from it. Writing
 /// the arms out longhand would have meant typing every name twice, and a
 /// typo in the string half would not have been caught by the compiler — it
 /// would only have shown up as a `KeyError` in Python at runtime.
-macro_rules! define_kind_name {
+///
+/// Both directions come from the one list, because the reverse is what lets
+/// Python name a format and have the table looked up. `FileKind` is not
+/// `#[repr]`-stable and carries no `FromStr`, so a second hand-written table
+/// would be a second place for a name to be wrong.
+macro_rules! define_kinds {
     ($($variant:ident),+ $(,)?) => {
         const fn file_kind_name(kind: FileKind) -> &'static str {
             match kind {
                 $(FileKind::$variant => stringify!($variant),)+
             }
         }
+
+        // Not `const`: matching on `&str` needs `PartialEq` in const context,
+        // which is not stable yet. Nothing here is called at compile time.
+        fn file_kind_from_name(name: &str) -> Option<FileKind> {
+            match name {
+                $(stringify!($variant) => Some(FileKind::$variant),)+
+                _ => None,
+            }
+        }
     };
 }
 
-define_kind_name!(
+define_kinds!(
     _8BPS,
     AceCompressed,
     Aiff,
@@ -272,6 +292,137 @@ fn all_kinds() -> Vec<&'static str> {
         .collect()
 }
 
+/// Returns the table's read sizes and offsets as the crate declares them.
+///
+/// The crate's constants are `pub` and mean things a caller cannot derive: the
+/// furthest signature sits at offset 36,865, and every rule declares a read
+/// size of at least 2,048, so a window below that excludes PNG along with
+/// everything else. `bytes_read` reports the total, but nothing in Python could
+/// say which formats a smaller window would drop.
+///
+/// A tuple rather than a dict, matching [`TableRow`]: the values differ in type
+/// — the offsets are lists and the rest are integers — and a `dict[str,
+/// object]` would hand every caller six casts. A named struct in Rust would
+/// cross the boundary as an opaque wrapper, which is the thing this module
+/// avoids elsewhere.
+#[pyfunction]
+#[pyo3(signature = ())]
+fn read_limits() -> (usize, usize, Vec<usize>, usize, Vec<usize>, usize) {
+    (
+        DEFAULT_MAX_BYTES_READ,
+        DEFAULT_OFFSET,
+        ISO_OFFSETS.to_vec(),
+        ISO_MAX_BYTES_READ,
+        TAR_OFFSETS.to_vec(),
+        TAR_MAX_BYTES_READ,
+    )
+}
+
+/// Returns the read size an offset and signature require, as `max_bytes` does.
+///
+/// The crate's `max_bytes` is a `const fn` over slices, so it is not callable
+/// from Python. It is the arithmetic behind `ISO_MAX_BYTES_READ` and
+/// `TAR_MAX_BYTES_READ`, and it is what a caller needs to size a read for a
+/// level 2 rule of their own.
+// `offsets` is taken by value because that is the only form pyo3 can extract
+// for a `Vec`, the same reason `signatures_match` takes its two `Vec`s. The
+// vector is borrowed for the call rather than moved, so nothing is consumed.
+#[allow(clippy::needless_pass_by_value)]
+#[pyfunction]
+#[pyo3(signature = (offsets, signature_len, /))]
+fn max_bytes_read_for(offsets: Vec<usize>, signature_len: usize) -> usize {
+    // The crate takes the signature to measure it. Only its length is used, so
+    // a zeroed buffer of the right size is passed rather than widening the
+    // crate's signature to take a length.
+    let probe = vec![0u8; signature_len];
+    max_bytes(&offsets, &probe)
+}
+
+/// One row of the detection table, as the Python layer receives it.
+///
+/// A tuple rather than a class: the extension returns plain data and the
+/// Python side wraps it, which is why `FileKind` is declared in Python too.
+/// Named here so the four places that build one agree.
+type TableRow = (String, Vec<Vec<u8>>, Vec<usize>, usize, bool);
+
+/// Flattens one `Magic` into a [`TableRow`].
+///
+/// A format matched by a function rather than a fixed pattern — `ScriptExecute`
+/// and `WEBP` — reports no signatures and `uses_predicate` true, because there
+/// are no bytes to report and inventing some would misdescribe how the rule
+/// decides.
+fn table_row(magic: &magical_rs::magical::signatures::Magic) -> TableRow {
+    let uses_predicate = matches!(magic.rules, MatchRules::WithFn(_));
+    let signatures = if uses_predicate {
+        Vec::new()
+    } else {
+        magic
+            .signatures
+            .iter()
+            .map(|signature| signature.to_vec())
+            .collect()
+    };
+
+    (
+        file_kind_name(magic.kind).to_string(),
+        signatures,
+        magic.offsets.to_vec(),
+        magic.max_bytes_read,
+        uses_predicate,
+    )
+}
+
+/// Returns one table entry, so a caller can ask why a format is or is not
+/// matched.
+///
+/// `(kind, signatures, offsets, max_bytes_read, uses_predicate)`. The
+/// signatures are the raw bytes at `offsets`.
+#[pyfunction]
+#[pyo3(signature = (kind, /))]
+fn signature_of(kind: &str) -> Option<TableRow> {
+    file_kind_from_name(kind)
+        .and_then(|wanted| SIGNATURE_KIND.iter().find(|magic| magic.kind == wanted))
+        .map(table_row)
+}
+
+/// Reports whether one named format's rule matches `data`, ignoring the rest
+/// of the table.
+///
+/// `detect` answers "what is this file", and it answers with the first entry
+/// that matched, so a format late in the table is invisible to a buffer that an
+/// earlier entry also matches. This asks the narrower question: would this one
+/// format's own rule match. `Zlib` is the case that matters, since `78 9C` is
+/// any deflate stream and the entry is deliberately ordered last for that
+/// reason.
+///
+/// A name the table does not contain is a `ValueError` rather than `False`,
+/// because "no such format" and "the format did not match" are different
+/// answers and a typo in a format name should not read as a negative result.
+#[pyfunction]
+#[pyo3(signature = (kind, data, /))]
+fn kind_matches(kind: &str, data: &[u8]) -> PyResult<bool> {
+    let Some(magic) = file_kind_from_name(kind)
+        .and_then(|wanted| SIGNATURE_KIND.iter().find(|magic| magic.kind == wanted))
+    else {
+        return Err(PyValueError::new_err(format!(
+            "{kind} is not a format the detection table can produce"
+        )));
+    };
+
+    Ok(magic.matches(data))
+}
+
+/// Returns every table entry, in the order `detect` tries them.
+///
+/// The order is the answer to "why did my file come back as this", so it is
+/// carried through rather than sorted: a caller that walks the list stops at
+/// the first match and gets the same answer `detect` gives.
+#[pyfunction]
+#[pyo3(signature = ())]
+fn signature_table() -> Vec<TableRow> {
+    SIGNATURE_KIND.iter().map(table_row).collect()
+}
+
 /// The number of bytes needed to detect every format in the table.
 ///
 /// The furthest signature sits at offset 36,865, so a header shorter than
@@ -331,6 +482,11 @@ fn _magical_rs(module: &Bound<'_, PyModule>) -> PyResult<()> {
     module.add_function(wrap_pyfunction!(read_header, module)?)?;
     module.add_function(wrap_pyfunction!(all_kinds, module)?)?;
     module.add_function(wrap_pyfunction!(bytes_read, module)?)?;
+    module.add_function(wrap_pyfunction!(read_limits, module)?)?;
+    module.add_function(wrap_pyfunction!(max_bytes_read_for, module)?)?;
+    module.add_function(wrap_pyfunction!(signature_of, module)?)?;
+    module.add_function(wrap_pyfunction!(signature_table, module)?)?;
+    module.add_function(wrap_pyfunction!(kind_matches, module)?)?;
     module.add_function(wrap_pyfunction!(signatures_match, module)?)?;
     Ok(())
 }

@@ -261,14 +261,14 @@ impl FileKind {
     /// pub const DEFAULT_OFFSET: usize = 0;
     /// pub const ISO_OFFSETS: &[usize] = &[32769, 34817, 36865];
     /// pub const TAR_OFFSETS: &[usize] = &[257];
-    /// pub const ISO_MAX_BYTES_READ: usize = max_bytes(ISO_OFFSETS, b"CD001"); // ~32774
+    /// pub const ISO_MAX_BYTES_READ: usize = max_bytes(ISO_OFFSETS, b"CD001"); // 36870
     /// pub const TAR_MAX_BYTES_READ: usize = max_bytes(TAR_OFFSETS, b"ustar"); // 262
     /// ```
     ///
     /// For example:
     /// - PNG, JPG, GIF, etc..: require `allowed_max_read >= 2048` to be considered.
     /// - TAR: requires `allowed_max_read >= 262`.
-    /// - ISO: requires `allowed_max_read >= 32774`.
+    /// - ISO: requires `allowed_max_read >= 36870`.
     ///
     /// If `allowed_max_read < 2048`, even common formats like PNG will be **excluded** from detection.
     ///

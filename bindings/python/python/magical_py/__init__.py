@@ -37,6 +37,13 @@ them have a Python counterpart:
   with a matcher that may await.
 * Level 5, raw pointers, is ``unsafe`` by definition and is not exposed.
 
+:func:`detect` answers one question, what a file is, and answers it with the
+first table entry that matched. Three more ask about the table itself:
+:func:`describe` and :attr:`FileKind.rule` say what an entry compares,
+:meth:`FileKind.matches` asks whether one format would match regardless of the
+order, and :func:`read_limits` reports the read sizes that
+``max_bytes_read`` is measured against.
+
 :mod:`magical_py._levels` documents what each level costs and where it
 deliberately differs from the crate.
 """
@@ -47,7 +54,7 @@ import os
 from typing import Final, Protocol
 
 from . import _magical_rs
-from ._kinds import FileKind
+from ._kinds import FileKind, Signature
 from ._levels import (
     AsyncDynMagic,
     AsyncPredicate,
@@ -62,8 +69,16 @@ from ._levels import (
     match_types_custom,
     match_types_custom_all,
 )
+from ._signatures import (
+    DEFAULT_MAX_BYTES_READ,
+    ReadLimits,
+    describe,
+    read_limits,
+    signature_table,
+)
 
 __all__ = [
+    "DEFAULT_MAX_BYTES_READ",
     "AsyncDynMagic",
     "AsyncPredicate",
     "DynMagicCustom",
@@ -71,7 +86,10 @@ __all__ = [
     "MagicCustom",
     "MatchRules",
     "Predicate",
+    "ReadLimits",
+    "Signature",
     "bytes_read",
+    "describe",
     "detect",
     "detect_bytes",
     "match_async_dyn_types",
@@ -81,6 +99,8 @@ __all__ = [
     "match_types_custom",
     "match_types_custom_all",
     "read_header",
+    "read_limits",
+    "signature_table",
     "version",
 ]
 

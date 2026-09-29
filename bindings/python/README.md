@@ -131,6 +131,76 @@ requires a `/` later on the first line, so a bare `#!` does not count;
 exists because `#!AMR` is the literal magic of AMR audio: without the `/`
 check, the script rule claimed those files and they became undetectable.
 
+## Asking the table a question
+
+`detect` answers one question — what is this file — and answers it with the
+first table entry that matched. Four more ask about the table itself.
+
+**What is this format matched on?** `FileKind.rule` says so, without a call:
+
+```python
+>>> FileKind.ISO.rule.offsets
+(32769, 34817, 36865)
+>>> FileKind.Png.rule.signatures
+(b'\x89PNG\r\n\x1a\n',)
+>>> FileKind.Png.rule.max_bytes_read
+2048
+```
+
+`describe(kind)` is the same thing spelled as a function, and
+`signature_table()` returns all 114 entries **in the order detection tries
+them**. Walk that list and stop at the first match and you get exactly what
+`detect` gives, which is the point: it is the answer to "why did my file come
+back as this".
+
+**Would this one format match?** `FileKind.matches` asks about a single format,
+ignoring the order:
+
+```python
+>>> FileKind.Ktx2.matches(ktx2_bytes)   # True, and detect says Ktx2
+True
+>>> FileKind.Ktx.matches(ktx2_bytes)    # also True; detect will never say this
+True
+>>> detect_bytes(ktx2_bytes) is FileKind.Ktx2
+True
+```
+
+`Ktx`'s magic is a prefix of `Ktx2`'s, so a KTX2 file is reported as KTX2 and
+is unreachable as KTX. `Qcow` is shadowed by `Qcow2` the same way, and those
+two pairs are the only ones in the table — `tests/test_signatures.py` walks all
+114 entries and fails if a third appears.
+
+`matches` also ignores `max_bytes_read`, which is the other half of what it
+does not answer. `detect_bytes(PNG, max_bytes_read=1)` returns `None` because
+no rule's declared read size fits in one byte; `FileKind.Png.matches(PNG)` is
+`True`, because a per-format question has no window to declare.
+
+**What does a smaller window cost me?** `read_limits()` reports the crate's own
+figures instead of making you remember them:
+
+```python
+>>> limits = read_limits()
+>>> limits.default_max_bytes_read, limits.iso_max_bytes_read
+(2048, 36870)
+>>> limits.tar_max_bytes_read        # what a tar-only reader needs
+262
+>>> limits == read_limits()          # a fresh, frozen object each call
+True
+```
+
+`DEFAULT_MAX_BYTES_READ` is the same 2,048 bound as a module constant, for the
+common case of naming the window you actually intend to read.
+
+**The two rules that decide with a function** report `uses_predicate` and no
+signatures, because there are no bytes to report. `ScriptExecute` and `WEBP`
+are decided by Rust functions over the buffer, and listing the bytes they
+happen to start with would misdescribe how they work:
+
+```python
+>>> FileKind.ScriptExecute.rule.uses_predicate, FileKind.ScriptExecute.rule.signatures
+(True, ())
+```
+
 ## Detection levels
 
 The Rust crate has five detection levels. Level 1 is `detect` and

@@ -335,7 +335,7 @@ sets out what each level costs in Python and when to reach for it.
 
 ### The same levels in `magical-js`
 
-The NodeJS bindings carry levels 1 and 2, and the reason the other three are
+The `NodeJS` bindings carry levels 1 and 2, and the reason the other three are
 missing is structural rather than a matter of effort: a level 3 or 4 predicate is
 a *host* function, and a WebAssembly module can only call the host by declaring an
 **import**. This module declares none, which is what lets it load with
@@ -606,7 +606,7 @@ And that the WebAssembly claim in the first paragraph still holds:
 cargo build --target wasm32-unknown-unknown
 ```
 
-The NodeJS bindings have their own gate, which also needs
+The `NodeJS` bindings have their own gate, which also needs
 `rustup target add wasm32-unknown-unknown`:
 
 ```bash

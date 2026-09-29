@@ -33,6 +33,30 @@ They detect exactly the 114 formats listed below, through the same detection
 table, with no separate list to keep in step. See
 [`bindings/python`](bindings/python).
 
+Not writing Rust or Python? There are JavaScript and TypeScript bindings, shipped
+as a 42 KB WebAssembly module with hand-written generics:
+
+```bash
+npm install magical-js
+```
+
+```ts
+import { detectPath, matchTypes } from "magical-js";
+
+detectPath("photo.png");                   // "Png", not a Promise
+
+// `const` type parameter: the answer is the union of the kinds *you* declared.
+const rules = [
+  { kind: "Png", signatures: [PNG_BYTES], offsets: [0] },
+  { kind: "GIF", signatures: [GIF_BYTES], offsets: [0] },
+] as const;
+const found = matchTypes(rules, bytes);    // "Png" | "GIF" | null
+if (found === "Jpg") { }                   // error: "Jpg" is a real format, just not one of these two
+```
+
+The module declares no imports, so there is no glue file and no toolchain, and
+`detectBytes` is synchronous end to end. See [`bindings/nodejs`](bindings/nodejs).
+
 ## Quick start
 
 ```rust,no_run
@@ -309,6 +333,26 @@ from both sides.
 The [bindings README](https://github.com/Reim-developer/magical_rs/tree/master/bindings/python#detection-levels)
 sets out what each level costs in Python and when to reach for it.
 
+### The same levels in `magical-js`
+
+The NodeJS bindings carry levels 1 and 2, and the reason the other three are
+missing is structural rather than a matter of effort: a level 3 or 4 predicate is
+a *host* function, and a WebAssembly module can only call the host by declaring an
+**import**. This module declares none, which is what lets it load with
+`new WebAssembly.Instance(module, {})` and no generated glue file beside it. One
+import would mean every caller supplies an import object, so the binding stops at
+two levels on purpose rather than by omission.
+
+Level 5 has no meaning at all: it hands out `magic_rs` pointers, and there is no
+`magic_rs` address space on the other side of a `WebAssembly.Instance`. The Rust
+in [`bindings/nodejs`](bindings/nodejs) does offer it, to Rust callers, because
+that crate is built as an `rlib` as well as a `cdylib`.
+
+The two predicate formats the crate has — `ScriptExecute` and `WEBP` — are
+reported and matched correctly, because their predicates are compiled *into* the
+module and called from inside it. What cannot cross the boundary is a predicate
+written in JavaScript.
+
 ## Feature flags
 
 | Flag | Default | Effect |
@@ -534,6 +578,13 @@ failure to read the file. Their
 [detection levels](https://github.com/Reim-developer/magical_rs/tree/master/bindings/python#detection-levels)
 section covers levels 2, 3 and 4, the custom rules, and what each one costs.
 
+The [`magical-js`](https://github.com/Reim-developer/magical_rs/tree/master/bindings/nodejs)
+bindings have no `examples/` directory, because everything in
+[`bindings/nodejs/README.md`](https://github.com/Reim-developer/magical_rs/tree/master/bindings/nodejs)
+is four lines long and the README is the example. The [workflow](.github/workflows/nodejs_bindings.yml)
+packs the tarball and installs it into a throwaway project on Linux, macOS and
+Windows, so the published shape is checked rather than assumed.
+
 ## Development
 
 ```bash
@@ -554,6 +605,19 @@ And that the WebAssembly claim in the first paragraph still holds:
 ```bash
 cargo build --target wasm32-unknown-unknown
 ```
+
+The NodeJS bindings have their own gate, which also needs
+`rustup target add wasm32-unknown-unknown`:
+
+```bash
+bash ./bindings/nodejs/scripts/gates.sh
+```
+
+It regenerates the format list from `pub enum FileKind`, runs the binding's own
+Rust tests, builds the module and checks it declares no imports, type-checks the
+hand-written declarations, runs the test suite, then runs rustfmt and clippy. The
+root `Cargo.toml` has no `[workspace]`, so `make fmt` and `make linter` cannot
+see this crate — this script is the only thing that holds it to the same bar.
 
 ## License
 

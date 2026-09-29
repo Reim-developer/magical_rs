@@ -71,6 +71,15 @@ jobs:
           run: |
             make test-nostd
 
+        # The readme's first paragraph advertises WebAssembly support, and
+        # nothing above checks it. `make test-nostd` proves `no_std` against a
+        # bare-metal ARM target, which is a different claim about a different
+        # target.
+        - name: Build for WebAssembly
+          shell: bash
+          run: |
+            make build-wasm
+
         # Last, because it is the slowest and the least likely to be the thing
         # that broke. Each example is a separate crate, so nothing above it
         # compiles any of them; they are run rather than built, which is the

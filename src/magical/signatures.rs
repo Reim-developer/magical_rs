@@ -123,9 +123,17 @@ impl Magic {
         match &self.rules {
             MatchRules::Default => self.signatures.iter().any(|&signature| {
                 self.offsets.iter().any(|&offset| {
-                    let offset_end = offset + signature.len();
+                    // Saturates, as the crate's level 2 comparison has since
+                    // 0.6.2. The sum is not a total function on `usize`: an
+                    // offset near the maximum overflowed, which is a debug
+                    // panic and a release slice index whose end sits below its
+                    // own start. Saturating leaves the end at the largest
+                    // number it can be, so the length check below is false and
+                    // the rule declines. No signature that could fit after the
+                    // offset was ever in the buffer, so no match is lost.
+                    let offset_end = offset.saturating_add(signature.len());
 
-                    bytes.len() >= offset_end && &bytes[offset..offset_end] == signature
+                    bytes.len() >= offset_end && bytes.get(offset..offset_end) == Some(signature)
                 })
             }),
             MatchRules::WithFn(func) => func(bytes),

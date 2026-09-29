@@ -4,9 +4,10 @@
 //! so every format added to the table is covered automatically. If a signature
 //! is wrong, or is shadowed by an earlier entry, these tests fail.
 
+use magical_rs::magical::bytes_read::DEFAULT_MAX_BYTES_READ;
 use magical_rs::magical::magic::FileKind;
 use magical_rs::magical::match_rules::MatchRules;
-use magical_rs::magical::signatures::SIGNATURE_KIND;
+use magical_rs::magical::signatures::{Magic, SIGNATURE_KIND};
 
 /// Neutral padding. All-zero is avoided so a fill byte can never itself
 /// satisfy a signature and mask a broken offset.
@@ -136,6 +137,44 @@ fn custom_rule_entries_are_listed() {
         vec![FileKind::ScriptExecute, FileKind::WEBP],
         "custom-rule entries changed; update this test and the readme"
     );
+}
+
+/// An offset near `usize::MAX` must decline rather than overflow.
+///
+/// `Magic::matches` added `offset + signature.len()` unchecked. That sum is not
+/// a total function on `usize`: a debug build panicked with `attempt to add with
+/// overflow`, and a release build wrapped it to a small number, so the length
+/// check passed and `&bytes[offset..offset_end]` indexed a range starting at the
+/// maximum and ending below its own start. Both are aborts, and both happen for
+/// an input that should simply not match.
+///
+/// The addition saturates, which is the same fix `magic_custom.rs` took in
+/// `0.6.2`. A saturated end is the largest number it can be, so
+/// `bytes.len() >= offset_end` is false and the rule declines.
+///
+/// Not reachable through `SIGNATURE_KIND`, which is a `static` of the crate's
+/// own with small literal offsets. The test builds a `Magic` directly, since
+/// the arithmetic is the thing under test and the table is not.
+#[test]
+fn an_offset_near_usize_max_declines_instead_of_overflowing() {
+    let magic = Magic {
+        signatures: &[b"PK\x03\x04"],
+        offsets: &[usize::MAX],
+        max_bytes_read: DEFAULT_MAX_BYTES_READ,
+        kind: FileKind::PkgZip,
+        rules: MatchRules::Default,
+    };
+
+    // Would panic in a debug build and index out of range in a release one.
+    assert!(!magic.matches(b"PK\x03\x04"));
+
+    // A saturating sum that lands exactly on the end of a real buffer still
+    // matches, so the fix is not "give up on large offsets".
+    let exact = Magic {
+        offsets: &[3],
+        ..magic
+    };
+    assert!(exact.matches(b"abcPK\x03\x04"));
 }
 
 /// The table must stay non-trivial and every entry must be reachable.

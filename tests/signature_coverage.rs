@@ -96,7 +96,10 @@ fn signatures_do_not_match_at_wrong_offset() {
 #[test]
 fn padding_is_not_misdetected() {
     assert_eq!(FileKind::match_types(&[]), None);
-    assert_eq!(FileKind::match_types(&vec![PAD; 64_096].into_boxed_slice()), None);
+    assert_eq!(
+        FileKind::match_types(&vec![PAD; 64_096].into_boxed_slice()),
+        None
+    );
 }
 
 /// A truncated buffer must not panic and must not match.

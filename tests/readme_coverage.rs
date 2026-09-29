@@ -6,9 +6,7 @@
 //! itself, so a format added to the table without a readme row fails the build
 //! rather than going unnoticed.
 
-use {
-    magical_rs::magical::{match_rules::MatchRules, signatures::SIGNATURE_KIND},
-};
+use magical_rs::magical::{match_rules::MatchRules, signatures::SIGNATURE_KIND};
 
 const fn readme() -> &'static str {
     include_str!("../readme.md")
@@ -207,7 +205,10 @@ fn readme_two_byte_caveat_matches_the_table() {
     // collapsed first because the readme wraps that sentence across lines,
     // and matching the wrapped text would break on any rewrap.
     let flattened = readme().split_whitespace().collect::<Vec<_>>().join(" ");
-    let phrase = format!("{} formats match on nothing but a two-byte prefix", short.len());
+    let phrase = format!(
+        "{} formats match on nothing but a two-byte prefix",
+        short.len()
+    );
     assert!(
         flattened.contains(&phrase),
         "readme.md should contain \"{phrase}\"; the two-byte set is now {short:?}"

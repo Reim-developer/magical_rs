@@ -17,12 +17,7 @@ fn detect(bytes: &[u8]) -> Option<FileKind> {
 
 #[test]
 fn bzip2_matches_the_real_block_header() {
-    for header in [
-        &b"BZh9"[..],
-        &b"BZh0"[..],
-        &b"BZh1"[..],
-        &b"BZh"[..],
-    ] {
+    for header in [&b"BZh9"[..], &b"BZh0"[..], &b"BZh1"[..], &b"BZh"[..]] {
         assert_eq!(
             detect(header),
             Some(FileKind::Bzip),
@@ -71,12 +66,7 @@ fn shebang_requires_an_interpreter_path() {
 
 #[test]
 fn shebang_no_longer_claims_bare_hash_bang() {
-    for not_a_script in [
-        &b"#!"[..],
-        &b"#!\n"[..],
-        &b"#! \n"[..],
-        &b"#!x"[..],
-    ] {
+    for not_a_script in [&b"#!"[..], &b"#!\n"[..], &b"#! \n"[..], &b"#!x"[..]] {
         assert_ne!(
             detect(not_a_script),
             Some(FileKind::ScriptExecute),
@@ -134,11 +124,7 @@ fn ply_requires_the_header_line_break() {
 
 #[test]
 fn ply_no_longer_claims_a_bare_word() {
-    for not_ply in [
-        &b"ply"[..],
-        &b"plywood"[..],
-        &b"plygonal math"[..],
-    ] {
+    for not_ply in [&b"ply"[..], &b"plywood"[..], &b"plygonal math"[..]] {
         assert_ne!(
             detect(not_ply),
             Some(FileKind::Ply),

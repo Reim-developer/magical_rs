@@ -307,14 +307,7 @@ fn all_kinds() -> Vec<&'static str> {
 /// avoids elsewhere.
 #[pyfunction]
 #[pyo3(signature = ())]
-fn read_limits() -> (
-    usize,
-    usize,
-    Vec<usize>,
-    usize,
-    Vec<usize>,
-    usize,
-) {
+fn read_limits() -> (usize, usize, Vec<usize>, usize, Vec<usize>, usize) {
     (
         DEFAULT_MAX_BYTES_READ,
         DEFAULT_OFFSET,
@@ -363,7 +356,11 @@ fn table_row(magic: &magical_rs::magical::signatures::Magic) -> TableRow {
     let signatures = if uses_predicate {
         Vec::new()
     } else {
-        magic.signatures.iter().map(|signature| signature.to_vec()).collect()
+        magic
+            .signatures
+            .iter()
+            .map(|signature| signature.to_vec())
+            .collect()
     };
 
     (

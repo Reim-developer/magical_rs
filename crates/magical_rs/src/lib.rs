@@ -23,6 +23,7 @@ pub mod magical {
     pub mod magic;
     pub mod magic_custom;
     pub mod match_rules;
+    pub mod rules_dsl;
     pub mod signatures;
     pub mod signatures_ext;
 }

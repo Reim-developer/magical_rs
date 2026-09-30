@@ -8,6 +8,10 @@ on:
             - "crates/**"
             - "Cargo.toml"
             - "readme.md"
+            # `formats.json` generates `_kinds.js` and `_kinds.d.ts`, so editing
+            # the dataset is editing this binding even though nothing under
+            # `bindings/` moved.
+            - "formats.json"
             # The release machinery is part of the bindings, so editing it gets
             # the same gate as editing the code it releases.
             - ".github/workflows/nodejs_bindings.yml"
@@ -169,6 +173,7 @@ jobs:
               package/_kinds.js \
               package/_kinds.d.ts \
               package/_levels.js \
+              package/_meta.js \
               package/_signatures.js \
               package/_wasm.js \
               package/magical_js.wasm \
@@ -215,7 +220,7 @@ jobs:
             cat > use.mjs <<'EOF'
             import {
               detectBytes, allKinds, describe, matchTypes, matchAllTypes,
-              neededBytes, readLimits, matches,
+              neededBytes, readLimits, matches, displayName, mime, extension,
             } from "@reim-developer/magical-js";
 
             const png = Uint8Array.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
@@ -229,6 +234,13 @@ jobs:
             if (!matches("Png", png)) throw new Error("matches is wrong");
             if (neededBytes() !== 36870) throw new Error("neededBytes is wrong");
             if (readLimits().defaultMaxBytesRead !== 2048) throw new Error("limits are wrong");
+
+            // The metadata comes from a table generated at build time, so a
+            // tarball missing the generated file would install and then throw on
+            // the first `mime()` call rather than on the first `detectBytes()`.
+            if (displayName("Png") !== "PNG") throw new Error("displayName is wrong");
+            if (mime("Png") !== "image/png") throw new Error("mime is wrong");
+            if (extension("Png") !== "png") throw new Error("extension is wrong");
 
             const rules = [{ kind: "House", signatures: [png], offsets: [0] }];
             if (matchTypes(rules, png) !== "House") throw new Error("matchTypes is wrong");

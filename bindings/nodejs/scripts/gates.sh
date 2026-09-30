@@ -7,9 +7,10 @@
 # The order is not arbitrary and not alphabetical. Each step narrows what the next
 # can be:
 #
-#   1. Generate the kinds files. `scripts/gen_kinds.mjs` reads
-#      `src/magical/magic.rs` and fails if the format count is not 114, so a
-#      changed enum is caught before anything is built against it.
+#   1. Generate the kinds files. `scripts/gen_formats.mjs` reads `formats.json`
+#      and fails if the format count is not 114 or if `abi_order` is not a
+#      permutation of 0..113, so a changed enum is caught before anything is built
+#      against it.
 #   2. Build the WebAssembly module, which also asserts the module has no imports
 #      and exports everything `_wasm.js` calls. A missing export is a `TypeError`
 #      for a caller; a *renamed* one is a failing build instead.
@@ -25,9 +26,14 @@ set -euo pipefail
 
 here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 bindings="$(cd "$here/.." && pwd)"
+# The generator lives at the repository root rather than beside the binding,
+# because it reads `formats.json` -- the same dataset that generates the Rust and
+# Python metadata -- and a script two directories away from the only file it reads
+# is a script nobody finds. Three levels up from `bindings/nodejs/scripts`.
+repo="$(cd "$here/../../.." && pwd)"
 
 echo "== generating the kinds files =="
-node "$bindings/scripts/gen_kinds.mjs"
+node "$repo/scripts/gen_formats.mjs"
 
 echo "== cargo test (the binding's own Rust) =="
 # Before the build, not after: the crate is `rlib` as well as `cdylib`, so this

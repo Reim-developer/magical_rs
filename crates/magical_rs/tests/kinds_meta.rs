@@ -1,18 +1,20 @@
 //! The generated metadata has to describe the formats the table can actually
 //! return.
 //!
-//! `magical::kinds_meta` is written by `scripts/gen_kinds.ps1` and checked in,
-//! which is the same arrangement the Python binding's `_kinds.py` uses and the
-//! same hazard: a generated file nobody can diff is a generated file nobody can
-//! review, and a format added to `SIGNATURE_KIND` without a row in the metadata
-//! table produces an accessor with no arm -- which is a compile error, and only
-//! if the new variant is reached by an exhaustive `match`. It is, so that case
-//! is covered.
+//! `magical::kinds_meta` is written by `scripts/gen_kinds.ps1` from
+//! `formats.json` and checked in, which is the same arrangement the Python
+//! binding's `_kinds.py` uses and the same hazard: a generated file nobody can
+//! diff is a generated file nobody can review, and a format added to
+//! `SIGNATURE_KIND` without a row in the dataset produces an accessor with no arm
+//! -- which is a compile error, and only if the new variant is reached by an
+//! exhaustive `match`. It is, so that case is covered.
 //!
 //! The case that is *not* covered by the compiler is the other direction. The
-//! generator's own cross-check compares the readme tables against its metadata
-//! table, so a format with a readme row and no metadata row fails there, but that
-//! check does not know what `SIGNATURE_KIND` contains. This one does.
+//! generator's own check is against the dataset's declared count, so a format
+//! with a dataset row and no `SIGNATURE_KIND` entry fails there, but that check
+//! does not know what `SIGNATURE_KIND` contains. This one does, and
+//! `tests/dataset.rs` covers the third side: the dataset against the generated
+//! file, so a hand-edit to this one is caught as well.
 
 use std::collections::BTreeSet;
 
@@ -49,8 +51,8 @@ fn all_kinds_is_exactly_what_the_table_detects() {
     let missing: Vec<&FileKind> = detectable.difference(&listed).collect();
     assert!(
         missing.is_empty(),
-        "{} format(s) the detection table returns are missing from ALL_KINDS: {}. Run \
-         `scripts/gen_kinds.ps1` and add them to its metadata table.",
+        "{} format(s) the detection table returns are missing from ALL_KINDS: {}. Add them to \
+         formats.json and re-run `scripts/gen_kinds.ps1`.",
         missing.len(),
         missing
             .iter()

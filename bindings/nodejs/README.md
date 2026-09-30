@@ -231,14 +231,20 @@ Rule sets are compiled on first use and cached on the array you pass, so the sam
 `rules` in a loop compiles once. `releaseRules` drops the handle. It does not free
 the memory: the compiled copy is leaked once so `MagicCustom` can hold a
 reference to it, which is a deliberate trade against allocating a fresh `Vec` per
-call, and it is recorded in `src/lib.rs`. A caller building rule sets in a loop
+call, and it is recorded in `bindings/asm/src/lib.rs`. A caller building rule sets in a loop
 rather than at startup should call it when done with one.
 
 ## How it works
 
-`src/lib.rs` is a `cdylib` of raw `extern "C"` exports. No `wasm-bindgen`, no
-`wasm-pack`, no `bg.js` beside the module, and no toolchain in CI. The memory ABI
-is documented at the top of `_wasm.js` and it is short:
+The module's Rust is one directory up, in [`../asm`](../asm), and this package is
+the JavaScript that loads it. Two directories and one npm package, because the two
+halves change for different reasons and are versioned apart — but never two npm
+packages, because the memory ABI below is a contract between them and a package
+shipping one without the other installs cleanly and throws on its first call.
+
+`bindings/asm/src/lib.rs` is a `cdylib` of raw `extern "C"` exports. No
+`wasm-bindgen`, no `wasm-pack`, no `bg.js` beside the module, and no toolchain in
+CI. The memory ABI is documented at the top of `_wasm.js` and it is short:
 
 - The module allocates its own scratch buffers (`input_ptr`, `answer_ptr`) and the
   loader writes where it is told. Address 0 is **not** free: the encoded table sits
@@ -251,11 +257,14 @@ is documented at the top of `_wasm.js` and it is short:
   `-1` in JavaScript, not `4294967295`.
 - A `bool` result arrives as `0` or `1`.
 
-`scripts/build.mjs` asserts the first and third of those against the built
-artifact, and checks that every export the loader calls is present. Nothing in the
-Rust build would notice the no-imports claim going false; adding a dependency that
+`scripts/build.mjs` builds that crate, copies `magical_js.wasm` here, and asserts
+the first and third of those against the artifact — plus the no-imports claim,
+which nothing in the Rust build would notice going false. Adding a dependency that
 needs an import compiles perfectly well, and the symptom would appear later as a
 `LinkError` in somebody else's project.
+
+The crate is `publish = false` and is not on crates.io either. It exists to be this
+module, and it depends on `magical_rs` by path so the two cannot drift apart.
 
 ## One thing this binding does not do
 

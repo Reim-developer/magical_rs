@@ -89,6 +89,31 @@ is not a permutation of `0..113`.
 * Both binding workflows now watch `formats.json`, since editing it regenerates
   both bindings and would otherwise not run either gate.
 
+* The NodeJS binding's Rust moved to **`bindings/asm`,** a crate of its own beside
+  the npm package rather than inside it. `Cargo.toml`, `Cargo.lock` and `src/lib.rs`
+  moved; the crate is now `magical-asm` — `publish = false` either way — and is
+  still built as a `cdylib` plus an `rlib`, so its 19 ABI tests run with no wasm in
+  the loop. Two directories and one npm package, because the two halves change for
+  different reasons and are versioned apart: the crate says `0.1.0` and is published
+  nowhere, while the package has its own version and its own release workflow. One
+  crate for both would tie two version numbers together for no benefit. What they
+  cannot be apart is the module and the loader that instantiates it, so
+  `bindings/nodejs/scripts/build.mjs` builds the crate, copies `magical_js.wasm`
+  in, and verifies it — that copy is the only thing crossing between the two
+  directories.
+
+  Two npm packages would be the opposite mistake, and it is worth saying why that
+  was not done: the memory ABI is a contract between the loader and the module, and
+  version skew there fails at `import()` inside a caller's project rather than at
+  install time. One package means the two cannot be installed apart.
+
+  `bindings/asm` joins `workspace.exclude`, which `tests/workspace.rs` checks in
+  both directions — a new crate that is not listed fails to build on its own, and a
+  listed path that no longer exists is the stale line nobody re-reads.
+  `tests/lint_level.rs` follows the crate to its new path. The built module is
+  byte-identical apart from the crate name that appears in its panic strings:
+  43,212 bytes raw, 17 exports, 0 imports.
+
 ## `magical-py`: Version 0.4.0
 **What has been changed:**
 

@@ -1,15 +1,17 @@
 [package]
-name = "magical-js"
+name = "magical-asm"
 version = "0.1.0"
 edition = "2024"
 rust-version = "1.85"
 license = "MIT"
-description = "JavaScript and TypeScript bindings for magical_rs, a zero-dependency file type detection library."
+description = "The WebAssembly module behind @reim-developer/magical-js: raw extern \"C\" exports over magical_rs, with no imports and no glue file."
 repository = "https://github.com/Reim-developer/magical_rs"
-homepage = "https://github.com/Reim-developer/magical_rs/blob/master/bindings/nodejs"
+homepage = "https://github.com/Reim-developer/magical_rs/blob/master/bindings/asm"
 documentation = "https://docs.rs/magical_rs"
-# This crate is published to npm, not to crates.io. It exists to be a path
-# dependency next to the crate it wraps, and to keep that crate dependency-free.
+# Not published to crates.io, and not to npm either: the *package* on npm is
+# `bindings/nodejs`, which is JavaScript plus the `.wasm` this crate builds. This
+# crate exists to be that module and to keep the binding's Rust dependency-free,
+# which it does by depending on the library by path rather than by version.
 publish = false
 
 [lib]
@@ -20,8 +22,9 @@ name = "magical_js"
 crate-type = ["cdylib", "rlib"]
 
 [dependencies]
-# Path dependency, not a registry dependency: the binding always builds against
-# the checkout it sits next to, so the two cannot drift apart.
+# Path dependency, not a registry dependency: the module always builds against the
+# checkout it sits next to, so the two cannot drift apart. The library name is
+# `magical_rs`; the crate here is `magical-asm`.
 magical_rs = { path = "../../crates/magical_rs", default-features = false, features = ["std"] }
 
 [profile.release]

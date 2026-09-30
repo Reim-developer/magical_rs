@@ -1,5 +1,25 @@
 //! The WebAssembly module behind the `@reim-developer/magical-js` package.
 //!
+//! # Where the two halves are
+//!
+//! This crate is the Rust half and it ships nothing of its own: it is not
+//! published to crates.io, and it is not the npm package either. The package is
+//! `bindings/nodejs` — this file's JavaScript half — and `scripts/build.mjs` in
+//! there compiles this crate and copies the artifact to `magical_js.wasm` beside
+//! the loader that instantiates it.
+//!
+//! Two directories rather than one, because they are two things that change for
+//! different reasons. This side changes when the crate's API or the memory ABI
+//! does; that side changes when the public JavaScript API or the generated format
+//! tables do. And they are versioned apart: the crate here says `0.1.0` and is
+//! not published anywhere, while the npm package has its own version and its own
+//! release workflow. Putting them in one crate would tie the two version numbers
+//! together for no benefit.
+//!
+//! What they *cannot* be apart is the module and its loader. The memory ABI below
+//! is a contract between this file and `_wasm.js`, and a package shipping one
+//! without the other would install cleanly and throw on its first call.
+//!
 //! # What this is, and what it deliberately is not
 //!
 //! Every function here is a raw `extern "C"` export. There is no `wasm-bindgen`,
@@ -37,11 +57,11 @@
 //! API rather than a port, so this binding covers levels 1 and 2 and the
 //! README says so plainly.
 
-// The same lint groups the library crate and the CLI crate deny, so the binding
-// is held to one bar and a stricter standard never drifts in one direction.
-// `bindings/nodejs/scripts/gates.sh` also passes them on the clippy command
-// line; the attribute is here so that `cargo build` alone is enough, and so that
-// the two cannot disagree about which lints are on.
+// The same lint groups the library crate and the Python binding's crate deny, so
+// every crate in this repository is held to one bar and a stricter standard never
+// drifts in one direction. `bindings/nodejs/scripts/gates.sh` also passes them on
+// the clippy command line; the attribute is here so that `cargo build` alone is
+// enough, and so that the two cannot disagree about which lints are on.
 #![deny(clippy::pedantic, clippy::all, clippy::nursery, clippy::perf)]
 
 use std::cell::RefCell;

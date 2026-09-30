@@ -22,6 +22,12 @@ members = ["crates/*"]
 # as a workspace member. A member resolves against the workspace's
 # single lockfile, which is the opposite of what each of them is for.
 #
+# `bindings/asm` is the Node binding's own crate: it is not published
+# anywhere and it exists to be built as a `wasm32-unknown-unknown`
+# `cdylib`. It is excluded for the same reason the others are -- a
+# member resolves against the workspace's single lockfile and is built
+# for the host by default, which is the opposite of what it is for.
+#
 # The cost of excluding is that the path dependencies below have to be
 # written out. The benefit is that `cargo test` at the root tests the
 # library and the CLI and nothing else, and neither binding's toolchain
@@ -36,7 +42,7 @@ members = ["crates/*"]
 # checks that every crate under these two directories is named here, so
 # a new example joins the list at the moment it is created.
 exclude = [
-  "bindings/nodejs",
+  "bindings/asm",
   "bindings/python",
   "examples/async_dyn_magic",
   "examples/dyn_magic",

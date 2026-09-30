@@ -1,20 +1,28 @@
 // Builds the WebAssembly module and installs it beside the JavaScript.
 //
+// The crate is one directory up, in `bindings/asm`, and this script is the only
+// thing that knows it. That is the point of the split: the module's Rust and the
+// package's JavaScript change for different reasons and are versioned apart, but
+// the copy step below is what keeps the memory ABI honest, and it has to be run by
+// whatever builds the module rather than remembered by whoever builds it.
+//
 // Three jobs, in this order because each one narrows what the next can be:
 //
-//   1. `cargo build --release --target wasm32-unknown-unknown`.
-//   2. Copy the artifact to `magical_js.wasm` in the package root, which is where
-//      `_wasm.js` looks for it. A copy rather than a symlink: npm packs symlinks
-//      as links to paths that do not exist inside the tarball, so a published
-//      package built with a symlink installs a module that cannot be read.
+//   1. `cargo build --release --target wasm32-unknown-unknown` in `bindings/asm`.
+//   2. Copy the artifact to `magical_js.wasm` in this package's root, which is
+//      where `_wasm.js` looks for it. A copy rather than a symlink: npm packs
+//      symlinks as links to paths that do not exist inside the tarball, so a
+//      published package built with a symlink installs a module that cannot be
+//      read.
 //   3. Verify what was built.
 //
-// Step 3 is the part that earns its place. The design claim in `src/lib.rs` is
-// that this module has *no imports*, which is what lets a loader instantiate it
-// with `{}` and no glue. Nothing in the Rust build would notice that claim going
-// false — adding a `#[link]` or an `extern "C"` import compiles perfectly well,
-// and the symptom would appear later as an `LinkError` in somebody else's
-// project. So it is asserted here, at the moment the artifact exists.
+// Step 3 is the part that earns its place. The design claim in
+// `bindings/asm/src/lib.rs` is that this module has *no imports*, which is what
+// lets a loader instantiate it with `{}` and no glue. Nothing in the Rust build
+// would notice that claim going false - adding a `#[link]` or an `extern "C"`
+// import compiles perfectly well, and the symptom would appear later as an
+// `LinkError` in somebody else's project. So it is asserted here, at the moment
+// the artifact exists.
 //
 // The export list is checked for the same reason. A renamed export breaks every
 // caller with a `TypeError: not a function`, which is at least loud; a *removed*
@@ -27,8 +35,9 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const bindingDir = join(dirname(fileURLToPath(import.meta.url)), "..");
+const crateDir = join(bindingDir, "..", "asm");
 const artifact = join(
-  bindingDir,
+  crateDir,
   "target",
   "wasm32-unknown-unknown",
   "release",
@@ -77,8 +86,13 @@ function fail(message) {
 // name on Windows, so `cargo` resolves to `cargo.exe` without it — and with it
 // Node prints DEP0190, because arguments passed through a shell are concatenated
 // rather than escaped.
+//
+// `cwd` is the crate, not this package. Cargo resolves a bare `--manifest-path`
+// against the current directory, so pointing it at this package and passing the
+// crate's manifest would work too — but a `cd` is one fewer path to get wrong
+// when the two directories move.
 const build = spawnSync("cargo", ["build", "--release", "--target", "wasm32-unknown-unknown"], {
-  cwd: bindingDir,
+  cwd: crateDir,
   stdio: "inherit",
 });
 if (build.error) {
@@ -113,6 +127,7 @@ if (missing.length > 0) {
 
 const kib = (n) => `${(n / 1024).toFixed(1)} KiB`;
 console.log(`build: ${installed}`);
+console.log(`  crate     ${crateDir}`);
 console.log(`  raw       ${String(bytes.length).padStart(7)} bytes  (${kib(bytes.length)})`);
 console.log(`  gzip      ${String(gzipSync(bytes).length).padStart(7)} bytes  (${kib(gzipSync(bytes).length)})`);
 console.log(`  imports   ${imports.length}`);

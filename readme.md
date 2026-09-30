@@ -345,8 +345,17 @@ two levels on purpose rather than by omission.
 
 Level 5 has no meaning at all: it hands out `magic_rs` pointers, and there is no
 `magic_rs` address space on the other side of a `WebAssembly.Instance`. The Rust
-in [`bindings/nodejs`](bindings/nodejs) does offer it, to Rust callers, because
-that crate is built as an `rlib` as well as a `cdylib`.
+in [`bindings/asm`](bindings/asm) does offer it, to Rust callers, because that
+crate is built as an `rlib` as well as a `cdylib`.
+
+It lives beside the package rather than inside it. The module's Rust and the
+package's JavaScript change for different reasons and are versioned apart — the
+crate says `0.1.0` and is published nowhere, while the npm package has its own
+version and its own release workflow — and one crate for both would tie two version
+numbers together for no benefit. What they cannot be apart is the module and the
+loader that instantiates it, so `bindings/nodejs/scripts/build.mjs` builds the
+crate, copies the artifact in, and verifies it; that copy is the only thing that
+crosses between the two directories.
 
 The two predicate formats the crate has — `ScriptExecute` and `WEBP` — are
 reported and matched correctly, because their predicates are compiled *into* the
@@ -617,9 +626,24 @@ Windows, so the published shape is checked rather than assumed.
 ## Development
 
 The repository is a cargo workspace. `crates/magical_rs` is the library this
-readme documents, and the two
-bindings under `bindings/` and the examples under `examples/` are separate
-workspaces of their own, which is why the root manifest has an `exclude` list.
+readme documents, and everything under `bindings/` and `examples/` is outside it,
+which is why the root manifest has an `exclude` list.
+
+`bindings/` holds three crates that share no lockfile and no toolchain:
+
+| Directory | What it is | Published as |
+| --- | --- | --- |
+| `bindings/python` | `PyO3` extension and `magical_py` | a wheel, on `PyPI` |
+| `bindings/asm` | the `wasm32-unknown-unknown` `cdylib` | nothing — `publish = false` |
+| `bindings/nodejs` | the loader, the API and the tests | `@reim-developer/magical-js` on npm |
+
+`bindings/asm` is the module the npm package loads. It is a sibling of the package
+rather than part of it: the two are versioned apart, and only
+`bindings/nodejs/scripts/build.mjs` crosses between them, compiling the crate,
+copying `magical_js.wasm` in and verifying it. Splitting them into two *npm
+packages* would be a mistake for the opposite reason — the memory ABI is a contract
+between the loader and the module, and version skew there fails at `import()` in a
+caller's project rather than at install time.
 
 ```bash
 cargo build

@@ -17,7 +17,12 @@
 //! The crate list is written out rather than discovered by walking the tree,
 //! for the same reason `ci_coverage.rs` writes out the workflow it reads: a list
 //! found by searching is a list that finds whatever happens to be there, and a
-//! new crate that is not in it would be silently unchecked.
+//! new crate that is not in it would be silently unchecked. That is also why the
+//! third entry is `bindings/asm` rather than `bindings/nodejs`: the `NodeJS`
+// binding's Rust moved out of the npm package into a crate of its own, and a
+//! path that no longer holds a crate root has to be *edited* out of this list
+// rather than left to fail, so the next reader finds a list that is right rather
+//! than one that has been commented out.
 
 use std::path::{Path, PathBuf};
 
@@ -31,7 +36,7 @@ use std::path::{Path, PathBuf};
 const CRATES: &[(&str, &str)] = &[
     ("crates/magical_rs", "src/lib.rs"),
     ("bindings/python", "src/lib.rs"),
-    ("bindings/nodejs", "src/lib.rs"),
+    ("bindings/asm", "src/lib.rs"),
 ];
 
 /// The four groups, in the order the library crate writes them.

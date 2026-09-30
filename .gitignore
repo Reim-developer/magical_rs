@@ -27,6 +27,15 @@ bindings/nodejs/node_modules/
 # locally does the same. `bindings/python/dist/` is ignored for the same reason.
 bindings/nodejs/dist/
 
+# An `.npmrc` anywhere in this repository is ignored, and that is a security rule
+# rather than a tidiness one: a project-local `.npmrc` is where an auth token lands
+# when somebody runs `npm login --location=project` or sets one by hand, and npm
+# does not warn about committing it. `npm login` with no flag writes to the *user*
+# config outside this tree, so nothing legitimate is ignored by this line -- and the
+# one that would be is the one that must not be committed. Credentials belong on the
+# machine, and `nodejs_publish.yml` gets its token from CI's own secret store.
+.npmrc
+
 # Planning notes are working documents, not project documentation, so they do
 # not belong here. They are written to the agent's scratch directory instead.
 # `PLAN.md` has no leading slash, so this matches the name at any depth.

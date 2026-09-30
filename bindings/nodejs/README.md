@@ -1,6 +1,7 @@
 # @reim-developer/magical-js
 
-JavaScript and TypeScript bindings for [`magical_rs`](../../readme.md), a
+JavaScript and TypeScript bindings for
+[`magical_rs`](https://github.com/Reim-developer/magical_rs), a
 zero-dependency file type detection library. 114 formats, 42 KB of WebAssembly
 (17 KB gzipped), no glue file, no toolchain, and hand-written types with real
 generics.
@@ -236,11 +237,13 @@ rather than at startup should call it when done with one.
 
 ## How it works
 
-The module's Rust is one directory up, in [`../asm`](../asm), and this package is
-the JavaScript that loads it. Two directories and one npm package, because the two
-halves change for different reasons and are versioned apart — but never two npm
-packages, because the memory ABI below is a contract between them and a package
-shipping one without the other installs cleanly and throws on its first call.
+The module's Rust is one directory up, in
+[`bindings/asm`](https://github.com/Reim-developer/magical_rs/tree/master/bindings/asm),
+and this package is the JavaScript that loads it. Two directories and one npm
+package, because the two halves change for different reasons and are versioned
+apart — but never two npm packages, because the memory ABI below is a contract
+between them and a package shipping one without the other installs cleanly and
+throws on its first call.
 
 `bindings/asm/src/lib.rs` is a `cdylib` of raw `extern "C"` exports. No
 `wasm-bindgen`, no `wasm-pack`, no `bg.js` beside the module, and no toolchain in
@@ -305,6 +308,13 @@ Rust side.
 
 ## Licence
 
-MIT, the same as the crate this wraps. See [LICENSE](../../LICENSE). There is no
-second copy of the licence file beside this README on purpose: one file, one place
-to change it, and the `license` field in `package.json` is what npm shows.
+MIT, the same as the crate this wraps. The licence text is
+[one file at the repository root](https://github.com/Reim-developer/magical_rs/blob/master/LICENSE),
+and there is no second copy beside this README on purpose: one file, one place to
+change it, and the `license` field in `package.json` is what npm shows.
+
+The link is absolute rather than `../../LICENSE` because this README is rendered on
+npmjs.com as well as in the file tree, and a relative path two levels up resolves to
+nothing there. That is the same class of mistake as the `files` list: the shape is
+right for one context and wrong for the other, and only one of the two is checked by
+`npm pack`.

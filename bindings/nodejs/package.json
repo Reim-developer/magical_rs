@@ -49,7 +49,7 @@
     "prepack": "npm run pack:check",
     "test": "npm run build && npm run test:only",
     "test:only": "node --test --test-reporter=tap \"test/*.test.js\"",
-    "types": "tsc --noEmit --project tsconfig.json",
+    "types": "tsc --noEmit --project tsconfig.json && tsc --noEmit --project examples/tsconfig.json",
     "gates": "npm run gen && npm run build && npm run types && npm run test:only"
   },
   "devDependencies": {

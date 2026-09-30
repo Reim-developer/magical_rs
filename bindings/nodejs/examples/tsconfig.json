@@ -1,0 +1,20 @@
+{
+  // The examples' own type-check, separate from the package's.
+  //
+  // `tsconfig.json` at the package root sets `"types": []` and `lib: ["es2023"]` on
+  // purpose: the public surface is a `Uint8Array`, a `number`, a `string` or
+  // `null`, and a binding that needed `@types/node` would not also run in a browser.
+  // That claim is about the *declarations*, and it is worth keeping.
+  //
+  // An example is not a declaration. It has to print something, `console` is a DOM
+  // global rather than a Node one, and adding `"dom"` to the package's project to
+  // accommodate it would quietly weaken the property the root project asserts. So
+  // the example gets its own project that extends the root one and widens `lib`,
+  // which is also a demonstration: two `tsconfig`s, no build step, and the package's
+  // own type surface is still free of both.
+  "extends": "../tsconfig.json",
+  "compilerOptions": {
+    "lib": ["es2023", "dom"]
+  },
+  "include": ["06_typed.ts"]
+}

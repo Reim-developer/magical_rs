@@ -58,6 +58,28 @@ echo "== node --test =="
 # they are: the glob in the script is `test/*.test.js`.
 npm --prefix "$bindings" run --silent test:only
 
+echo "== running the examples =="
+# Run, not build, and not merely check that they parse. `npm test` already imports
+# every module the package ships, so a file in `examples/` is the only thing here
+# that nothing else would execute - which is exactly why an example that has drifted
+# stays green until somebody reads it. There is no bundler and no build step here, so
+# `node` on each file is the whole verification.
+#
+# Each one in its own process, so an example that leaves the module's memory grown,
+# or writes a temporary directory it fails to clean up, cannot make the next one lie.
+for example in "$bindings"/examples/*.mjs; do
+  echo "  $(basename "$example")"
+  node "$example" > /dev/null
+done
+
+echo "== running the TypeScript example =="
+# The flag is unneeded on Node 23.6+ and needed on 22.6 to 23.5; it is harmless on
+# both, and `engines` allows 22. The important half is `npm run types` above, which
+# is what makes this a TypeScript example rather than a JavaScript one -- running it
+# only proves the stripping works.
+echo "  06_typed.ts"
+node --experimental-strip-types "$bindings/examples/06_typed.ts" > /dev/null
+
 echo "== rustfmt =="
 cargo fmt --manifest-path "$crate/Cargo.toml" --check
 

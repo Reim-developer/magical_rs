@@ -1,0 +1,28 @@
+[package]
+name = "wasm_rust"
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+[lib]
+# `cdylib` only. There is no `rlib` and no `main`, because there is nothing to run:
+# the loader is `load.mjs`, and it is plain JavaScript with no import of this crate's
+# Rust in it. The point of this example is that the crate can be used on WebAssembly
+# *without* the npm binding at all, and `rlib` would only invite someone to reach for
+# it and find it is not there.
+crate-type = ["cdylib"]
+
+[dependencies]
+# A path dependency like every other example, so this runs against the checkout it
+# sits beside rather than against a release from crates.io.
+magical_rs = { path = "../../crates/magical_rs", default-features = false, features = ["std"] }
+
+[profile.release]
+# Copied from `bindings/asm/Cargo.toml`, and for the same reason: the whole point of
+# shipping a module is how much of it a browser downloads. `opt-level = "s"` over `z`
+# because the detection table is data, and the measured difference is 243 bytes.
+opt-level = "s"
+lto = true
+codegen-units = 1
+panic = "abort"
+strip = true

@@ -353,6 +353,21 @@ reported and matched correctly, because their predicates are compiled *into* the
 module and called from inside it. What cannot cross the boundary is a predicate
 written in JavaScript.
 
+### Metadata across all three
+
+`FileKind::display_name`, `FileKind::mime` and `FileKind::extension` on the Rust
+side, `FileKind.description`, `.mime` and `.extension` on the Python side, and
+`displayName`, `mime` and `extension` on the JavaScript side, all answer from one
+table: [`formats.json`](https://github.com/Reim-developer/magical_rs/blob/master/formats.json)
+at the repository root. It is generated into each language, so a format cannot be
+`image/png` in Rust and something else in JavaScript.
+
+A format with no verified MIME type or extension answers `None`, `None` and `null`
+respectively. Nothing is invented: a MIME type is served to a browser, and an
+invented one is indistinguishable from a real one at the point it does harm. The
+fallback — `application/octet-stream`, or no extension at all — is a decision the
+caller makes where the decision is visible.
+
 ## Feature flags
 
 | Flag | Default | Effect |
@@ -370,6 +385,20 @@ Building with `--no-default-features` gives a `no_std` library with only levels
 Magic bytes and offsets below are read directly from `SIGNATURE_KIND` in
 [`crates/magical_rs/src/magical/signatures.rs`](https://github.com/Reim-developer/magical_rs/blob/master/crates/magical_rs/src/magical/signatures.rs).
 "Offset" is the byte position the magic is compared at.
+
+The format names in this section come from
+[`formats.json`](https://github.com/Reim-developer/magical_rs/blob/master/formats.json),
+which is the one place a format's display name, MIME type and extension is
+written down — the same table that generates the Rust `FileKind::mime`, the
+Python `FileKind.mime` and the JavaScript `mime()`.
+[`crates/magical_rs/tests/dataset.rs`](https://github.com/Reim-developer/magical_rs/blob/master/crates/magical_rs/tests/dataset.rs)
+checks the names below against it, so a format cannot be documented with one name
+and detected with another.
+
+The magic bytes are hand-written here rather than generated, because they are
+facts about the formats rather than metadata about this project's table, and
+[`crates/magical_rs/tests/readme_coverage.rs`](https://github.com/Reim-developer/magical_rs/blob/master/crates/magical_rs/tests/readme_coverage.rs)
+checks them against the `SIGNATURE_KIND` code that matches on them.
 
 | Format | `FileKind` | Magic | Offset |
 | --- | --- | --- | --- |
@@ -637,12 +666,12 @@ The `NodeJS` bindings have one too, which also needs
 bash ./bindings/nodejs/scripts/gates.sh
 ```
 
-It regenerates the format list from `pub enum FileKind`, runs the binding's own
-Rust tests, builds the module and checks it declares no imports, type-checks the
+It regenerates the format tables from `formats.json`, runs the binding's own Rust
+tests, builds the module and checks it declares no imports, type-checks the
 hand-written declarations, runs the test suite, then runs rustfmt and clippy.
 
-Two tests exist because the layout above is a thing that can drift, and neither
-kind of drift is caught by a build:
+Three tests exist because the layout above is a thing that can drift, and none of
+the drift is caught by a build:
 
 - `crates/magical_rs/tests/workspace.rs` checks that every crate under
   `bindings/` and `examples/` is named in `exclude`, and that each one reaches
@@ -653,11 +682,38 @@ kind of drift is caught by a build:
   file from outside the package — `include = ["../../LICENSE"]` is silently
   ignored, while `readme = "../../readme.md"` works — so those two are copied
   and this test is what keeps the copies honest.
+- `crates/magical_rs/tests/dataset.rs` checks `formats.json` against this readme,
+  against `SIGNATURE_KIND` and against the metadata generated from it.
 
-`scripts/gen_kinds.ps1` regenerates the bindings' format metadata from the
-tables in this readme plus a MIME and extension table of its own. A format
-added to `SIGNATURE_KIND` without a row here fails the build, because
-`tests/readme_coverage.rs` compares both directions.
+## One dataset, three languages
+
+`formats.json` at the repository root is the only place a format's display name,
+short token, MIME type and extension are written down. It used to be three: a
+hashtable in `scripts/gen_kinds.ps1`, a column of markdown tables in this readme,
+and a name list parsed out of `pub enum FileKind`. A value that appeared in two of
+them was checked by hand, which is a check nobody performs.
+
+Two scripts read it, and neither is a third source of truth:
+
+| Script | Writes | Run by |
+| --- | --- | --- |
+| `scripts/gen_kinds.ps1` | `kinds_meta.rs`, `magical_py/_kinds.py` | `npm run gen` in the Python binding, by hand otherwise |
+| `scripts/gen_formats.mjs` | `_kinds.js`, `_kinds.d.ts` | `npm run gen` in the `NodeJS` binding, and its gate |
+
+`abi_order` is the exception that proves the rule. It is the position of a variant
+in `pub enum FileKind`, which is a fact about code rather than about a format, so it
+is *read out of the declaration* by `scripts/build_formats.mjs` rather than typed
+into the dataset by hand. It is also the JavaScript side's ABI — a kind crosses the
+wasm boundary as its Rust discriminant — and `test/kinds.test.js` checks all 114
+against what the compiled module reports.
+
+The magic bytes stay in this readme rather than moving into the dataset, because
+they are facts about the formats rather than metadata about this project's table.
+`tests/readme_coverage.rs` checks them against the `SIGNATURE_KIND` code that
+matches on them, so the bytes are verified against the matcher and the names
+against the dataset. `tests/dataset.rs` then checks the two against each other, so
+a format cannot be documented with one name and detected with another.
+
 
 ## License
 

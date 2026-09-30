@@ -1,5 +1,6 @@
 # CHANGELOG
 - [CHANGELOG](#changelog)
+  - [Unreleased: one format dataset](#unreleased-one-format-dataset)
   - [magical-py: Version 0.4.0](#magical-py-version-040)
   - [magical-py: Version 0.3.0](#magical-py-version-030)
   - [magical-py: Version 0.2.0](#magical-py-version-020)
@@ -16,6 +17,77 @@
   - [Version: 0.6.3 `Header Padding Fix`](#version-063-header-padding-fix)
   - [Version: 0.6.4 `Offset Arithmetic and a Wrong Constant`](#version-064-offset-arithmetic-and-a-wrong-constant)
 
+
+## Unreleased: one format dataset
+
+**`@reim-developer/magical-js` can now answer what a format is called and served as.**
+
+* **Added `displayName(kind)`, `mime(kind)` and `extension(kind)`.** The two
+  questions detection cannot answer, because `detectBytes` reads bytes. This was
+  the one parity gap left in the NodeJS binding: Python had
+  `FileKind.description`, `.mime` and `.extension` since 0.4.0 and JavaScript had
+  none of them, and its README said so under a heading called "Two things this
+  binding does not do". It does not any more.
+* **All three answer `null` rather than a guess,** for the same reason and with the
+  same 16 formats the other bindings report: a MIME type is served to a browser,
+  and an invented one is indistinguishable from a real one at the point it does
+  harm. The `application/octet-stream` fallback is the caller's to write, where it
+  is visible.
+* **An unknown format name throws** — a `RangeError` for a string that is not one
+  of the 114, a `TypeError` for a value that is not a string — rather than
+  answering `undefined`, which would be ambiguous between "not a format we know"
+  and "a format with no registered type". Only the first is a caller error.
+
+**`formats.json` is now the only place a format's metadata is written down.**
+
+The values were in three places and a value that appeared in two of them was
+checked by a person:
+
+* `mime`, `extension` and a short token were a PowerShell hashtable at the top of
+  `scripts/gen_kinds.ps1`.
+* Display names were the first column of the markdown tables in `readme.md`, which
+  the generator parsed back out. That is a table with its own parser, and the
+  parser is where the bugs would have been.
+* The names and their order were parsed out of `pub enum FileKind`.
+
+`formats.json` at the repository root holds all of it now, and two scripts generate
+from it: `scripts/gen_kinds.ps1` for the Rust and Python metadata,
+`scripts/gen_formats.mjs` for the JavaScript and TypeScript tables. JSON because
+`JSON.parse` is in Node, `json` is in Python's standard library, and the Rust side
+never parses it at all — it is generated *from* it, so `no_std` and the zero
+dependencies are untouched.
+
+Every field in the file is read by a generator and checked by a test. The magic
+bytes are deliberately *not* in it: they are facts about the formats rather than
+metadata about this project's table, they stay in the readme, and
+`tests/readme_coverage.rs` checks them against the `SIGNATURE_KIND` code that
+matches on them.
+
+`abi_order` is the exception that proves the rule. It is the position of a variant
+in the enum, which is a fact about code rather than about a format, so it was read
+out of the declaration and written into the dataset rather than typed into it. It
+is also the JavaScript side's ABI, so the generator refuses to emit anything if it
+is not a permutation of `0..113`.
+
+**What changed and what did not:**
+
+* `_kinds.js` and `_kinds.d.ts` gained three tables and a fourth export. Every
+  existing line of both files is byte-identical except the header comment.
+* `kinds_meta.rs` and `magical_py/_kinds.py` are unchanged except their header
+  comments. The dataset reproduces the old output exactly, which is the check that
+  the migration moved a value rather than rewriting it.
+* `scripts/gen_kinds.ps1` lost its hashtable and its readme parser. Its emitted
+  text is the same.
+* `bindings/nodejs/scripts/gen_kinds.mjs` is gone, replaced by
+  `scripts/gen_formats.mjs`, which reads the dataset instead of the enum.
+* New: `crates/magical_rs/tests/dataset.rs` (6 tests) checks the dataset against
+  `SIGNATURE_KIND`, against the metadata generated from it, and against the
+  readme. `bindings/nodejs/test/meta.test.js` (11 tests) checks the JavaScript
+  tables and the three new functions. `bindings/nodejs/test/gen.test.js` (7 tests)
+  checks the line-ending helpers, which exist because this repository is CRLF on a
+  Windows checkout and LF in CI.
+* Both binding workflows now watch `formats.json`, since editing it regenerates
+  both bindings and would otherwise not run either gate.
 
 ## `magical-py`: Version 0.4.0
 **What has been changed:**

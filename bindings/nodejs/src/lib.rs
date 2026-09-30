@@ -37,6 +37,13 @@
 //! API rather than a port, so this binding covers levels 1 and 2 and the
 //! README says so plainly.
 
+// The same lint groups the library crate and the CLI crate deny, so the binding
+// is held to one bar and a stricter standard never drifts in one direction.
+// `bindings/nodejs/scripts/gates.sh` also passes them on the clippy command
+// line; the attribute is here so that `cargo build` alone is enough, and so that
+// the two cannot disagree about which lints are on.
+#![deny(clippy::pedantic, clippy::all, clippy::nursery, clippy::perf)]
+
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::sync::OnceLock;

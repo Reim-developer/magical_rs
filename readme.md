@@ -588,7 +588,7 @@ Windows, so the published shape is checked rather than assumed.
 ## Development
 
 The repository is a cargo workspace. `crates/magical_rs` is the library this
-readme documents, `crates/magical-file` is the `file` command, and the two
+readme documents, and the two
 bindings under `bindings/` and the examples under `examples/` are separate
 workspaces of their own, which is why the root manifest has an `exclude` list.
 
@@ -608,16 +608,13 @@ make linter      # clippy with --all-targets --all-features
 make fmt         # rustfmt --check
 ```
 
-Verify `no_std` still holds. Scoped to the library with `-p`, because
-`magical-file` is a filesystem program and neither `std::env` nor `std::fs`
-exists on a bare-metal target:
+Verify `no_std` still holds:
 
 ```bash
 cargo build -p magical_rs --no-default-features --target thumbv7em-none-eabi
 ```
 
-And that the WebAssembly claim in the first paragraph still holds, which is
-about the library for the same reason:
+And that the WebAssembly claim in the first paragraph still holds:
 
 ```bash
 cargo build -p magical_rs --target wasm32-unknown-unknown

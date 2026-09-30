@@ -18,6 +18,13 @@
 //!
 //! [`magical_rs`]: https://docs.rs/magical_rs
 
+// The same lint groups the library crate and the CLI crate deny, so the binding
+// is held to one bar and a stricter standard never drifts in one direction.
+// `scripts/gates.sh` also passes them on the clippy command line; the attribute
+// is here so that `cargo build` alone is enough, and so that the two cannot
+// disagree about which lints are on.
+#![deny(clippy::pedantic, clippy::all, clippy::nursery, clippy::perf)]
+
 use {
     magical_rs::magical::{
         bytes_read::{

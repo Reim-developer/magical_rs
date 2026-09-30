@@ -1,12 +1,13 @@
-// magical-js — JavaScript and TypeScript bindings for `magical_rs`.
+// @reim-developer/magical-js - JavaScript and TypeScript bindings for `magical_rs`.
 //
 // This file is the package's whole public surface, and it is a barrel on purpose.
 // Every name below is re-exported from exactly one internal module, so the shape
 // of the package is decided here and nowhere else: `_kinds.js` is generated,
-// `_wasm.js` is the memory ABI, `_signatures.js` decodes the table, and
-// `_levels.js` is the API. None of those four is imported by name from outside —
-// not by a test, not by the README's examples — so a change inside one of them
-// is invisible from out here, which is what makes the barrel worth having.
+// `_wasm.js` is the memory ABI, `_signatures.js` decodes the table, `_meta.js` is
+// the format metadata, and `_levels.js` is the API. None of those five is imported
+// by name from outside — not by a test, not by the README's examples — so a change
+// inside one of them is invisible from out here, which is what makes the barrel
+// worth having.
 //
 // The types are hand-written in `index.d.ts`, and the generics there are the
 // point of this binding: `describe("Png").kind` is typed `"Png"`, and
@@ -18,6 +19,8 @@
 // approximation.
 
 export { FileKind } from "./_kinds.js";
+
+export { displayName, extension, mime } from "./_meta.js";
 
 export {
   DEFAULT_MAX_BYTES_READ,

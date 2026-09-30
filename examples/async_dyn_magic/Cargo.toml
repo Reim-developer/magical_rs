@@ -9,4 +9,4 @@ edition = "2024"
 # But anyway, you can use any runtime.
 # I recommend `tokio`.
 async-std = { version = "1.13.1", features = ["attributes"] }
-magical_rs = { path = "../../", features = ["magical_async_dyn"] }
+magical_rs = { path = "../../crates/magical_rs", features = ["magical_async_dyn"] }

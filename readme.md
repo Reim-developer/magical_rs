@@ -37,11 +37,11 @@ Not writing Rust or Python? There are JavaScript and TypeScript bindings, shippe
 as a 42 KB WebAssembly module with hand-written generics:
 
 ```bash
-npm install magical-js
+npm install @reim-developer/magical-js
 ```
 
 ```ts
-import { detectPath, matchTypes } from "magical-js";
+import { detectPath, matchTypes } from "@reim-developer/magical-js";
 
 detectPath("photo.png");                   // "Png", not a Promise
 
@@ -333,7 +333,7 @@ from both sides.
 The [bindings README](https://github.com/Reim-developer/magical_rs/tree/master/bindings/python#detection-levels)
 sets out what each level costs in Python and when to reach for it.
 
-### The same levels in `magical-js`
+### The same levels in `@reim-developer/magical-js`
 
 The `NodeJS` bindings carry levels 1 and 2, and the reason the other three are
 missing is structural rather than a matter of effort: a level 3 or 4 predicate is
@@ -345,13 +345,37 @@ two levels on purpose rather than by omission.
 
 Level 5 has no meaning at all: it hands out `magic_rs` pointers, and there is no
 `magic_rs` address space on the other side of a `WebAssembly.Instance`. The Rust
-in [`bindings/nodejs`](bindings/nodejs) does offer it, to Rust callers, because
-that crate is built as an `rlib` as well as a `cdylib`.
+in [`bindings/asm`](bindings/asm) does offer it, to Rust callers, because that
+crate is built as an `rlib` as well as a `cdylib`.
+
+It lives beside the package rather than inside it. The module's Rust and the
+package's JavaScript change for different reasons and are versioned apart — the
+crate says `0.1.0` and is published nowhere, while the npm package has its own
+version and its own release workflow — and one crate for both would tie two version
+numbers together for no benefit. What they cannot be apart is the module and the
+loader that instantiates it, so `bindings/nodejs/scripts/build.mjs` builds the
+crate, copies the artifact in, and verifies it; that copy is the only thing that
+crosses between the two directories.
 
 The two predicate formats the crate has — `ScriptExecute` and `WEBP` — are
 reported and matched correctly, because their predicates are compiled *into* the
 module and called from inside it. What cannot cross the boundary is a predicate
 written in JavaScript.
+
+### Metadata across all three
+
+`FileKind::display_name`, `FileKind::mime` and `FileKind::extension` on the Rust
+side, `FileKind.description`, `.mime` and `.extension` on the Python side, and
+`displayName`, `mime` and `extension` on the JavaScript side, all answer from one
+table: [`formats.json`](https://github.com/Reim-developer/magical_rs/blob/master/formats.json)
+at the repository root. It is generated into each language, so a format cannot be
+`image/png` in Rust and something else in JavaScript.
+
+A format with no verified MIME type or extension answers `None`, `None` and `null`
+respectively. Nothing is invented: a MIME type is served to a browser, and an
+invented one is indistinguishable from a real one at the point it does harm. The
+fallback — `application/octet-stream`, or no extension at all — is a decision the
+caller makes where the decision is visible.
 
 ## Feature flags
 
@@ -368,8 +392,22 @@ Building with `--no-default-features` gives a `no_std` library with only levels
 ## Supported formats
 
 Magic bytes and offsets below are read directly from `SIGNATURE_KIND` in
-[`src/magical/signatures.rs`](https://github.com/Reim-developer/magical_rs/blob/master/src/magical/signatures.rs).
+[`crates/magical_rs/src/magical/signatures.rs`](https://github.com/Reim-developer/magical_rs/blob/master/crates/magical_rs/src/magical/signatures.rs).
 "Offset" is the byte position the magic is compared at.
+
+The format names in this section come from
+[`formats.json`](https://github.com/Reim-developer/magical_rs/blob/master/formats.json),
+which is the one place a format's display name, MIME type and extension is
+written down — the same table that generates the Rust `FileKind::mime`, the
+Python `FileKind.mime` and the JavaScript `mime()`.
+[`crates/magical_rs/tests/dataset.rs`](https://github.com/Reim-developer/magical_rs/blob/master/crates/magical_rs/tests/dataset.rs)
+checks the names below against it, so a format cannot be documented with one name
+and detected with another.
+
+The magic bytes are hand-written here rather than generated, because they are
+facts about the formats rather than metadata about this project's table, and
+[`crates/magical_rs/tests/readme_coverage.rs`](https://github.com/Reim-developer/magical_rs/blob/master/crates/magical_rs/tests/readme_coverage.rs)
+checks them against the `SIGNATURE_KIND` code that matches on them.
 
 | Format | `FileKind` | Magic | Offset |
 | --- | --- | --- | --- |
@@ -424,10 +462,10 @@ Magic bytes and offsets below are read directly from `SIGNATURE_KIND` in
 
 Two entries are not matched by a byte signature alone. WebP uses a dedicated
 function in
-[`src/magical/ext_fn/webp.rs`](https://github.com/Reim-developer/magical_rs/blob/master/src/magical/ext_fn/webp.rs)
+[`crates/magical_rs/src/magical/ext_fn/webp.rs`](https://github.com/Reim-developer/magical_rs/blob/master/crates/magical_rs/src/magical/ext_fn/webp.rs)
 because the format requires checking the `RIFF` header and the file size field
 together. Shebangs use
-[`src/magical/ext_fn/shebang.rs`](https://github.com/Reim-developer/magical_rs/blob/master/src/magical/ext_fn/shebang.rs)
+[`crates/magical_rs/src/magical/ext_fn/shebang.rs`](https://github.com/Reim-developer/magical_rs/blob/master/crates/magical_rs/src/magical/ext_fn/shebang.rs)
 to require a path separator, which is what separates `#!/bin/sh` from the
 `#!AMR` audio header.
 
@@ -441,7 +479,7 @@ rule.
 ### Extended formats
 
 Added in `0.5.0` and `0.6.0`, defined in
-[`src/magical/signatures_ext.rs`](https://github.com/Reim-developer/magical_rs/blob/master/src/magical/signatures_ext.rs).
+[`crates/magical_rs/src/magical/signatures_ext.rs`](https://github.com/Reim-developer/magical_rs/blob/master/crates/magical_rs/src/magical/signatures_ext.rs).
 
 **Archives and compression**
 
@@ -578,7 +616,7 @@ failure to read the file. Their
 [detection levels](https://github.com/Reim-developer/magical_rs/tree/master/bindings/python#detection-levels)
 section covers levels 2, 3 and 4, the custom rules, and what each one costs.
 
-The [`magical-js`](https://github.com/Reim-developer/magical_rs/tree/master/bindings/nodejs)
+The [`@reim-developer/magical-js`](https://github.com/Reim-developer/magical_rs/tree/master/bindings/nodejs)
 bindings have no `examples/` directory, because everything in
 [`bindings/nodejs/README.md`](https://github.com/Reim-developer/magical_rs/tree/master/bindings/nodejs)
 is four lines long and the README is the example. The [workflow](.github/workflows/nodejs_bindings.yml)
@@ -587,6 +625,26 @@ Windows, so the published shape is checked rather than assumed.
 
 ## Development
 
+The repository is a cargo workspace. `crates/magical_rs` is the library this
+readme documents, and everything under `bindings/` and `examples/` is outside it,
+which is why the root manifest has an `exclude` list.
+
+`bindings/` holds three crates that share no lockfile and no toolchain:
+
+| Directory | What it is | Published as |
+| --- | --- | --- |
+| `bindings/python` | `PyO3` extension and `magical_py` | a wheel, on `PyPI` |
+| `bindings/asm` | the `wasm32-unknown-unknown` `cdylib` | nothing — `publish = false` |
+| `bindings/nodejs` | the loader, the API and the tests | `@reim-developer/magical-js` on npm |
+
+`bindings/asm` is the module the npm package loads. It is a sibling of the package
+rather than part of it: the two are versioned apart, and only
+`bindings/nodejs/scripts/build.mjs` crosses between them, compiling the crate,
+copying `magical_js.wasm` in and verifying it. Splitting them into two *npm
+packages* would be a mistake for the opposite reason — the memory ABI is a contract
+between the loader and the module, and version skew there fails at `import()` in a
+caller's project rather than at install time.
+
 ```bash
 cargo build
 cargo test
@@ -594,30 +652,92 @@ cargo test --all-features
 cargo clippy --all-targets --all-features -- -D warnings
 ```
 
+Or through the `Makefile`, which is what CI runs, so a local run and a CI run
+cannot disagree about what green means:
+
+```bash
+make test        # cargo test, over the whole workspace
+make linter      # clippy with --all-targets --all-features
+make fmt         # rustfmt --check
+```
+
 Verify `no_std` still holds:
 
 ```bash
-cargo build --no-default-features --target thumbv7em-none-eabi
+cargo build -p magical_rs --no-default-features --target thumbv7em-none-eabi
 ```
 
 And that the WebAssembly claim in the first paragraph still holds:
 
 ```bash
-cargo build --target wasm32-unknown-unknown
+cargo build -p magical_rs --target wasm32-unknown-unknown
 ```
 
-The `NodeJS` bindings have their own gate, which also needs
+`make examples` runs every crate under `examples/`. They are run rather than
+built because `cargo test` at the root does not reach them, and an example that
+compiles and is wrong is invisible to a build.
+
+The Python bindings have their own gate:
+
+```bash
+bash ./scripts/gates.sh
+```
+
+The `NodeJS` bindings have one too, which also needs
 `rustup target add wasm32-unknown-unknown`:
 
 ```bash
 bash ./bindings/nodejs/scripts/gates.sh
 ```
 
-It regenerates the format list from `pub enum FileKind`, runs the binding's own
-Rust tests, builds the module and checks it declares no imports, type-checks the
-hand-written declarations, runs the test suite, then runs rustfmt and clippy. The
-root `Cargo.toml` has no `[workspace]`, so `make fmt` and `make linter` cannot
-see this crate — this script is the only thing that holds it to the same bar.
+It regenerates the format tables from `formats.json`, runs the binding's own Rust
+tests, builds the module and checks it declares no imports, type-checks the
+hand-written declarations, runs the test suite, then runs rustfmt and clippy.
+
+Three tests exist because the layout above is a thing that can drift, and none of
+the drift is caught by a build:
+
+- `crates/magical_rs/tests/workspace.rs` checks that every crate under
+  `bindings/` and `examples/` is named in `exclude`, and that each one reaches
+  the library at its new home. An unlisted crate fails to build *on its own*,
+  and not from `cargo test` at the root, which never looks at it.
+- `crates/magical_rs/tests/packaging.rs` checks the copies of `LICENSE` and
+  `CHANGELOG.md` that sit beside the crate's manifest. Cargo will not package a
+  file from outside the package — `include = ["../../LICENSE"]` is silently
+  ignored, while `readme = "../../readme.md"` works — so those two are copied
+  and this test is what keeps the copies honest.
+- `crates/magical_rs/tests/dataset.rs` checks `formats.json` against this readme,
+  against `SIGNATURE_KIND` and against the metadata generated from it.
+
+## One dataset, three languages
+
+`formats.json` at the repository root is the only place a format's display name,
+short token, MIME type and extension are written down. It used to be three: a
+hashtable in `scripts/gen_kinds.ps1`, a column of markdown tables in this readme,
+and a name list parsed out of `pub enum FileKind`. A value that appeared in two of
+them was checked by hand, which is a check nobody performs.
+
+Two scripts read it, and neither is a third source of truth:
+
+| Script | Writes | Run by |
+| --- | --- | --- |
+| `scripts/gen_kinds.ps1` | `kinds_meta.rs`, `magical_py/_kinds.py` | `npm run gen` in the Python binding, by hand otherwise |
+| `scripts/gen_formats.mjs` | `_kinds.js`, `_kinds.d.ts` | `npm run gen` in the `NodeJS` binding, and its gate |
+
+`abi_order` is the exception that proves the rule. It is the position of a variant
+in `pub enum FileKind`, which is a fact about code rather than about a format, so it
+is *read out of the declaration* by `scripts/build_formats.mjs` rather than typed
+into the dataset by hand. It is also the JavaScript side's ABI — a kind crosses the
+wasm boundary as its Rust discriminant — and `test/kinds.test.js` checks all 114
+against what the compiled module reports.
+
+The magic bytes stay in this readme rather than moving into the dataset, because
+they are facts about the formats rather than metadata about this project's table.
+`tests/readme_coverage.rs` checks them against the `SIGNATURE_KIND` code that
+matches on them, so the bytes are verified against the matcher and the names
+against the dataset. `tests/dataset.rs` then checks the two against each other, so
+a format cannot be documented with one name and detected with another.
+
 
 ## License
 

@@ -84,7 +84,7 @@ function instantiate() {
     bytes = readFileSync(fileURLToPath(url));
   } catch (cause) {
     throw new Error(
-      `magical-js: cannot read ${url.href}.\n` +
+      `@reim-developer/magical-js: cannot read ${url.href}.\n` +
         "The compiled module is built by `npm run build` and shipped inside the\n" +
         "package. If you are running from a source checkout, build it first; if you\n" +
         "installed from npm, this is a corrupt install and reinstalling will fix it.",
@@ -95,7 +95,7 @@ function instantiate() {
   try {
     return new WebAssembly.Instance(new WebAssembly.Module(bytes), {});
   } catch (cause) {
-    throw new Error(`magical-js: the WebAssembly module did not compile: ${cause.message}`, {
+    throw new Error(`@reim-developer/magical-js: the WebAssembly module did not compile: ${cause.message}`, {
       cause,
     });
   }

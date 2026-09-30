@@ -1,15 +1,24 @@
-﻿# Regenerates bindings/python/python/magical_py/_kinds.py.
+# Regenerates the Rust and Python format metadata.
 #
-# The enum is emitted as static Python source rather than built with a
-# functional `Enum(...)` call, because pyright resolves members of a
-# functional enum as `Unknown` and strict mode would then reject every
-# `FileKind.X` reference. Static members also give real IDE completion and
-# real docstrings in `help(FileKind)`.
+#   crates/magical_rs/src/magical/kinds_meta.rs
+#   bindings/python/python/magical_py/_kinds.py
 #
-# Display names come from the format tables in readme.md, which
-# tests/readme_coverage.rs already checks against the Rust detection table,
-# so a format added on the Rust side without a matching row here fails the
-# build rather than shipping a gap.
+# Both are generated from `formats.json`, which is the one place a format's
+# short name, display name, MIME type and extension are written down. It was not
+# always that way: the MIME types and extensions lived in a hashtable at the top
+# of this script and the display names were parsed back out of the markdown
+# tables in readme.md, so the same value was written down twice and a format
+# added on the Rust side needed a hand-edited row here to match.
+#
+# The magic bytes are still not in the dataset, because they are not metadata:
+# they are facts about the formats, and `crates/magical_rs/tests/readme_coverage.rs`
+# checks the readme against `SIGNATURE_KIND` -- so the bytes are verified against
+# the code that matches on them, and the names are verified against formats.json.
+#
+# `abi_order` is read out of `pub enum FileKind` when the dataset is built (see
+# scripts/build_formats.mjs) rather than here, because it is the position in a
+# declaration rather than a fact about a format. The check below that it is a
+# permutation of 0..113 is what keeps a hand-edited renumbering from shipping.
 #
 # The repository root, resolved from this script's own location. Everything
 # below reads a relative path from here, so hard-coding an absolute path meant
@@ -18,161 +27,90 @@
 $repoRoot = Resolve-Path (Join-Path $PSScriptRoot '..')
 Set-Location $repoRoot
 
-# Variant -> value, mime, extension.
+# --- read the dataset --------------------------------------------------------
+
+$datasetPath = Join-Path $repoRoot 'formats.json'
+if (-not (Test-Path -LiteralPath $datasetPath)) {
+    throw "formats.json is missing. It is the source of truth for this script; nothing else is."
+}
+$dataset = Get-Content -Raw -LiteralPath $datasetPath | ConvertFrom-Json
+
+# Pinned because every generated file and every test states the count, so a
+# silent 115 has to take a deliberate edit rather than arrive by being one line
+# longer in a data file.
+$expected = 114
+if ($dataset.formats.Count -ne $expected) {
+    throw ('formats.json has {0} formats, expected {1}' -f $dataset.formats.Count, $expected)
+}
+
+# variant -> (token, mime, extension)
 # A null mime or extension means "no registered or verified value", not
 # "invented". A wrong MIME type is a documentation bug of the same kind as a
 # wrong magic byte, and this project does not ship those.
-$data = @{
-    '_8BPS'                             = @('psd',   'image/vnd.adobe.photoshop', 'psd')
-    'AceCompressed'                     = @('ace',   $null,                        $null)
-    'Aiff'                              = @('aiff',  'audio/aiff',                 'aiff')
-    'Amr'                               = @('amr',   'audio/amr',                  'amr')
-    'AppleDiskImage'                    = @('dmg',   'application/x-apple-diskimage', 'dmg')
-    'AppleIconImage'                    = @('icns',  'image/icns',                 'icns')
-    'Arj'                               = @('arj',   'application/x-arj',          'arj')
-    'Asf'                               = @('asf',   'video/x-ms-asf',             'asf')
-    'AuAudioFileFormat'                 = @('au',    'audio/basic',                'au')
-    'Avro'                              = @('avro',  'application/avro',           'avro')
-    'BinaryPlist'                       = @('bplist', 'application/x-bplist',      'bplist')
-    'Bitmap'                            = @('bmp',   'image/bmp',                  'bmp')
-    'BitTorrent'                        = @('torrent', 'application/x-bittorrent', 'torrent')
-    'BLENDER'                           = @('blend', 'application/x-blender',      'blend')
-    'Bzip'                              = @('bz2',   'application/x-bzip2',        'bz2')
-    'Cabinet'                           = @('cab',   'application/vnd.ms-cab-compressed', 'cab')
-    'Chm'                               = @('chm',   'application/vnd.ms-htmlhelp', 'chm')
-    'Class'                             = @('class', 'application/java-vm',        'class')
-    'CoreAudio'                         = @('caf',   'audio/x-caf',                'caf')
-    'Cpio'                              = @('cpio',  'application/x-cpio',         'cpio')
-    'CreativeVoiceFile'                 = @('voc',   'audio/x-voc',                'voc')
-    'Cursor'                            = @('cur',   'image/x-icon',               'cur')
-    'Dalvik'                            = @('dex',   'application/vnd.android.dex', 'dex')
-    'Dds'                               = @('dds',   'image/vnd-ms.dds',           'dds')
-    'Deb'                               = @('deb',   'application/vnd.debian.binary-package', 'deb')
-    'Djvu'                              = @('djvu',  'image/vnd.djvu',             'djvu')
-    'DoomWad'                           = @('wad',   'application/x-doom-wad',     'wad')
-    'ELF'                               = @('elf',   $null,                        $null)
-    'FbxBinary'                         = @('fbx',   $null,                        'fbx')
-    'Fits'                              = @('fits',  'image/fits',                 'fits')
-    'Flac'                              = @('flac',  'audio/flac',                 'flac')
-    'FlashVideo'                        = @('flv',   'video/x-flv',                'flv')
-    'FontCollection'                    = @('ttc',   'font/collection',            'ttc')
-    'Gguf'                              = @('gguf',  $null,                        'gguf')
-    'GIF'                               = @('gif',   'image/gif',                  'gif')
-    'GimpXcf'                           = @('xcf',   'image/x-xcf',                'xcf')
-    'GltfBinary'                        = @('glb',   'model/gltf-binary',          'glb')
-    'GoogleChromeExtension'             = @('crx',   'application/x-chrome-extension', 'crx')
-    'Gzip'                              = @('gz',    'application/gzip',           'gz')
-    'Hdf5'                              = @('h5',    'application/x-hdf5',         'h5')
-    'ICO'                               = @('ico',   'image/x-icon',               'ico')
-    'ISO'                               = @('iso',   'application/x-iso9660-image', 'iso')
-    'IsoMedia'                          = @('mp4',   'video/mp4',                  'mp4')
-    'JPEG2000'                          = @('jp2',   'image/jp2',                  'jp2')
-    'JpegXl'                            = @('jxl',   'image/jxl',                  'jxl')
-    'Jpg'                               = @('jpg',   'image/jpeg',                 'jpg')
-    'Ktx'                               = @('ktx',   'image/ktx',                  'ktx')
-    'Ktx2'                              = @('ktx2',  'image/ktx2',                 'ktx2')
-    'Lua'                               = @('luac',  'application/x-lua-bytecode', 'luac')
-    'Lz4'                               = @('lz4',   'application/x-lz4',          'lz4')
-    'Lzh'                               = @('lzh',   'application/x-lzh-compressed', 'lzh')
-    'MachO'                             = @('macho', $null,                        $null)
-    'Matlab'                            = @('mat',   'application/x-matlab-data',  'mat')
-    'MatroskaMediaContainer'            = @('mkv',   'video/x-matroska',           'mkv')
-    'Midi'                              = @('mid',   'audio/midi',                 'mid')
-    'Mobipocket'                        = @('mobi',  'application/x-mobipocket-ebook', 'mobi')
-    'ModuleForEvenvironmentModules'     = @('module', $null,                       $null)
-    'MonkeyAudio'                       = @('ape',   'audio/x-monkeys-audio',      'ape')
-    'MP3'                               = @('mp3',   'audio/mpeg',                 'mp3')
-    'MpegProgramStream'                 = @('mpg',   'video/mpeg',                 'mpg')
-    'MSDOS'                             = @('exe',   'application/vnd.microsoft.portable-executable', 'exe')
-    'NoodlesoftHazel'                   = @('hazel', $null,                        $null)
-    'Numpy'                             = @('npy',   $null,                        'npy')
-    'OGG'                               = @('ogg',   'audio/ogg',                  'ogg')
-    'OleCompoundFile'                   = @('ole',   $null,                        $null)
-    'OpenExr'                           = @('exr',   'image/x-exr',                'exr')
-    'OpenGLIrisPerformer'               = @('iv',    $null,                        $null)
-    'OpenTypeFont'                      = @('otf',   'font/otf',                   'otf')
-    'Orc'                               = @('orc',   'application/vnd.apache.orc',  'orc')
-    'Par2'                              = @('par2',  'application/x-par2',          'par2')
-    'Parquet'                           = @('parquet', 'application/vnd.apache.parquet', 'parquet')
-    'Pcap'                              = @('pcap',  'application/vnd.tcpdump.pcap', 'pcap')
-    'PcapNg'                            = @('pcapng', 'application/x-pcapng',       'pcapng')
-    'Pcx'                               = @('pcx',   'image/x-pcx',                'pcx')
-    'PDF'                               = @('pdf',   'application/pdf',            'pdf')
-    'PhotoCapTemplate'                  = @('pct',   $null,                        'pct')
-    'Pickle'                            = @('pickle', $null,                       $null)
-    'PkgZip'                            = @('zip',   'application/zip',            'zip')
-    'Ply'                               = @('ply',   'text/x-ply',                 'ply')
-    'Png'                               = @('png',   'image/png',                  'png')
-    'PostScript'                        = @('ps',    'application/postscript',      'ps')
-    'Qcow'                              = @('qcow',  'application/x-qemu-qcow',     'qcow')
-    'Qcow2'                             = @('qcow2', 'application/x-qemu-qcow',     'qcow2')
-    'Radiance'                          = @('hdr',   'image/vnd.radiance',         'hdr')
-    'RAR'                               = @('rar',   'application/vnd.rar',        'rar')
-    'RData'                             = @('rdata', 'application/x-r-data',      'rdata')
-    'RichTextFormat'                    = @('rtf',   'application/rtf',            'rtf')
-    'RPM'                               = @('rpm',   'application/x-rpm',          'rpm')
-    'ScriptExecute'                     = @('script', $null,                       $null)
-    'SerializedJavaData'                = @('ser',   $null,                        $null)
-    'SevenZip'                          = @('7z',    'application/x-7z-compressed', '7z')
-    'Slob'                              = @('slob',  $null,                        'slob')
-    'SQLite'                            = @('sqlite', 'application/vnd.sqlite3',   'sqlite')
-    'Stuffit'                           = @('stuffit', 'application/x-stuffit',     'sit')
-    'StuffitSit'                        = @('sit',   'application/x-stuffit',      'sit')
-    'Swf'                               = @('swf',   'application/x-shockwave-flash', 'swf')
-    'Tar'                               = @('tar',   'application/x-tar',          'tar')
-    'Tiff'                              = @('tiff',  'image/tiff',                 'tiff')
-    'TrueTypeFont'                      = @('ttf',   'font/ttf',                   'ttf')
-    'VBScriptEncoded'                   = @('vbe',   'text/x-vbscript',            'vbe')
-    'VirtualBoxVdi'                     = @('vdi',   'application/x-vdi',          'vdi')
-    'VirtualHd'                         = @('vhd',   'application/x-vhd',          'vhd')
-    'Vmdk'                              = @('vmdk',  'application/x-vmdk',         'vmdk')
-    'WASM'                              = @('wasm',  'application/wasm',           'wasm')
-    'WavPack'                           = @('wv',    'audio/x-wavpack',            'wv')
-    'WEBP'                              = @('webp',  'image/webp',                 'webp')
-    'WindowImagingFormat'               = @('wim',   'application/x-ms-wim',       'wim')
-    'WindowsShortcut'                   = @('lnk',   'application/x-ms-shortcut',  'lnk')
-    'Woff'                              = @('woff',  'font/woff',                  'woff')
-    'Woff2'                             = @('woff2', 'font/woff2',                 'woff2')
-    'XML'                               = @('xml',   'application/xml',            'xml')
-    'Xz'                                = @('xz',    'application/x-xz',           'xz')
-    'Zlib'                              = @('zlib',  $null,                        $null)
-    'Zstd'                              = @('zst',   'application/zstd',           'zst')
-}
+$data = @{}
 
-# --- read the display names out of the format tables -----------------------
-
+# variant -> display name
 $names = @{}
-foreach ($line in Get-Content 'readme.md') {
-    $cells = $line.Split('|') | ForEach-Object { $_.Trim() }
-    if ($cells.Count -eq 6 -and $cells[1]) {
-        $offsets = $cells[4].Split(',') | ForEach-Object { $_.Trim() }
-        if ($offsets.Count -gt 0 -and -not ($offsets | Where-Object { $_ -notmatch '^\d+$' })) {
-            $variant = $cells[2].Trim('`')
-            if ($variant -and $variant -match '^[A-Za-z_][A-Za-z0-9_]*$') {
-                $names[$variant] = ($cells[1] -replace '`', '')
-            }
+
+# abi_order -> variant, so the positions can be checked as a permutation.
+# Keyed by text because `ConvertFrom-Json` hands back `Int64` and the loop below
+# counts with `Int32`, and a PowerShell hashtable treats those as different keys.
+$abi = @{}
+
+foreach ($format in $dataset.formats) {
+    $variant = $format.variant
+    if (-not $variant -or $variant -notmatch '^[A-Za-z_][A-Za-z0-9_]*$') {
+        throw ('{0} is not a Rust identifier, and `variant` is the name of the enum member' -f $variant)
+    }
+    if ($data.ContainsKey($variant)) { throw "two formats are both $variant" }
+    if ($names.ContainsKey($variant)) { throw "two formats are both $variant" }
+
+    foreach ($field in @('token', 'name')) {
+        $value = $format.$field
+        if (-not $value -or -not ($value -is [string])) { throw "$variant has no $field" }
+    }
+
+    # The two nullable fields have to be *present*. `$null` is a real answer --
+    # "no registered MIME type" -- and a missing key would produce the same
+    # `$null` here while meaning something different, so the difference is
+    # checked rather than inferred from the value.
+    foreach ($field in @('mime', 'extension')) {
+        if (-not $format.PSObject.Properties.Name.Contains($field)) {
+            throw "$variant has no $field key; use null for none"
+        }
+        $value = $format.$field
+        if ($null -ne $value -and -not ($value -is [string] -and $value.Length -gt 0)) {
+            throw "$variant.$field is neither a non-empty string nor null"
         }
     }
+
+    $order = $format.abi_order
+    if (-not ($order -is [int] -or $order -is [long])) {
+        throw "$variant has no numeric abi_order"
+    }
+    $key = [string]$order
+    if ($abi.ContainsKey($key)) {
+        throw ('abi_order {0} is both {1} and {2}' -f $order, $abi[$key], $variant)
+    }
+
+    $abi[$key] = $variant
+    $data[$variant] = @($format.token, $format.mime, $format.extension)
+    $names[$variant] = $format.name
 }
 
-# --- cross-check the two tables before emitting anything --------------------
-
-if ($names.Count -ne $data.Count) {
-    throw "readme.md has $($names.Count) rows but the metadata table has $($data.Count)"
-}
-foreach ($variant in $names.Keys) {
-    if (-not $data.ContainsKey($variant)) { throw "no metadata for $variant" }
-}
-foreach ($variant in $data.Keys) {
-    if (-not $names.ContainsKey($variant)) { throw "no readme row for $variant" }
+# The positions have to be 0 to n-1 with no gaps, because a kind crosses the wasm
+# boundary as its Rust discriminant: entry N here is what the compiled module
+# reports as N, and a gap would make one name answer for another's index.
+for ($at = 0; $at -lt $dataset.formats.Count; $at++) {
+    if (-not $abi.ContainsKey([string]$at)) { throw "abi_order $at is missing" }
 }
 
-$values = $data.Values | ForEach-Object { $_[0] }
-$duplicates = $values | Group-Object | Where-Object { $_.Count -gt 1 }
+# A duplicate token would silently turn the second enum member into an alias of
+# the first, so the Python enum would have fewer members than the table.
+$tokens = $data.Values | ForEach-Object { $_[0] }
+$duplicates = $tokens | Group-Object | Where-Object { $_.Count -gt 1 }
 if ($duplicates) {
-    # A duplicate value would silently turn the second member into an alias
-    # of the first, so the enum would have fewer members than the table.
-    throw "duplicate enum values: $($duplicates.Name -join ', ')"
+    throw ('duplicate tokens: {0}' -f (($duplicates | ForEach-Object { $_.Name }) -join ', '))
 }
 
 # --- emit -------------------------------------------------------------------
@@ -184,7 +122,8 @@ Emit '"""The :class:`FileKind` enum, one member per detectable file format,'
 Emit ''
 Emit 'and the :class:`Signature` that describes how each one is detected.'
 Emit ''
-Emit 'Generated by ``scripts/gen_kinds.ps1``. Do not edit by hand.'
+Emit 'Generated by ``scripts/gen_kinds.ps1`` from ``formats.json``. Do not edit by'
+Emit 'hand; ``tests/test_metadata.py`` reads the same file back.'
 Emit ''
 Emit '``Signature`` lives here rather than in ``_signatures`` because the two are'
 Emit 'mutually recursive: a ``Signature`` names a ``FileKind``, and a ``FileKind``'
@@ -391,3 +330,207 @@ $out = Join-Path $repoRoot 'bindings\python\python\magical_py\_kinds.py'
 Remove-Item (Join-Path $repoRoot 'bindings\python\python\magical_py\_kinds_data.py') `
     -ErrorAction SilentlyContinue
 Write-Output "wrote $out with $($names.Count) members"
+
+# ---------------------------------------------------------------------------
+# The same table, emitted as Rust.
+#
+# The bindings have their own copies of this metadata because each of them is
+# loaded into a language that cannot call into the library, and a third copy for
+# the library's own Rust users is not a copy at all -- it is the one the other
+# two could have been reading. So it lives here, as inherent methods on
+# `FileKind`, and the library's own tests hold it against `SIGNATURE_KIND`.
+# ---------------------------------------------------------------------------
+
+# Rust string literals, escaped. PowerShell has no backslash escape, so a `"\""`
+# here would emit two characters rather than one, and a display name containing
+# a quote would produce a file that does not parse. None of the 114 names do,
+# which is exactly why a name starting with one would not be noticed.
+function Escape-RustString([string]$value) {
+    return $value.Replace('\', '\\').Replace('"', '\"')
+}
+
+# `Option<&'static str>`, with `None` for a value the table has none for. A
+# missing MIME type is left missing rather than guessed: this project does not
+# ship a wrong MIME type, and `None` says "not registered" where a guess would
+# say "binary".
+function Emit-RustOption($value) {
+    if ($null -eq $value) { return 'None' }
+    return 'Some("' + (Escape-RustString $value) + '")'
+}
+
+# The order every emitted list uses: by the short value the Python binding
+# carries as its enum value, then by the variant name to break a tie.
+#
+# Defined once because the emitted `ALL_KINDS`, the `meta` arms and the
+# `from_name` arms all have to agree, and a list that is sorted in three places
+# is a list that is sorted in two places the next time someone edits one of them.
+# The short value leads because it is what a reader would sort by: "7z" before
+# "ace" before "amr". The tiebreaker is not decorative -- `Sort-Object` is stable
+# but a Hashtable has no order to be stable *with*, so without it two formats
+# sharing a short value would swap places between runs and every run would
+# rewrite the file.
+$sorted = $names.Keys | Sort-Object { $data[$_][0] }, { $_ }
+
+$rust = [System.Text.StringBuilder]::new()
+function EmitRust([string]$text) { [void]$rust.AppendLine($text) }
+
+EmitRust '//! The name, MIME type and conventional extension of every format.'
+EmitRust '//!'
+EmitRust '//! Generated by `scripts/gen_kinds.ps1` from `formats.json`. Do not edit'
+EmitRust '//! by hand; `tests/kinds_meta.rs` holds it against `SIGNATURE_KIND`.'
+EmitRust '//!'
+EmitRust '//! `formats.json` is the one place a name, a MIME type and an extension are'
+EmitRust '//! written down, for this file and for the Python and JavaScript bindings at'
+EmitRust '//! once. None of them is derivable from magic bytes: `50 4B 03 04` is a zip'
+EmitRust '//! container, and whether that is `application/zip` or'
+EmitRust '//! `application/java-archive` or `application/vnd.android.package-archive` is a'
+EmitRust '//! question about the bytes *inside* it, which is a longer answer than a magic'
+EmitRust '//! number. A wrong MIME type is served to a browser, so the project does not'
+EmitRust '//! ship one: a format with no registered type answers `None` rather than a guess.'
+EmitRust ''
+EmitRust 'use crate::magical::magic::FileKind;'
+EmitRust ''
+EmitRust '/// Every format, in the order the metadata table is sorted.'
+EmitRust '///'
+# The backticks in the two lines below are literal characters in the generated
+# file, and writing them from PowerShell needs a single-quoted string. A
+# double-quoted one eats them: the backtick is PowerShell's escape character,
+# and `` `a `` is the alert escape, so "`ace`" comes out as a BEL followed by
+# "ce" and "`amr`" as "mr". A BEL in a doc comment is invisible in a diff and
+# obvious in the rendered documentation, which is the worst place to find it.
+#
+# `clippy::doc_markdown` then rejects the result for naming `SIGNATURE_KIND`
+# and `7z` without backticks, so the damage is caught -- but the error names
+# the generated file, not the line in this script that caused it.
+EmitRust '/// Sorted by the short name the Python binding uses as its enum value -- `7z`'
+EmitRust '/// before `ace` before `amr` -- and by nothing else. It is deliberately not'
+EmitRust '/// `SIGNATURE_KIND` order, which is the order detection has to try rules in:'
+EmitRust '/// 71 of its 114 entries are out of enum order, so a catalogue built from it'
+EmitRust '/// reads as though something were wrong with the formats near the end. Nor is'
+EmitRust '/// it enum order, which is neither alphabetical nor grouped, and which changed'
+EmitRust '/// meaning last time a format was added in the section it belonged to.'
+EmitRust '///'
+EmitRust '/// A display name, a MIME type or an extension is the stable way to name a'
+EmitRust '/// format in a table, and a list of those is what a reader can scan.'
+# The parentheses are load-bearing and not decoration. Written as
+# `EmitRust 'text' + $count + '] = ['`, PowerShell parses that as the command
+# `EmitRust` with five arguments -- the literal, `+`, the count, `+`, and the
+# tail -- rather than as one concatenated string. The function takes the first
+# and discards the rest, so the emitted line came out as
+# `pub static ALL_KINDS: [FileKind; ` with no length and no `= [`, and the file
+# it produced did not compile. The format operator is here instead of
+# concatenation because it cannot be misparsed that way.
+EmitRust ('pub static ALL_KINDS: [FileKind; {0}] = [' -f $names.Count)
+foreach ($variant in $sorted) {
+    EmitRust "    FileKind::$variant,"
+}
+EmitRust '];'
+EmitRust ''
+EmitRust 'impl FileKind {'
+EmitRust ''
+EmitRust '    /// All four answers at once, in one match.'
+EmitRust '    ///'
+EmitRust '    /// One `match` rather than four, because a 114-arm `match` is a hundred lines'
+EmitRust '    /// long and five of them is five hundred lines of generated code where one'
+EmitRust '    /// would do -- and five places for a `clippy::too_many_lines` allowance to be'
+EmitRust '    /// repeated. Four one-line accessors read the tuple.'
+EmitRust '    ///'
+EmitRust '    /// `clippy::too_many_lines` is allowed rather than avoided because there is no'
+EmitRust '    /// way to avoid it: 114 arms is 116 lines. The alternative is an index into a'
+EmitRust '    /// `static` slice, which trades a lint the tool has a number for a bounds'
+EmitRust '    /// check on every call.'
+EmitRust '    #[allow(clippy::too_many_lines)]'
+EmitRust '    const fn meta(self) -> (&''static str, Option<&''static str>, Option<&''static str>, &''static str) {'
+EmitRust '        match self {'
+foreach ($variant in $sorted) {
+    $display = Escape-RustString $names[$variant]
+    $mime = Emit-RustOption $data[$variant][1]
+    $ext = Emit-RustOption $data[$variant][2]
+    # `Self::` rather than `FileKind::`, because the crate denies
+    # `clippy::use_self` and a pattern arm is still a path.
+    EmitRust "            Self::$variant => (`"$display`", $mime, $ext, `"$variant`"),"
+}
+EmitRust '        }'
+EmitRust '    }'
+EmitRust ''
+EmitRust '    /// The name this format is written with in documentation and in a `file`'
+EmitRust '    /// listing, such as `"PNG"` or `"Zip / JAR / APK"`.'
+EmitRust '    ///'
+EmitRust '    /// `const` because the answer is a literal in the generated body, and a caller'
+EmitRust '    /// building a table of labels at compile time should not have to give that up.'
+EmitRust '    #[must_use]'
+EmitRust '    #[inline]'
+EmitRust '    pub const fn display_name(self) -> &''static str {'
+EmitRust '        self.meta().0'
+EmitRust '    }'
+EmitRust ''
+EmitRust '    /// The registered MIME type, or [`None`] when there is none.'
+EmitRust '    ///'
+EmitRust '    /// [`None`] means "not registered or not verified", never "unknown". A caller'
+EmitRust '    /// that needs an answer should fall back to `application/octet-stream` itself,'
+EmitRust '    /// so the choice stays visible at the call site rather than baked in here.'
+EmitRust '    #[must_use]'
+EmitRust '    #[inline]'
+EmitRust '    pub const fn mime(self) -> Option<&''static str> {'
+EmitRust '        self.meta().1'
+EmitRust '    }'
+EmitRust ''
+EmitRust '    /// The conventional file extension, or [`None`] when there is none.'
+EmitRust '    ///'
+EmitRust '    /// Without a leading dot, and advisory: detection never reads a file name, so a'
+EmitRust '    /// `.jpg` holding a PNG is reported as a PNG. The extension is for choosing'
+EmitRust '    /// what to *write*, which is the one question a magic number cannot answer.'
+EmitRust '    #[must_use]'
+EmitRust '    #[inline]'
+EmitRust '    pub const fn extension(self) -> Option<&''static str> {'
+EmitRust '        self.meta().2'
+EmitRust '    }'
+EmitRust ''
+EmitRust '    /// The name of the enum variant, which is what `format!("{:?}")` prints.'
+EmitRust '    ///'
+EmitRust '    /// Its own method because the two names answer different questions and are not'
+EmitRust '    /// interchangeable: this one is `Png` and [`Self::display_name`] is `"PNG"`,'
+EmitRust '    /// and a caller that wants a stable identifier wants this one.'
+EmitRust '    #[must_use]'
+EmitRust '    #[inline]'
+EmitRust '    pub const fn variant_name(self) -> &''static str {'
+EmitRust '        self.meta().3'
+EmitRust '    }'
+EmitRust ''
+EmitRust '    /// The format whose [`Self::variant_name`] is `name`, or [`None`].'
+EmitRust '    ///'
+EmitRust '    /// Exact and case-sensitive, and that is the point: `Png`, `png` and `PNG` are'
+EmitRust '    /// three spellings and only one is the identifier this crate uses. A loose'
+EmitRust '    /// lookup belongs in whatever parses a command line, where forgiving is right,'
+EmitRust '    /// rather than in the library, where a wrong answer is silent.'
+EmitRust '    ///'
+EmitRust '    /// ```rust'
+EmitRust '    /// use magical_rs::magical::magic::FileKind;'
+EmitRust '    ///'
+EmitRust '    /// assert_eq!(FileKind::from_name("Png"), Some(FileKind::Png));'
+EmitRust '    /// assert_eq!(FileKind::from_name("png"), None);'
+EmitRust '    /// assert_eq!(FileKind::from_name("Nonsense"), None);'
+EmitRust '    /// ```'
+EmitRust '    #[must_use]'
+EmitRust '    #[inline]'
+EmitRust '    // A hundred and fourteen arms, for the reason the meta match gives. Unlike'
+EmitRust '    // that one this could have been a table, but a match on a string compiles'
+EmitRust '    // to a length switch and a memcmp rather than a scan over an array.'
+EmitRust '    #[allow(clippy::too_many_lines)]'
+EmitRust '    pub fn from_name(name: &str) -> Option<Self> {'
+EmitRust '        match name {'
+foreach ($variant in $sorted) {
+    EmitRust "            `"$variant`" => Some(Self::$variant),"
+}
+EmitRust '            _ => None,'
+EmitRust '        }'
+EmitRust '    }'
+EmitRust '}'
+EmitRust ''
+
+$rustOut = Join-Path $repoRoot 'crates\magical_rs\src\magical\kinds_meta.rs'
+[System.IO.File]::WriteAllText(
+    $rustOut,
+    $rust.ToString(),
+    (New-Object System.Text.UTF8Encoding $false))
+Write-Output "wrote $rustOut with $($names.Count) formats"

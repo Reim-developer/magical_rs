@@ -26,6 +26,66 @@ import * as api from "../index.js";
 
 const README = readFileSync(fileURLToPath(new URL("../README.md", import.meta.url)), "utf8");
 const WASM = fileURLToPath(new URL("../magical_js.wasm", import.meta.url));
+const PKG = JSON.parse(
+  readFileSync(fileURLToPath(new URL("../package.json", import.meta.url)), "utf8"),
+);
+
+test("the README says the package's real name, and never an old one", () => {
+  // The name is the one thing in a package that is wrong everywhere at once: the
+  // install line, every import, the headings, and the prefix on 25 error messages.
+  // Nothing about a rename makes any of those fail, so the tests all stay green
+  // over a README that tells people to install a package that does not exist.
+  //
+  // It was not hypothetical. `magical-js` — the name this binding was written with
+  // — is held on npm by a different package that was published and then
+  // unpublished in 2023, so the rename to a scope was forced, and every one of
+  // those places needed changing by hand.
+  assert.equal(PKG.name, "@reim-developer/magical-js");
+
+  // The install line, exactly. `npm i` is not accepted as a synonym here because
+  // the README only uses the long form and a synonym would make the assertion
+  // pass on a line nobody writes.
+  assert.match(README, new RegExp(`^npm install ${escape(PKG.name)}$`, "m"));
+  assert.doesNotMatch(README, /^npm install magical-js$/m);
+
+  // The heading is the name a reader sees first, on npmjs.com and in a file
+  // tree alike.
+  assert.match(README, new RegExp(`^# ${escape(PKG.name)}$`, "m"));
+
+  // Every import in the README resolves to this package, or to a Node builtin.
+  // This is the assertion that would have caught the rename, because an unscoped
+  // import line is a copy-paste that still looks right. Nothing else is allowed
+  // because this README documents one package; if it ever grows an example that
+  // imports a third-party module, this list is where that gets admitted.
+  const specifiers = new Set([...README.matchAll(/from "([^"]+)"/g)].map((m) => m[1]));
+  assert.ok(specifiers.size > 0, "the scan no longer finds any import in the README");
+  for (const specifier of specifiers) {
+    assert.ok(
+      specifier === PKG.name || specifier.startsWith("node:"),
+      `the README imports "${specifier}", which is neither this package nor a builtin`,
+    );
+  }
+
+  // And the error prefix carries the name too, because a message that names
+  // `magical-js` now points at somebody else's package. Checked in both
+  // directions: the scoped prefix is present, and the old unscoped one is gone
+  // from every file that throws.
+  //
+  // The unscoped prefix is a *substring* of the scoped one, so the scoped form is
+  // cut out before the search. Testing `"magical-js: " in source` directly would
+  // pass on a file that had done nothing, and fail on a file that was entirely
+  // correct — the assertion would be about the test rather than the code.
+  const prefix = `${PKG.name}: `;
+  for (const file of ["_levels.js", "_signatures.js", "_wasm.js"]) {
+    const source = readFileSync(fileURLToPath(new URL(`../${file}`, import.meta.url)), "utf8");
+    assert.ok(source.includes(prefix), `${file} no longer prefixes errors with the package name`);
+    const unscoped = source.split(prefix).join("");
+    assert.ok(
+      !unscoped.includes("magical-js: "),
+      `${file} still prefixes errors with the unscoped name, which is another package`,
+    );
+  }
+});
 
 test("the counts the README quotes are the ones the module reports", () => {
   // "114 formats", "114 rows", "114 names", "the 114-way union", "the format
@@ -43,6 +103,7 @@ test("the first example in the README is what it says it is", () => {
   // ```js
   // detectPath("photo.png");          // "Png"
   // describe("Png").signatures[0];    // Uint8Array [137, 80, 78, 71, 13, 10, 26, 10]
+  // mime("Png");                      // "image/png"
   // ```
   //
   // A real file on disk rather than a fixture, because `detectPath` is what the
@@ -61,7 +122,37 @@ test("the first example in the README is what it says it is", () => {
     [...api.describe("Png").signatures[0]],
     [137, 80, 78, 71, 13, 10, 26, 10],
   );
+  assert.equal(api.mime("Png"), "image/png");
   assert.match(README, /detectPath\("photo\.png"\)/);
+  assert.match(README, /mime\("Png"\)\s*;\s*\/\/ "image\/png"/);
+});
+test("the metadata examples in the README are what the tables say", () => {
+  // The "Format metadata" section quotes four answers as comments:
+  //
+  //   displayName("Png")   // "PNG"
+  //   mime("Png")          // "image/png"
+  //   extension("Png")     // "png"
+  //   mime("ELF")          // null
+  //
+  // `ELF` is in there because it is the example that proves the `null`: a reader
+  // who has only seen the first three has not been shown what happens to a format
+  // with no registered type, and an invented fallback would read the same from
+  // here.
+  assert.match(README, /displayName\("Png"\)\s*\/\/ "PNG"/);
+  assert.match(README, /extension\("Png"\)\s*\/\/ "png"/);
+  assert.match(README, /mime\("ELF"\)\s*\/\/ null/);
+  assert.equal(api.displayName("Png"), "PNG");
+  assert.equal(api.extension("Png"), "png");
+  assert.equal(api.mime("ELF"), null);
+
+  // The count the section states for the null case, measured rather than copied.
+  const claim = README.match(/`null` for the (\d+) formats with no verified/);
+  assert.ok(claim, "the README no longer says how many formats have no MIME type");
+  assert.equal(
+    api.allKinds().filter((kind) => api.mime(kind) === null).length,
+    Number(claim[1]),
+    "the README's count of formats with no MIME type has moved",
+  );
 });
 
 test("the sizes in the first paragraph are the right order of magnitude", () => {
@@ -107,30 +198,39 @@ test("every format name the README puts in a result position is a real one", () 
     "Install", "abort", "module", "type", // "panic = \"abort\"", "type": "module", headings
   ]);
   const known = new Set(api.allKinds());
+  // `displayName()` added a second vocabulary, and the README quotes both:
+  // `FileKind.Png` is the identifier and `"PNG"` is the same format written the
+  // way a person writes it, so `displayName("Png") // "PNG"` puts a string in a
+  // result position that is not a format name. Checking against the union is the
+  // general form of this test: against the names alone a correct README fails,
+  // and against the display names alone `Heif` would be one edit away from
+  // passing again.
+  const written = new Set(api.allKinds().flatMap((kind) => [kind, api.displayName(kind)]));
   const claimed = new Set();
   for (const match of README.matchAll(/"([A-Z][A-Za-z0-9]+)"/g)) {
     if (notFormats.has(match[1])) continue;
     claimed.add(match[1]);
   }
 
-  // `"Jpg"` is the README's *negative* example — `if (found === "Jpg")` is meant
-  // not to compile — so it is a real format that these particular rules did not
+  // `"Jpg"` is the README's *negative* example - `if (found === "Jpg")` is meant
+  // not to compile - so it is a real format that these particular rules did not
   // declare. Checking it against `allKinds()` is the right check, and it is worth
   // saying why the example uses a real name: a made-up one would be rejected by
   // the compiler for a reason that has nothing to do with the union, which is the
   // point the example is making.
   for (const name of claimed) {
     assert.ok(
-      known.has(name),
-      `the README puts "${name}" where a format name goes, and it is not one of ` +
-        `the ${known.size} formats`,
+      written.has(name),
+      `the README puts "${name}" where a format name goes, and it is neither one of ` +
+        `the ${known.size} formats nor a display name of one`,
     );
   }
   // Sanity, in both directions. A regex that stopped matching would make this
   // test pass forever, and so would an allowlist that grew to everything.
   assert.ok(claimed.has("Png"), "the scan no longer finds the example that is there");
+  assert.ok(claimed.has("PNG"), "the scan no longer finds the display name that is there");
   assert.ok(claimed.has("WEBP"), "the scan no longer finds the predicate format");
-  assert.ok(claimed.size < 20, `${claimed.size} matches: the scan is too wide now`);
+  assert.ok(claimed.size < 25, `${claimed.size} matches: the scan is too wide now`);
 });
 
 test("the levels the README says are present are the ones that are", () => {
@@ -161,4 +261,9 @@ test("the levels the README says are present are the ones that are", () => {
 function claimedKilobytes(pattern) {
   const match = README.match(pattern);
   return match ? Number(match[1]) : 0;
+}
+
+/** Quote a package name for a regular expression; the scope is not a pattern. */
+function escape(text) {
+  return text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }

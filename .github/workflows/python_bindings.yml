@@ -5,9 +5,12 @@ on:
         branches: [ "master", "dev" ]
         paths:
             - "bindings/**"
-            - "src/**"
+            - "crates/**"
+            - "Cargo.toml"
             - "readme.md"
-            - "tests/**"
+            # `formats.json` generates `_kinds.py`, so editing the dataset is
+            # editing this binding even though nothing under `bindings/` moved.
+            - "formats.json"
             # The release machinery is part of the bindings, so editing it gets
             # the same gate as editing the code it releases.
             - ".github/workflows/python_bindings.yml"

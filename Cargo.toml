@@ -1,24 +1,52 @@
-[package]
-name = "magical_rs"
-description = """Rust framework for file recognition, aiming for high extensibility and customization."""
-version = "0.6.4"
-edition = "2024"
-license = "MIT"
-keywords = ["detect-file", "no-dependency", "no-std", "magic", "rlib"]
-categories = ["filesystem", "no-std", "asynchronous"]
-include = ["LICENSE", "src/**/*.rs", "CHANGELOG.md"]
-authors = ["Reim-developer", "contact.kaxtr@gmail.com"]
-readme = "readme.md"
-repository = "https://github.com/reim-developer/magical_rs"
+# The workspace root, and nothing else.
+#
+# A virtual manifest on purpose: there is no package here any more, so
+# `cargo build` at the root builds the workspace rather than one crate,
+# and there is no root package whose version could drift from the crates
+# it contains.
+[workspace]
+resolver = "3"
+members = ["crates/*"]
 
-[lib]
-crate-type = ["lib"]
-
-[features]
-default = ["std"]
-std = []
-magical_dyn = []
-magical_async_dyn = []
-unsafe_context = []
-
-[dependencies]
+# The bindings and the examples are *not* members, and this is the line
+# that says so. They live under this directory, and a package under a
+# workspace root that is neither a member nor excluded is an error --
+# "current package believes it's in a workspace when it's not" -- so
+# without this every `maturin develop` and every `cargo run` in
+# `examples/` stops working.
+#
+# Excluded rather than added, on purpose. Each is its own published
+# artifact with its own lockfile and its own release: the Python binding
+# builds a wheel, the Node binding builds a wasm module, and the
+# examples exist to demonstrate the crate as a *dependency* rather than
+# as a workspace member. A member resolves against the workspace's
+# single lockfile, which is the opposite of what each of them is for.
+#
+# `bindings/asm` is the Node binding's own crate: it is not published
+# anywhere and it exists to be built as a `wasm32-unknown-unknown`
+# `cdylib`. It is excluded for the same reason the others are -- a
+# member resolves against the workspace's single lockfile and is built
+# for the host by default, which is the opposite of what it is for.
+#
+# The cost of excluding is that the path dependencies below have to be
+# written out. The benefit is that `cargo test` at the root tests the
+# library and the CLI and nothing else, and neither binding's toolchain
+# leaks into the other's build.
+#
+# Written out one by one, and not as `"bindings/*"` and `"examples/*"`,
+# because `exclude` does not expand globs. It reads like it should --
+# `members` above is a glob -- and cargo 1.98 silently matches nothing
+# with one, so every example then fails with "current package believes
+# it's in a workspace when it's not" and the error names the root
+# manifest rather than the line that is wrong. `tests/workspace.rs`
+# checks that every crate under these two directories is named here, so
+# a new example joins the list at the moment it is created.
+exclude = [
+  "bindings/asm",
+  "bindings/python",
+  "examples/async_dyn_magic",
+  "examples/dyn_magic",
+  "examples/magic_custom",
+  "examples/normal_usage",
+  "examples/unsafe_context",
+]

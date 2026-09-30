@@ -9,4 +9,4 @@ edition = "2024"
 # However, in practice:
 # 'cargo add magical_rs'
 # is always recommended.
-magical_rs = { path = "../../" }
+magical_rs = { path = "../../crates/magical_rs" }

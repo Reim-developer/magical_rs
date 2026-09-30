@@ -1,3 +1,7 @@
+# The `test`, `linter` and `fmt` targets above are deliberately unscoped. The
+# root is a virtual workspace now, so they cover every crate in it, which is how
+# the CLI comes to be tested and linted at all without a target of its own. Only
+# the cross-compiled targets are scoped, and each of those says why in place.
 .PHONY: test linter fmt test-dyn test-unsafe test-nostd build-nostd build-wasm examples
 
 test:
@@ -45,7 +49,7 @@ build-nostd:
 # compile in `build-nostd` is what actually proves the `no_std` build works;
 # this target proves the rest of the suite still passes without `std`.
 test-nostd:
-	@cargo test --no-default-features --lib --tests
+	@cargo test -p magical_rs --no-default-features --lib --tests
 	@$(MAKE) build-nostd
 
 # The readme's first paragraph claims this crate works in WebAssembly builds,

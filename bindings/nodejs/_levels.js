@@ -105,7 +105,7 @@ export function neededBytes() {
 function checkSize(value, name) {
   if (value === undefined || value === null) return undefined;
   if (typeof value !== "number" || !Number.isSafeInteger(value) || value < 0) {
-    throw new RangeError(`magical-js: ${name} must be a non-negative safe integer, got ${value}`);
+    throw new RangeError(`@reim-developer/magical-js: ${name} must be a non-negative safe integer, got ${value}`);
   }
   return value;
 }
@@ -125,7 +125,7 @@ function toBytes(data, where) {
   if (data instanceof Uint8Array) return data;
   if (data instanceof ArrayBuffer) return new Uint8Array(data);
   throw new TypeError(
-    `magical-js: ${where} needs a Uint8Array or an ArrayBuffer, got ` +
+    `@reim-developer/magical-js: ${where} needs a Uint8Array or an ArrayBuffer, got ` +
       `${data === null ? "null" : typeof data}`,
   );
 }
@@ -186,7 +186,7 @@ export function detectPath(path, options = {}) {
  */
 export function readHeader(path, options = {}) {
   if (typeof path !== "string") {
-    throw new TypeError(`magical-js: readHeader needs a path string, got ${typeof path}`);
+    throw new TypeError(`@reim-developer/magical-js: readHeader needs a path string, got ${typeof path}`);
   }
   const maxBytes = checkSize(options.maxBytes, "maxBytes") ?? bytesRead();
 
@@ -206,7 +206,7 @@ export function readHeader(path, options = {}) {
     // directories keeps working.
     if (stats.isDirectory()) {
       const error = new Error(
-        `magical-js: ${path} is a directory, not a file.`,
+        `@reim-developer/magical-js: ${path} is a directory, not a file.`,
       );
       error.code = "EISDIR";
       throw error;
@@ -280,22 +280,22 @@ const compiled = new WeakMap();
 function checkRule(rule, index) {
   if (rule === null || typeof rule !== "object") {
     throw new TypeError(
-      `magical-js: rules[${index}] must be an object, got ${rule === null ? "null" : typeof rule}`,
+      `@reim-developer/magical-js: rules[${index}] must be an object, got ${rule === null ? "null" : typeof rule}`,
     );
   }
   const { kind, signatures, offsets } = /** @type {Record<string, unknown>} */ (rule);
   if (typeof kind !== "string" || kind === "") {
-    throw new TypeError(`magical-js: rules[${index}].kind must be a non-empty string`);
+    throw new TypeError(`@reim-developer/magical-js: rules[${index}].kind must be a non-empty string`);
   }
   if (!Array.isArray(signatures) || signatures.length === 0) {
     throw new TypeError(
-      `magical-js: rules[${index}] (${kind}) needs at least one signature; a rule with ` +
+      `@reim-developer/magical-js: rules[${index}] (${kind}) needs at least one signature; a rule with ` +
         "none can never match",
     );
   }
   if (!Array.isArray(offsets) || offsets.length === 0) {
     throw new TypeError(
-      `magical-js: rules[${index}] (${kind}) needs at least one offset; a rule with none ` +
+      `@reim-developer/magical-js: rules[${index}] (${kind}) needs at least one offset; a rule with none ` +
         "can never match",
     );
   }
@@ -318,11 +318,11 @@ function checkRule(rule, index) {
  */
 function handleFor(rules) {
   if (!Array.isArray(rules)) {
-    throw new TypeError(`magical-js: rules must be an array, got ${typeof rules}`);
+    throw new TypeError(`@reim-developer/magical-js: rules must be an array, got ${typeof rules}`);
   }
   if (rules.length === 0) {
     throw new RangeError(
-      "magical-js: rules is empty. A rule set with no rules answers null for everything, " +
+      "@reim-developer/magical-js: rules is empty. A rule set with no rules answers null for everything, " +
         "which a caller cannot tell apart from a format that was not recognised.",
     );
   }
@@ -343,7 +343,7 @@ function handleFor(rules) {
     // two validators is wrong, not the caller.
     rulesRelease(handle);
     throw new Error(
-      "magical-js: the compiled rule set was rejected. That is a bug in magical-js " +
+      "@reim-developer/magical-js: the compiled rule set was rejected. That is a bug in magical-js " +
         "rather than in the rules you passed, because the JavaScript checks accepted them.",
     );
   }

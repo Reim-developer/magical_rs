@@ -63,9 +63,14 @@ jobs:
           shell: bash
           run: |
             tag_version="${GITHUB_REF_NAME#v}"
+            # `crates/magical_rs/Cargo.toml`, not the one at the repository root.
+            # The root manifest is a virtual workspace with no `[package]` table
+            # at all since the library moved, so `["package"]["version"]` there
+            # is a `KeyError` and the step fails on a mistag with a traceback
+            # instead of a message.
             crate_version="$(python3 -c '
             import tomllib
-            with open("Cargo.toml", "rb") as f:
+            with open("crates/magical_rs/Cargo.toml", "rb") as f:
                 print(tomllib.load(f)["package"]["version"])
             ')"
             echo "tag says: $tag_version"
@@ -173,7 +178,10 @@ jobs:
             # publish` verifies the build of whatever this lists; the listing
             # itself is here so a change to `include` is visible in the log
             # before the upload rather than after.
-            cargo package --locked --list
+            #
+            # `-p magical_rs` because the root is a virtual workspace now, and
+            # an unscoped `cargo package` there has no package to name.
+            cargo package -p magical_rs --locked --list
 
         - name: Mint a short-lived registry token
           # Pinned to a commit rather than to `v1`, unlike every other action
@@ -197,7 +205,9 @@ jobs:
             # was tested rather than one cargo rewrote on the way out. This
             # crate has no dependencies, so the lockfile is a formality, but a
             # release is not the place to find out it can be rewritten.
-            cargo publish --locked
+            #
+            # `-p magical_rs` for the reason the listing step has it.
+            cargo publish -p magical_rs --locked
 
         - name: Report
           shell: bash

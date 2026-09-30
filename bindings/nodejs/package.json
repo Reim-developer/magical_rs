@@ -1,5 +1,5 @@
 {
-  "name": "magical-js",
+  "name": "@reim-developer/magical-js",
   "version": "0.1.0",
   "description": "JavaScript and TypeScript bindings for magical_rs, a zero-dependency file type detection library.",
   "keywords": [
@@ -29,6 +29,7 @@
     "_kinds.js",
     "_kinds.d.ts",
     "_levels.js",
+    "_meta.js",
     "_signatures.js",
     "_wasm.js",
     "magical_js.wasm",
@@ -38,9 +39,14 @@
     "node": ">=22"
   },
   "sideEffects": false,
+  "publishConfig": {
+    "access": "public"
+  },
   "scripts": {
     "build": "node scripts/build.mjs",
-    "gen": "node scripts/gen_kinds.mjs",
+    "gen": "node ../../scripts/gen_formats.mjs",
+    "pack:check": "node -e \"const{existsSync,statSync}=require('fs');const f='magical_js.wasm';if(!existsSync(f)){console.error('prepack: '+f+' is not built. Run npm run build first. Publishing without it ships a package that installs cleanly and then throws on its first call.');process.exit(1)}const n=statSync(f).size;if(n<1024){console.error('prepack: '+f+' is '+n+' bytes, which is not a WebAssembly module.');process.exit(1)}\"",
+    "prepack": "npm run pack:check",
     "test": "npm run build && npm run test:only",
     "test:only": "node --test --test-reporter=tap \"test/*.test.js\"",
     "types": "tsc --noEmit --project tsconfig.json",

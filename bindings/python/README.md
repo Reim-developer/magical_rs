@@ -374,9 +374,12 @@ uv run pyright         # type check in strict mode
 uv build               # build the wheel and the sdist
 ```
 
-`python/magical_py/_kinds.py` is generated. Edit the metadata table in
-`../../scripts/gen_kinds.ps1` and re-run it; `tests/test_drift.py` fails if the
-enum and the Rust detection table disagree.
+`python/magical_py/_kinds.py` is generated from `../../formats.json`, the
+dataset at the repository root that also generates the Rust metadata and the
+JavaScript tables. Edit the JSON and re-run `../../scripts/gen_kinds.ps1`;
+`tests/test_drift.py` fails if the enum and the Rust detection table disagree, and
+`crates/magical_rs/tests/dataset.rs` fails if the JSON and the generated enum
+disagree.
 
 The repository's helper scripts live in `../../scripts/`, not next to the code
 they maintain. `gates.sh` is the one this section describes: it runs the build,

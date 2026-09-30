@@ -1,0 +1,917 @@
+{
+  "$comment": "The format metadata for every language magical_rs ships in.\n\nThis file is the source of truth. Two scripts read it and nothing else writes\nany of these values:\n\n  scripts/gen_kinds.ps1       crates/magical_rs/src/magical/kinds_meta.rs\n                              bindings/python/python/magical_py/_kinds.py\n  scripts/gen_formats.mjs    bindings/nodejs/_kinds.js\n                              bindings/nodejs/_kinds.d.ts\n\nEvery field here is read by at least one of them and by at least one test. A\nfield nothing reads is worse than no field: it is a second answer waiting to\ndisagree, and the magic bytes would have been the obvious one to add. They are\nin readme.md instead, because they are facts about the formats rather than\nmetadata about this project's table, and readme_coverage.rs checks them against\nSIGNATURE_KIND -- the code that matches on them.\n\nFields:\n  variant    the Rust enum member, in src/magical/magic.rs\n  abi_order  its position in that enum. This is the ABI: a kind crosses the wasm\n            boundary as its discriminant, so entry N here is what the compiled\n            module reports as N. Read it out of the declaration; do not renumber.\n  token      a short stable identifier, such as \"psd\" or \"bz2\". The Python enum\n            member value, and what a catalogue sorts by. Not the same as\n            `extension`: Png is \"png\" either way, but Lua is \"luac\" here\n            because a .lua file is source and this table detects byte code.\n  name       the display name, as documentation and a catalogue write it\n  mime       the registered MIME type, or null. Null means \"not registered\",\n            never \"unknown\" -- a wrong MIME type is served to a browser.\n  extension  the conventional extension without a dot, or null. Advisory: detection\n            never reads a file name.\n\nThe count is 114 and every generated file and every test states it.",
+  "formats": [
+    {
+      "variant": "Png",
+      "abi_order": 0,
+      "token": "png",
+      "name": "PNG",
+      "mime": "image/png",
+      "extension": "png"
+    },
+    {
+      "variant": "Bitmap",
+      "abi_order": 1,
+      "token": "bmp",
+      "name": "Bitmap",
+      "mime": "image/bmp",
+      "extension": "bmp"
+    },
+    {
+      "variant": "Gzip",
+      "abi_order": 2,
+      "token": "gz",
+      "name": "Gzip",
+      "mime": "application/gzip",
+      "extension": "gz"
+    },
+    {
+      "variant": "Bzip",
+      "abi_order": 3,
+      "token": "bz2",
+      "name": "Bzip2",
+      "mime": "application/x-bzip2",
+      "extension": "bz2"
+    },
+    {
+      "variant": "PkgZip",
+      "abi_order": 4,
+      "token": "zip",
+      "name": "Zip / JAR / APK",
+      "mime": "application/zip",
+      "extension": "zip"
+    },
+    {
+      "variant": "Tar",
+      "abi_order": 5,
+      "token": "tar",
+      "name": "Tar",
+      "mime": "application/x-tar",
+      "extension": "tar"
+    },
+    {
+      "variant": "MSDOS",
+      "abi_order": 6,
+      "token": "exe",
+      "name": "DOS/PE executable",
+      "mime": "application/vnd.microsoft.portable-executable",
+      "extension": "exe"
+    },
+    {
+      "variant": "Jpg",
+      "abi_order": 7,
+      "token": "jpg",
+      "name": "JPEG",
+      "mime": "image/jpeg",
+      "extension": "jpg"
+    },
+    {
+      "variant": "Class",
+      "abi_order": 8,
+      "token": "class",
+      "name": "Java class",
+      "mime": "application/java-vm",
+      "extension": "class"
+    },
+    {
+      "variant": "MP3",
+      "abi_order": 9,
+      "token": "mp3",
+      "name": "MP3",
+      "mime": "audio/mpeg",
+      "extension": "mp3"
+    },
+    {
+      "variant": "ISO",
+      "abi_order": 10,
+      "token": "iso",
+      "name": "ISO 9660",
+      "mime": "application/x-iso9660-image",
+      "extension": "iso"
+    },
+    {
+      "variant": "RPM",
+      "abi_order": 11,
+      "token": "rpm",
+      "name": "RPM",
+      "mime": "application/x-rpm",
+      "extension": "rpm"
+    },
+    {
+      "variant": "SQLite",
+      "abi_order": 12,
+      "token": "sqlite",
+      "name": "SQLite",
+      "mime": "application/vnd.sqlite3",
+      "extension": "sqlite"
+    },
+    {
+      "variant": "XML",
+      "abi_order": 13,
+      "token": "xml",
+      "name": "XML",
+      "mime": "application/xml",
+      "extension": "xml"
+    },
+    {
+      "variant": "ICO",
+      "abi_order": 14,
+      "token": "ico",
+      "name": "Windows icon",
+      "mime": "image/x-icon",
+      "extension": "ico"
+    },
+    {
+      "variant": "WASM",
+      "abi_order": 15,
+      "token": "wasm",
+      "name": "WebAssembly",
+      "mime": "application/wasm",
+      "extension": "wasm"
+    },
+    {
+      "variant": "Deb",
+      "abi_order": 16,
+      "token": "deb",
+      "name": "Debian package",
+      "mime": "application/vnd.debian.binary-package",
+      "extension": "deb"
+    },
+    {
+      "variant": "RAR",
+      "abi_order": 17,
+      "token": "rar",
+      "name": "RAR",
+      "mime": "application/vnd.rar",
+      "extension": "rar"
+    },
+    {
+      "variant": "ScriptExecute",
+      "abi_order": 18,
+      "token": "script",
+      "name": "Script / shebang",
+      "mime": null,
+      "extension": null
+    },
+    {
+      "variant": "ELF",
+      "abi_order": 19,
+      "token": "elf",
+      "name": "ELF",
+      "mime": null,
+      "extension": null
+    },
+    {
+      "variant": "OGG",
+      "abi_order": 20,
+      "token": "ogg",
+      "name": "Ogg",
+      "mime": "audio/ogg",
+      "extension": "ogg"
+    },
+    {
+      "variant": "_8BPS",
+      "abi_order": 21,
+      "token": "psd",
+      "name": "Photoshop PSD",
+      "mime": "image/vnd.adobe.photoshop",
+      "extension": "psd"
+    },
+    {
+      "variant": "BLENDER",
+      "abi_order": 22,
+      "token": "blend",
+      "name": "Blender",
+      "mime": "application/x-blender",
+      "extension": "blend"
+    },
+    {
+      "variant": "TrueTypeFont",
+      "abi_order": 23,
+      "token": "ttf",
+      "name": "TrueType font",
+      "mime": "font/ttf",
+      "extension": "ttf"
+    },
+    {
+      "variant": "OpenTypeFont",
+      "abi_order": 24,
+      "token": "otf",
+      "name": "OpenType font",
+      "mime": "font/otf",
+      "extension": "otf"
+    },
+    {
+      "variant": "ModuleForEvenvironmentModules",
+      "abi_order": 25,
+      "token": "module",
+      "name": "Environment module",
+      "mime": null,
+      "extension": null
+    },
+    {
+      "variant": "WindowImagingFormat",
+      "abi_order": 26,
+      "token": "wim",
+      "name": "Windows Imaging Format",
+      "mime": "application/x-ms-wim",
+      "extension": "wim"
+    },
+    {
+      "variant": "Slob",
+      "abi_order": 27,
+      "token": "slob",
+      "name": "StarDict binary",
+      "mime": null,
+      "extension": "slob"
+    },
+    {
+      "variant": "SerializedJavaData",
+      "abi_order": 28,
+      "token": "ser",
+      "name": "Java serialization",
+      "mime": null,
+      "extension": null
+    },
+    {
+      "variant": "CreativeVoiceFile",
+      "abi_order": 29,
+      "token": "voc",
+      "name": "Creative Voice File",
+      "mime": "audio/x-voc",
+      "extension": "voc"
+    },
+    {
+      "variant": "AuAudioFileFormat",
+      "abi_order": 30,
+      "token": "au",
+      "name": "AU audio",
+      "mime": "audio/basic",
+      "extension": "au"
+    },
+    {
+      "variant": "OpenGLIrisPerformer",
+      "abi_order": 31,
+      "token": "iv",
+      "name": "OpenGL Iris Performer",
+      "mime": null,
+      "extension": null
+    },
+    {
+      "variant": "NoodlesoftHazel",
+      "abi_order": 32,
+      "token": "hazel",
+      "name": "Noodlesoft Hazel",
+      "mime": null,
+      "extension": null
+    },
+    {
+      "variant": "VBScriptEncoded",
+      "abi_order": 33,
+      "token": "vbe",
+      "name": "Encoded VBScript",
+      "mime": "text/x-vbscript",
+      "extension": "vbe"
+    },
+    {
+      "variant": "WEBP",
+      "abi_order": 34,
+      "token": "webp",
+      "name": "WebP",
+      "mime": "image/webp",
+      "extension": "webp"
+    },
+    {
+      "variant": "AppleIconImage",
+      "abi_order": 35,
+      "token": "icns",
+      "name": "Apple icon",
+      "mime": "image/icns",
+      "extension": "icns"
+    },
+    {
+      "variant": "GIF",
+      "abi_order": 36,
+      "token": "gif",
+      "name": "GIF",
+      "mime": "image/gif",
+      "extension": "gif"
+    },
+    {
+      "variant": "JPEG2000",
+      "abi_order": 37,
+      "token": "jp2",
+      "name": "JPEG 2000",
+      "mime": "image/jp2",
+      "extension": "jp2"
+    },
+    {
+      "variant": "PDF",
+      "abi_order": 38,
+      "token": "pdf",
+      "name": "PDF",
+      "mime": "application/pdf",
+      "extension": "pdf"
+    },
+    {
+      "variant": "AppleDiskImage",
+      "abi_order": 39,
+      "token": "dmg",
+      "name": "Apple disk image",
+      "mime": "application/x-apple-diskimage",
+      "extension": "dmg"
+    },
+    {
+      "variant": "Cabinet",
+      "abi_order": 40,
+      "token": "cab",
+      "name": "Cabinet",
+      "mime": "application/vnd.ms-cab-compressed",
+      "extension": "cab"
+    },
+    {
+      "variant": "MatroskaMediaContainer",
+      "abi_order": 41,
+      "token": "mkv",
+      "name": "Matroska",
+      "mime": "video/x-matroska",
+      "extension": "mkv"
+    },
+    {
+      "variant": "RichTextFormat",
+      "abi_order": 42,
+      "token": "rtf",
+      "name": "Rich Text Format",
+      "mime": "application/rtf",
+      "extension": "rtf"
+    },
+    {
+      "variant": "PhotoCapTemplate",
+      "abi_order": 43,
+      "token": "pct",
+      "name": "PhotoCap template",
+      "mime": null,
+      "extension": "pct"
+    },
+    {
+      "variant": "AceCompressed",
+      "abi_order": 44,
+      "token": "ace",
+      "name": "ACE archive",
+      "mime": null,
+      "extension": null
+    },
+    {
+      "variant": "FlashVideo",
+      "abi_order": 45,
+      "token": "flv",
+      "name": "Flash video",
+      "mime": "video/x-flv",
+      "extension": "flv"
+    },
+    {
+      "variant": "Vmdk",
+      "abi_order": 46,
+      "token": "vmdk",
+      "name": "VMware disk image",
+      "mime": "application/x-vmdk",
+      "extension": "vmdk"
+    },
+    {
+      "variant": "GoogleChromeExtension",
+      "abi_order": 47,
+      "token": "crx",
+      "name": "Chrome extension",
+      "mime": "application/x-chrome-extension",
+      "extension": "crx"
+    },
+    {
+      "variant": "SevenZip",
+      "abi_order": 48,
+      "token": "7z",
+      "name": "7-Zip",
+      "mime": "application/x-7z-compressed",
+      "extension": "7z"
+    },
+    {
+      "variant": "Xz",
+      "abi_order": 49,
+      "token": "xz",
+      "name": "XZ",
+      "mime": "application/x-xz",
+      "extension": "xz"
+    },
+    {
+      "variant": "Lz4",
+      "abi_order": 50,
+      "token": "lz4",
+      "name": "LZ4 frame",
+      "mime": "application/x-lz4",
+      "extension": "lz4"
+    },
+    {
+      "variant": "Zstd",
+      "abi_order": 51,
+      "token": "zst",
+      "name": "Zstandard",
+      "mime": "application/zstd",
+      "extension": "zst"
+    },
+    {
+      "variant": "Lzh",
+      "abi_order": 52,
+      "token": "lzh",
+      "name": "LHA/LZH",
+      "mime": "application/x-lzh-compressed",
+      "extension": "lzh"
+    },
+    {
+      "variant": "Cpio",
+      "abi_order": 53,
+      "token": "cpio",
+      "name": "cpio",
+      "mime": "application/x-cpio",
+      "extension": "cpio"
+    },
+    {
+      "variant": "Arj",
+      "abi_order": 54,
+      "token": "arj",
+      "name": "ARJ",
+      "mime": "application/x-arj",
+      "extension": "arj"
+    },
+    {
+      "variant": "Stuffit",
+      "abi_order": 55,
+      "token": "stuffit",
+      "name": "StuffIt",
+      "mime": "application/x-stuffit",
+      "extension": "sit"
+    },
+    {
+      "variant": "StuffitSit",
+      "abi_order": 56,
+      "token": "sit",
+      "name": "StuffIt .sit",
+      "mime": "application/x-stuffit",
+      "extension": "sit"
+    },
+    {
+      "variant": "Par2",
+      "abi_order": 57,
+      "token": "par2",
+      "name": "PAR2",
+      "mime": "application/x-par2",
+      "extension": "par2"
+    },
+    {
+      "variant": "Zlib",
+      "abi_order": 58,
+      "token": "zlib",
+      "name": "zlib stream",
+      "mime": null,
+      "extension": null
+    },
+    {
+      "variant": "Tiff",
+      "abi_order": 59,
+      "token": "tiff",
+      "name": "TIFF / BigTIFF",
+      "mime": "image/tiff",
+      "extension": "tiff"
+    },
+    {
+      "variant": "Pcx",
+      "abi_order": 60,
+      "token": "pcx",
+      "name": "PCX",
+      "mime": "image/x-pcx",
+      "extension": "pcx"
+    },
+    {
+      "variant": "Dds",
+      "abi_order": 61,
+      "token": "dds",
+      "name": "DirectDraw surface",
+      "mime": "image/vnd-ms.dds",
+      "extension": "dds"
+    },
+    {
+      "variant": "Ktx",
+      "abi_order": 62,
+      "token": "ktx",
+      "name": "KTX 1",
+      "mime": "image/ktx",
+      "extension": "ktx"
+    },
+    {
+      "variant": "Ktx2",
+      "abi_order": 63,
+      "token": "ktx2",
+      "name": "KTX 2",
+      "mime": "image/ktx2",
+      "extension": "ktx2"
+    },
+    {
+      "variant": "OpenExr",
+      "abi_order": 64,
+      "token": "exr",
+      "name": "OpenEXR",
+      "mime": "image/x-exr",
+      "extension": "exr"
+    },
+    {
+      "variant": "Radiance",
+      "abi_order": 65,
+      "token": "hdr",
+      "name": "Radiance HDR",
+      "mime": "image/vnd.radiance",
+      "extension": "hdr"
+    },
+    {
+      "variant": "JpegXl",
+      "abi_order": 66,
+      "token": "jxl",
+      "name": "JPEG XL",
+      "mime": "image/jxl",
+      "extension": "jxl"
+    },
+    {
+      "variant": "Cursor",
+      "abi_order": 67,
+      "token": "cur",
+      "name": "Windows cursor",
+      "mime": "image/x-icon",
+      "extension": "cur"
+    },
+    {
+      "variant": "GimpXcf",
+      "abi_order": 68,
+      "token": "xcf",
+      "name": "GIMP XCF",
+      "mime": "image/x-xcf",
+      "extension": "xcf"
+    },
+    {
+      "variant": "Fits",
+      "abi_order": 69,
+      "token": "fits",
+      "name": "FITS",
+      "mime": "image/fits",
+      "extension": "fits"
+    },
+    {
+      "variant": "Midi",
+      "abi_order": 70,
+      "token": "mid",
+      "name": "MIDI",
+      "mime": "audio/midi",
+      "extension": "mid"
+    },
+    {
+      "variant": "Aiff",
+      "abi_order": 71,
+      "token": "aiff",
+      "name": "AIFF",
+      "mime": "audio/aiff",
+      "extension": "aiff"
+    },
+    {
+      "variant": "Flac",
+      "abi_order": 72,
+      "token": "flac",
+      "name": "FLAC",
+      "mime": "audio/flac",
+      "extension": "flac"
+    },
+    {
+      "variant": "WavPack",
+      "abi_order": 73,
+      "token": "wv",
+      "name": "WavPack",
+      "mime": "audio/x-wavpack",
+      "extension": "wv"
+    },
+    {
+      "variant": "CoreAudio",
+      "abi_order": 74,
+      "token": "caf",
+      "name": "Core Audio",
+      "mime": "audio/x-caf",
+      "extension": "caf"
+    },
+    {
+      "variant": "Amr",
+      "abi_order": 75,
+      "token": "amr",
+      "name": "AMR audio",
+      "mime": "audio/amr",
+      "extension": "amr"
+    },
+    {
+      "variant": "MonkeyAudio",
+      "abi_order": 76,
+      "token": "ape",
+      "name": "Monkey's Audio",
+      "mime": "audio/x-monkeys-audio",
+      "extension": "ape"
+    },
+    {
+      "variant": "IsoMedia",
+      "abi_order": 77,
+      "token": "mp4",
+      "name": "ISO base media",
+      "mime": "video/mp4",
+      "extension": "mp4"
+    },
+    {
+      "variant": "Swf",
+      "abi_order": 78,
+      "token": "swf",
+      "name": "SWF",
+      "mime": "application/x-shockwave-flash",
+      "extension": "swf"
+    },
+    {
+      "variant": "Asf",
+      "abi_order": 79,
+      "token": "asf",
+      "name": "ASF / WMV",
+      "mime": "video/x-ms-asf",
+      "extension": "asf"
+    },
+    {
+      "variant": "MpegProgramStream",
+      "abi_order": 80,
+      "token": "mpg",
+      "name": "MPEG program stream",
+      "mime": "video/mpeg",
+      "extension": "mpg"
+    },
+    {
+      "variant": "PostScript",
+      "abi_order": 81,
+      "token": "ps",
+      "name": "PostScript",
+      "mime": "application/postscript",
+      "extension": "ps"
+    },
+    {
+      "variant": "Djvu",
+      "abi_order": 82,
+      "token": "djvu",
+      "name": "DjVu",
+      "mime": "image/vnd.djvu",
+      "extension": "djvu"
+    },
+    {
+      "variant": "Mobipocket",
+      "abi_order": 83,
+      "token": "mobi",
+      "name": "Mobipocket",
+      "mime": "application/x-mobipocket-ebook",
+      "extension": "mobi"
+    },
+    {
+      "variant": "Chm",
+      "abi_order": 84,
+      "token": "chm",
+      "name": "MS Compiled HTML",
+      "mime": "application/vnd.ms-htmlhelp",
+      "extension": "chm"
+    },
+    {
+      "variant": "OleCompoundFile",
+      "abi_order": 85,
+      "token": "ole",
+      "name": "OLE compound file",
+      "mime": null,
+      "extension": null
+    },
+    {
+      "variant": "MachO",
+      "abi_order": 86,
+      "token": "macho",
+      "name": "Mach-O",
+      "mime": null,
+      "extension": null
+    },
+    {
+      "variant": "Dalvik",
+      "abi_order": 87,
+      "token": "dex",
+      "name": "Dalvik",
+      "mime": "application/vnd.android.dex",
+      "extension": "dex"
+    },
+    {
+      "variant": "Lua",
+      "abi_order": 88,
+      "token": "luac",
+      "name": "Lua byte code",
+      "mime": "application/x-lua-bytecode",
+      "extension": "luac"
+    },
+    {
+      "variant": "WindowsShortcut",
+      "abi_order": 89,
+      "token": "lnk",
+      "name": "Windows shortcut",
+      "mime": "application/x-ms-shortcut",
+      "extension": "lnk"
+    },
+    {
+      "variant": "Woff",
+      "abi_order": 90,
+      "token": "woff",
+      "name": "WOFF",
+      "mime": "font/woff",
+      "extension": "woff"
+    },
+    {
+      "variant": "Woff2",
+      "abi_order": 91,
+      "token": "woff2",
+      "name": "WOFF2",
+      "mime": "font/woff2",
+      "extension": "woff2"
+    },
+    {
+      "variant": "FontCollection",
+      "abi_order": 92,
+      "token": "ttc",
+      "name": "Font collection",
+      "mime": "font/collection",
+      "extension": "ttc"
+    },
+    {
+      "variant": "Numpy",
+      "abi_order": 93,
+      "token": "npy",
+      "name": "NumPy .npy",
+      "mime": null,
+      "extension": "npy"
+    },
+    {
+      "variant": "Hdf5",
+      "abi_order": 94,
+      "token": "h5",
+      "name": "HDF5",
+      "mime": "application/x-hdf5",
+      "extension": "h5"
+    },
+    {
+      "variant": "Matlab",
+      "abi_order": 95,
+      "token": "mat",
+      "name": "MATLAB",
+      "mime": "application/x-matlab-data",
+      "extension": "mat"
+    },
+    {
+      "variant": "Parquet",
+      "abi_order": 96,
+      "token": "parquet",
+      "name": "Parquet",
+      "mime": "application/vnd.apache.parquet",
+      "extension": "parquet"
+    },
+    {
+      "variant": "Orc",
+      "abi_order": 97,
+      "token": "orc",
+      "name": "Apache ORC",
+      "mime": "application/vnd.apache.orc",
+      "extension": "orc"
+    },
+    {
+      "variant": "Avro",
+      "abi_order": 98,
+      "token": "avro",
+      "name": "Avro",
+      "mime": "application/avro",
+      "extension": "avro"
+    },
+    {
+      "variant": "BinaryPlist",
+      "abi_order": 99,
+      "token": "bplist",
+      "name": "Binary plist",
+      "mime": "application/x-bplist",
+      "extension": "bplist"
+    },
+    {
+      "variant": "Pickle",
+      "abi_order": 100,
+      "token": "pickle",
+      "name": "Python pickle",
+      "mime": null,
+      "extension": null
+    },
+    {
+      "variant": "Gguf",
+      "abi_order": 101,
+      "token": "gguf",
+      "name": "GGUF",
+      "mime": null,
+      "extension": "gguf"
+    },
+    {
+      "variant": "RData",
+      "abi_order": 102,
+      "token": "rdata",
+      "name": "R serialized data",
+      "mime": "application/x-r-data",
+      "extension": "rdata"
+    },
+    {
+      "variant": "GltfBinary",
+      "abi_order": 103,
+      "token": "glb",
+      "name": "glTF binary",
+      "mime": "model/gltf-binary",
+      "extension": "glb"
+    },
+    {
+      "variant": "FbxBinary",
+      "abi_order": 104,
+      "token": "fbx",
+      "name": "FBX binary",
+      "mime": null,
+      "extension": "fbx"
+    },
+    {
+      "variant": "Ply",
+      "abi_order": 105,
+      "token": "ply",
+      "name": "Stanford PLY",
+      "mime": "text/x-ply",
+      "extension": "ply"
+    },
+    {
+      "variant": "DoomWad",
+      "abi_order": 106,
+      "token": "wad",
+      "name": "Doom WAD",
+      "mime": "application/x-doom-wad",
+      "extension": "wad"
+    },
+    {
+      "variant": "Qcow",
+      "abi_order": 107,
+      "token": "qcow",
+      "name": "QCOW",
+      "mime": "application/x-qemu-qcow",
+      "extension": "qcow"
+    },
+    {
+      "variant": "Qcow2",
+      "abi_order": 108,
+      "token": "qcow2",
+      "name": "QCOW2",
+      "mime": "application/x-qemu-qcow",
+      "extension": "qcow2"
+    },
+    {
+      "variant": "VirtualBoxVdi",
+      "abi_order": 109,
+      "token": "vdi",
+      "name": "VirtualBox VDI",
+      "mime": "application/x-vdi",
+      "extension": "vdi"
+    },
+    {
+      "variant": "VirtualHd",
+      "abi_order": 110,
+      "token": "vhd",
+      "name": "Virtual HD",
+      "mime": "application/x-vhd",
+      "extension": "vhd"
+    },
+    {
+      "variant": "Pcap",
+      "abi_order": 111,
+      "token": "pcap",
+      "name": "pcap",
+      "mime": "application/vnd.tcpdump.pcap",
+      "extension": "pcap"
+    },
+    {
+      "variant": "PcapNg",
+      "abi_order": 112,
+      "token": "pcapng",
+      "name": "pcapng",
+      "mime": "application/x-pcapng",
+      "extension": "pcapng"
+    },
+    {
+      "variant": "BitTorrent",
+      "abi_order": 113,
+      "token": "torrent",
+      "name": "BitTorrent metainfo",
+      "mime": "application/x-bittorrent",
+      "extension": "torrent"
+    }
+  ]
+}

@@ -5,13 +5,18 @@ on:
         branches: [ "master", "dev" ]
         paths:
             - "bindings/**"
-            - "src/**"
+            - "crates/**"
+            - "Cargo.toml"
             - "readme.md"
-            - "tests/**"
+            # `formats.json` generates `_kinds.js` and `_kinds.d.ts`, so editing
+            # the dataset is editing this binding even though nothing under
+            # `bindings/` moved.
+            - "formats.json"
             # The release machinery is part of the bindings, so editing it gets
             # the same gate as editing the code it releases.
             - ".github/workflows/nodejs_bindings.yml"
             - ".github/workflows/publish.yml"
+            - ".github/workflows/nodejs_publish.yml"
             # `gates.sh` is what this workflow runs, and it lives beside the
             # binding it gates, so editing it has to count as editing the binding.
             - "scripts/**"
@@ -150,7 +155,11 @@ jobs:
         - name: Check what the tarball contains
           run: |
             cd "$RUNNER_TEMP"
-            tar tzf magical-js-*.tgz | sort > packed.txt
+            # A scoped package drops the `@` and turns the `/` into a `-`, so
+            # `@reim-developer/magical-js` packs to `reim-developer-magical-js-*.tgz`.
+            # The old `magical-js-*.tgz` glob does not match that, and a glob that
+            # matches nothing is not a failure unless something says it is.
+            tar tzf reim-developer-magical-js-*.tgz | sort > packed.txt
             cat packed.txt
             # A `.wasm` missing from `files` installs cleanly everywhere and then
             # throws at first call with a message about a missing file, which is a
@@ -164,6 +173,7 @@ jobs:
               package/_kinds.js \
               package/_kinds.d.ts \
               package/_levels.js \
+              package/_meta.js \
               package/_signatures.js \
               package/_wasm.js \
               package/magical_js.wasm \
@@ -203,15 +213,15 @@ jobs:
               p.type = 'module';
               fs.writeFileSync('package.json', JSON.stringify(p, null, 2));
             "
-            npm install "$RUNNER_TEMP"/magical-js-*.tgz
+            npm install "$RUNNER_TEMP"/reim-developer-magical-js-*.tgz
 
             # A real detection rather than an import: a package that installs and
             # then throws on first call is worse than one that fails to install.
             cat > use.mjs <<'EOF'
             import {
               detectBytes, allKinds, describe, matchTypes, matchAllTypes,
-              neededBytes, readLimits, matches,
-            } from "magical-js";
+              neededBytes, readLimits, matches, displayName, mime, extension,
+            } from "@reim-developer/magical-js";
 
             const png = Uint8Array.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
             const gif = Uint8Array.from([0x47, 0x49, 0x46, 0x38, 0x39, 0x61]);
@@ -224,6 +234,13 @@ jobs:
             if (!matches("Png", png)) throw new Error("matches is wrong");
             if (neededBytes() !== 36870) throw new Error("neededBytes is wrong");
             if (readLimits().defaultMaxBytesRead !== 2048) throw new Error("limits are wrong");
+
+            // The metadata comes from a table generated at build time, so a
+            // tarball missing the generated file would install and then throw on
+            // the first `mime()` call rather than on the first `detectBytes()`.
+            if (displayName("Png") !== "PNG") throw new Error("displayName is wrong");
+            if (mime("Png") !== "image/png") throw new Error("mime is wrong");
+            if (extension("Png") !== "png") throw new Error("extension is wrong");
 
             const rules = [{ kind: "House", signatures: [png], offsets: [0] }];
             if (matchTypes(rules, png) !== "House") throw new Error("matchTypes is wrong");
@@ -252,7 +269,7 @@ jobs:
             # `_wasm.js`'s pointer-returning exports have become public API, and
             # nothing documented their contract.
             node -e "
-              import('magical-js/_wasm.js')
+              import('@reim-developer/magical-js/_wasm.js')
                 .then(() => { console.error('internals are importable'); process.exit(1); })
                 .catch((e) => {
                   if (e.code !== 'ERR_PACKAGE_PATH_NOT_EXPORTED') {

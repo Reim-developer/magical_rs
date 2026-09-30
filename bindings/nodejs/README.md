@@ -1,6 +1,7 @@
-# magical-js
+# @reim-developer/magical-js
 
-JavaScript and TypeScript bindings for [`magical_rs`](../../readme.md), a
+JavaScript and TypeScript bindings for
+[`magical_rs`](https://github.com/Reim-developer/magical_rs), a
 zero-dependency file type detection library. 114 formats, 42 KB of WebAssembly
 (17 KB gzipped), no glue file, no toolchain, and hand-written types with real
 generics.
@@ -9,17 +10,22 @@ This is not a port of `file-type` or `python-magic`. The API is designed for
 JavaScript, and the reason to use it over either is in the next section.
 
 ```js
-import { detectPath, describe } from "magical-js";
+import { detectPath, describe, mime } from "@reim-developer/magical-js";
 
 detectPath("photo.png");          // "Png"
 describe("Png").signatures[0];    // Uint8Array [137, 80, 78, 71, 13, 10, 26, 10]
+mime("Png");                      // "image/png"
 ```
 
 ## Install
 
 ```sh
-npm install magical-js
+npm install @reim-developer/magical-js
 ```
+
+The scope is there because `magical-js` on npm is a different package that was
+published and then unpublished in 2023; the name is still held, and the registry
+will not release it back.
 
 Node 22 or newer. The package is ESM-only, and the reason is one line of code:
 `_wasm.js` finds the compiled module with `new URL("./magical_js.wasm",
@@ -58,7 +64,7 @@ point: the interesting types are about *your* arguments, and no tool that reads 
 `.wasm` can write them.
 
 ```ts
-import { describe, matchTypes } from "magical-js";
+import { describe, matchTypes } from "@reim-developer/magical-js";
 
 // `describe` carries the name you asked about into the rule it returns, so the
 // answer is `"Png"` rather than the 114-way union.
@@ -160,6 +166,47 @@ Python binding blanks the signature of every predicate entry. `#!` is a genuine
 prefilter the crate uses, so hiding it would make this a worse description of how
 detection actually works.
 
+### Format metadata
+
+```js
+displayName("Png")      // "PNG"
+mime("Png")            // "image/png"
+extension("Png")        // "png"
+mime("ELF")            // null
+```
+
+The two questions detection cannot answer. `detectBytes` reads bytes, so it can say
+a file *is* a PNG; it cannot say what to call it or what to serve it as.
+
+`displayName` is the human-facing spelling, not the identifier. `FileKind.Png` is how
+you refer to the format in this API and `"PNG"` is what goes in a file listing. They
+are the same thing written two ways, and the difference matters the moment a caller
+prints one and stores the other.
+
+`mime` and `extension` answer `null` for the 16 formats with no verified
+registration rather than a guess. A MIME type gets served to a browser, so an
+invented one is indistinguishable from a real one at the point it does harm:
+
+```js
+res.setHeader("Content-Type", mime(kind) ?? "application/octet-stream");
+```
+
+The fallback is at the call site on purpose. `application/octet-stream` is a
+decision — "this is opaque data, do not render it" — and a library that makes it for
+you has made it invisibly. There is no `bin` for the same reason: an extension is a
+convention a project is free to stop following.
+
+All three come from `formats.json` at the repository root, the same table that
+generates the Rust `FileKind::mime` and the Python `FileKind.mime`, so a format
+cannot be `image/png` in one binding and something else in another. They are the
+same strings as the crate's `display_name` and the Python `description`.
+
+Passing anything that is not one of the 114 names throws — a `RangeError` for a
+string that is not a format, a `TypeError` for a value that is not a string — rather
+than answering `undefined`. `undefined` would be ambiguous between "not a format we
+know" and "a format with no registered type", and only the first of those is a
+caller error.
+
 ### Custom rules
 
 ```js
@@ -185,14 +232,22 @@ Rule sets are compiled on first use and cached on the array you pass, so the sam
 `rules` in a loop compiles once. `releaseRules` drops the handle. It does not free
 the memory: the compiled copy is leaked once so `MagicCustom` can hold a
 reference to it, which is a deliberate trade against allocating a fresh `Vec` per
-call, and it is recorded in `src/lib.rs`. A caller building rule sets in a loop
+call, and it is recorded in `bindings/asm/src/lib.rs`. A caller building rule sets in a loop
 rather than at startup should call it when done with one.
 
 ## How it works
 
-`src/lib.rs` is a `cdylib` of raw `extern "C"` exports. No `wasm-bindgen`, no
-`wasm-pack`, no `bg.js` beside the module, and no toolchain in CI. The memory ABI
-is documented at the top of `_wasm.js` and it is short:
+The module's Rust is one directory up, in
+[`bindings/asm`](https://github.com/Reim-developer/magical_rs/tree/master/bindings/asm),
+and this package is the JavaScript that loads it. Two directories and one npm
+package, because the two halves change for different reasons and are versioned
+apart — but never two npm packages, because the memory ABI below is a contract
+between them and a package shipping one without the other installs cleanly and
+throws on its first call.
+
+`bindings/asm/src/lib.rs` is a `cdylib` of raw `extern "C"` exports. No
+`wasm-bindgen`, no `wasm-pack`, no `bg.js` beside the module, and no toolchain in
+CI. The memory ABI is documented at the top of `_wasm.js` and it is short:
 
 - The module allocates its own scratch buffers (`input_ptr`, `answer_ptr`) and the
   loader writes where it is told. Address 0 is **not** free: the encoded table sits
@@ -205,31 +260,35 @@ is documented at the top of `_wasm.js` and it is short:
   `-1` in JavaScript, not `4294967295`.
 - A `bool` result arrives as `0` or `1`.
 
-`scripts/build.mjs` asserts the first and third of those against the built
-artifact, and checks that every export the loader calls is present. Nothing in the
-Rust build would notice the no-imports claim going false; adding a dependency that
+`scripts/build.mjs` builds that crate, copies `magical_js.wasm` here, and asserts
+the first and third of those against the artifact — plus the no-imports claim,
+which nothing in the Rust build would notice going false. Adding a dependency that
 needs an import compiles perfectly well, and the symptom would appear later as a
 `LinkError` in somebody else's project.
 
-## Two things this binding does not do
+The crate is `publish = false` and is not on crates.io either. It exists to be this
+module, and it depends on `magical_rs` by path so the two cannot drift apart.
 
-**No MIME types or extensions.** The Python binding parses `readme.md` for its
-table; this one reports signatures and read limits, and `describe` does not
-answer "what should I call this file". A follow-up is possible, and the format
-count is pinned at 114 in both `scripts/gen_kinds.mjs` and `test/kinds.test.js`,
-so adding a format is a deliberate edit.
+## One thing this binding does not do
 
-**No CommonJS.** See "Install" above.
+**No CommonJS.** See "Install" above. The package is `"type": "module"` with a
+closed `exports` map, and the internals are not importable from outside — which is
+deliberate, because `_wasm.js` exports pointer-returning functions whose contract
+nothing documented.
 
 ## Building from source
 
 ```sh
-npm run gen      # regenerate _kinds.js and _kinds.d.ts from src/magical/magic.rs
+npm run gen      # regenerate _kinds.js and _kinds.d.ts from formats.json
 npm run build    # cargo build --target wasm32-unknown-unknown, install, and verify
 npm test         # build, then node --test
 npm run types    # tsc --noEmit over index.d.ts and test/types.ts
 npm run gates    # all of the above, in the order CI runs them
 ```
+
+`npm run gen` runs `scripts/gen_formats.mjs` at the repository root, not a script
+in this directory, because it reads `formats.json` — the dataset that also
+generates the Rust and Python metadata. Three languages, one table.
 
 `npm run build` needs the `wasm32-unknown-unknown` target
 (`rustup target add wasm32-unknown-unknown`) and nothing else — no `wasm-opt`, no
@@ -239,14 +298,23 @@ difference is 243 bytes and `s` keeps the matching loop faster for a caller
 scanning a directory.
 
 `_kinds.js` and `_kinds.d.ts` are generated and checked in. The names and their
-order come from `pub enum FileKind` in `src/magical/magic.rs`, because the order
-*is* the ABI: a format crosses the wasm boundary as its Rust discriminant. They
-are committed because `test/kinds.test.js` compares them against the compiled
-module, and a generated file nobody can diff is a generated file nobody can
-review.
+order come from `formats.json`'s `abi_order`, which is the position of each variant
+in `pub enum FileKind`, because the order *is* the ABI: a format crosses the wasm
+boundary as its Rust discriminant. They are committed because `test/kinds.test.js`
+compares them against the compiled module, and a generated file nobody can diff is a
+generated file nobody can review. `test/meta.test.js` compares the same tables
+against the dataset, and `crates/magical_rs/tests/dataset.rs` does it again from the
+Rust side.
 
 ## Licence
 
-MIT, the same as the crate this wraps. See [LICENSE](../../LICENSE). There is no
-second copy of the licence file beside this README on purpose: one file, one place
-to change it, and the `license` field in `package.json` is what npm shows.
+MIT, the same as the crate this wraps. The licence text is
+[one file at the repository root](https://github.com/Reim-developer/magical_rs/blob/master/LICENSE),
+and there is no second copy beside this README on purpose: one file, one place to
+change it, and the `license` field in `package.json` is what npm shows.
+
+The link is absolute rather than `../../LICENSE` because this README is rendered on
+npmjs.com as well as in the file tree, and a relative path two levels up resolves to
+nothing there. That is the same class of mistake as the `files` list: the shape is
+right for one context and wrong for the other, and only one of the two is checked by
+`npm pack`.

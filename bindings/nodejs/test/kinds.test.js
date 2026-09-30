@@ -20,8 +20,8 @@ import { ascii } from "./fixtures.js";
 test("the format count is still 114", () => {
   // Pinned because the project has a standing decision to keep it there, and a
   // silent 115 is exactly the change that should take a deliberate edit rather
-  // than arrive by accident. `scripts/gen_kinds.mjs` checks the same number
-  // against the crate; this checks it against the module.
+  // than arrive by accident. `scripts/gen_formats.mjs` checks the same number
+  // against formats.json; this checks it against the module.
   assert.equal(api.allKinds().length, 114);
   assert.equal(FILE_KIND_NAMES.length, 114);
   assert.equal(FILE_KIND_INDICES.size, 114);

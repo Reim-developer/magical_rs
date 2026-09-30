@@ -8,8 +8,9 @@
 
 use magical_rs::magical::{match_rules::MatchRules, signatures::SIGNATURE_KIND};
 
+/// The readme, three levels up: `tests/`, then the crate, then `crates/`.
 const fn readme() -> &'static str {
-    include_str!("../readme.md")
+    include_str!("../../../readme.md")
 }
 
 /// Distinct `FileKind` names the detection table can actually return.

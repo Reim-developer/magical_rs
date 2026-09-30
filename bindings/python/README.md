@@ -1,5 +1,11 @@
 # `magical_py`
 
+[![PyPI version](https://img.shields.io/pypi/v/magical-py)](https://pypi.org/project/magical-py/)
+[![PyPI downloads/month](https://img.shields.io/pypi/dm/magical-py)](https://pypi.org/project/magical-py/)
+[![Python versions](https://img.shields.io/pypi/pyversions/magical-py)](https://pypi.org/project/magical-py/)
+[![license](https://img.shields.io/badge/license-MIT-blue)](https://github.com/Reim-developer/magical_rs/blob/master/LICENSE)
+[![CI](https://github.com/Reim-developer/magical_rs/actions/workflows/python_bindings.yml/badge.svg)](https://github.com/Reim-developer/magical_rs/actions/workflows/python_bindings.yml)
+
 Native Python bindings for
 [`magical_rs`](https://github.com/Reim-developer/magical_rs), a zero-dependency
 Rust library that identifies files by their magic bytes.

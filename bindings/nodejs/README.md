@@ -1,5 +1,11 @@
 # @reim-developer/magical-js
 
+[![npm version](https://img.shields.io/npm/v/@reim-developer/magical-js)](https://www.npmjs.com/package/@reim-developer/magical-js)
+[![npm downloads/month](https://img.shields.io/npm/dm/@reim-developer/magical-js)](https://www.npmjs.com/package/@reim-developer/magical-js)
+[![Node version](https://img.shields.io/badge/node-%3E%3D22-brightgreen)](https://nodejs.org)
+[![license](https://img.shields.io/badge/license-MIT-blue)](https://github.com/Reim-developer/magical_rs/blob/master/LICENSE)
+[![CI](https://github.com/Reim-developer/magical_rs/actions/workflows/nodejs_bindings.yml/badge.svg)](https://github.com/Reim-developer/magical_rs/actions/workflows/nodejs_bindings.yml)
+
 JavaScript and TypeScript bindings for
 [`magical_rs`](https://github.com/Reim-developer/magical_rs), a
 zero-dependency file type detection library. 114 formats, 42 KB of WebAssembly
@@ -293,9 +299,29 @@ generates the Rust and Python metadata. Three languages, one table.
 `npm run build` needs the `wasm32-unknown-unknown` target
 (`rustup target add wasm32-unknown-unknown`) and nothing else — no `wasm-opt`, no
 `wasm-pack`, no `twiggy`. The release profile is `opt-level = "s"` with LTO,
-`codegen-units = 1` and `panic = "abort"`; `s` over `z` because the measured
-difference is 243 bytes and `s` keeps the matching loop faster for a caller
-scanning a directory.
+`codegen-units = 1` and `panic = "abort"`.
+
+`s` is not a measured optimum and is not dressed up as one. `node
+../../scripts/wasm_sizes.mjs` builds the module at every level and prints what it
+costs:
+
+| `opt-level` | raw | gzip | |
+| --- | --- | --- | --- |
+| `"s"` | 43,212 | 17,080 | this is what ships |
+| `"z"` | 43,395 | 17,412 | **183 bytes larger** |
+| `3` | 42,203 | 16,676 | 1,009 smaller |
+| `2` | 43,060 | 17,012 | 152 smaller |
+
+`z` losing is the interesting part, and it was the opposite of what the Cargo
+manifest used to claim. The detection table is 114 entries encoded into linear memory
+at import; that blob is already close to incompressible, so `z` has nothing left to
+take from it and only optimises the code around it. On a module that is mostly code
+— `examples/wasm_rust` — `z` saves 9,557 of 17,764 bytes, so the spread is a property
+of the module rather than of the crate.
+
+The whole range is 2.4% of a 42 KB module. There is no benchmark in this repository
+that would justify moving, so `s` stays as a middle default rather than as a
+conclusion. A bare `3` is a number; `"3"` is a string cargo rejects.
 
 `_kinds.js` and `_kinds.d.ts` are generated and checked in. The names and their
 order come from `formats.json`'s `abi_order`, which is the position of each variant

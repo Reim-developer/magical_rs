@@ -96,6 +96,11 @@ build-wasm:
 # `img/1.png` by relative path and has to be running from its own directory.
 examples:
 	@set -e; for dir in examples/*/; do \
+		if [ ! -f "$$dir/src/main.rs" ]; then continue; fi; \
 		echo "  $$dir"; \
 		( cd "$$dir" && cargo run --quiet ); \
 	done
+	@echo "  examples/wasm_rust/"
+	@rustup target add wasm32-unknown-unknown
+	@cargo build --release --target wasm32-unknown-unknown --manifest-path examples/wasm_rust/Cargo.toml
+	@node examples/wasm_rust/load.mjs

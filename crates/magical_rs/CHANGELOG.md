@@ -1,5 +1,6 @@
 # CHANGELOG
 - [CHANGELOG](#changelog)
+  - [Unreleased: macros, a fluent API, and an API reference](#unreleased-macros-a-fluent-api-and-an-api-reference)
   - [Unreleased: a first-byte detection index](#unreleased-a-first-byte-detection-index)
   - [Unreleased: one format dataset](#unreleased-one-format-dataset)
   - [magical-py: Version 0.4.0](#magical-py-version-040)
@@ -17,6 +18,52 @@
   - [Version: 0.6.2 `Overflow Fix and Release Gates`](#version-062-overflow-fix-and-release-gates)
   - [Version: 0.6.3 `Header Padding Fix`](#version-063-header-padding-fix)
   - [Version: 0.6.4 `Offset Arithmetic and a Wrong Constant`](#version-064-offset-arithmetic-and-a-wrong-constant)
+
+
+## Unreleased: macros, a fluent API, and an API reference
+
+**Level 2 stops asking for five fields, level 1 has a shorter spelling, and the
+readme lists what all three languages export.**
+
+* **Added `magic_rules!`.** Level 2 rule sets as a table:
+
+  ```rust
+  static RULES: &[MagicCustom<Kind>] = magic_rules![
+      (Kind::CadFile, b"ACAD", read 2048),
+      (Kind::ShortFile, [b"<<", b">>"], read 4),
+      (Kind::Fallback, via all [is_cad, is_short]),
+  ];
+  ```
+
+  Sugar for the five-field `MagicCustom` literal and nothing else. A byte rule
+  stops spelling out `offsets: &[0]` every time and a predicate rule stops
+  spelling out `signatures: &[]` and `offsets: &[]` — two fields that are noise,
+  and where leaving a signature in place reads as "and also" and means nothing.
+  `at` and `read` are optional and default to the crate's own `DEFAULT_OFFSET` and
+  `DEFAULT_MAX_BYTES_READ`. Not behind a feature flag: it adds no dependency,
+  allocates nothing, and emits no code unless invoked.
+
+* **Added the `magical_fluent` feature: `bytes.detect()`.** Plus `detect_within`,
+  `is`, `is_any`, and `detect_in` for level 2. Gated, and the only flag here that
+  is not about a level — it puts a method on `[u8]`, so writing it is a dependency
+  on this crate for a slice of bytes you could have handed to anything, and
+  nothing in the signature says so afterwards. With the flag off there is no
+  trait, no type, and not an empty module in the documentation either: the `cfg`
+  is on the `pub mod` line rather than only inside the module, and a test reads the
+  crate root to check it.
+
+  There is deliberately no `detect_or`. `FileKind` has no "unknown" variant — all
+  114 of them are real formats — so there is no honest value to substitute.
+
+* **The readme has an API reference for all three languages**, one table each, and
+  a fourth that lists where the three are deliberately *not* the same. A reader
+  who knew the crate had `is_shebang` had no way to find that out from the
+  documentation before.
+
+  Writing it turned up two claims that were about to be written down wrong:
+  `releaseRules` drops a handle rather than freeing the wasm-side memory, and
+  `neededBytes()` is 36,870 while `DEFAULT_MAX_BYTES_READ` is 2,048 — not the same
+  number, and the readme was about to describe them as if they were.
 
 
 ## Unreleased: a first-byte detection index

@@ -103,6 +103,7 @@ test("the first example in the README is what it says it is", () => {
   // ```js
   // detectPath("photo.png");          // "Png"
   // describe("Png").signatures[0];    // Uint8Array [137, 80, 78, 71, 13, 10, 26, 10]
+  // mime("Png");                      // "image/png"
   // ```
   //
   // A real file on disk rather than a fixture, because `detectPath` is what the
@@ -121,7 +122,37 @@ test("the first example in the README is what it says it is", () => {
     [...api.describe("Png").signatures[0]],
     [137, 80, 78, 71, 13, 10, 26, 10],
   );
+  assert.equal(api.mime("Png"), "image/png");
   assert.match(README, /detectPath\("photo\.png"\)/);
+  assert.match(README, /mime\("Png"\)\s*;\s*\/\/ "image\/png"/);
+});
+test("the metadata examples in the README are what the tables say", () => {
+  // The "Format metadata" section quotes four answers as comments:
+  //
+  //   displayName("Png")   // "PNG"
+  //   mime("Png")          // "image/png"
+  //   extension("Png")     // "png"
+  //   mime("ELF")          // null
+  //
+  // `ELF` is in there because it is the example that proves the `null`: a reader
+  // who has only seen the first three has not been shown what happens to a format
+  // with no registered type, and an invented fallback would read the same from
+  // here.
+  assert.match(README, /displayName\("Png"\)\s*\/\/ "PNG"/);
+  assert.match(README, /extension\("Png"\)\s*\/\/ "png"/);
+  assert.match(README, /mime\("ELF"\)\s*\/\/ null/);
+  assert.equal(api.displayName("Png"), "PNG");
+  assert.equal(api.extension("Png"), "png");
+  assert.equal(api.mime("ELF"), null);
+
+  // The count the section states for the null case, measured rather than copied.
+  const claim = README.match(/`null` for the (\d+) formats with no verified/);
+  assert.ok(claim, "the README no longer says how many formats have no MIME type");
+  assert.equal(
+    api.allKinds().filter((kind) => api.mime(kind) === null).length,
+    Number(claim[1]),
+    "the README's count of formats with no MIME type has moved",
+  );
 });
 
 test("the sizes in the first paragraph are the right order of magnitude", () => {
@@ -167,30 +198,39 @@ test("every format name the README puts in a result position is a real one", () 
     "Install", "abort", "module", "type", // "panic = \"abort\"", "type": "module", headings
   ]);
   const known = new Set(api.allKinds());
+  // `displayName()` added a second vocabulary, and the README quotes both:
+  // `FileKind.Png` is the identifier and `"PNG"` is the same format written the
+  // way a person writes it, so `displayName("Png") // "PNG"` puts a string in a
+  // result position that is not a format name. Checking against the union is the
+  // general form of this test: against the names alone a correct README fails,
+  // and against the display names alone `Heif` would be one edit away from
+  // passing again.
+  const written = new Set(api.allKinds().flatMap((kind) => [kind, api.displayName(kind)]));
   const claimed = new Set();
   for (const match of README.matchAll(/"([A-Z][A-Za-z0-9]+)"/g)) {
     if (notFormats.has(match[1])) continue;
     claimed.add(match[1]);
   }
 
-  // `"Jpg"` is the README's *negative* example — `if (found === "Jpg")` is meant
-  // not to compile — so it is a real format that these particular rules did not
+  // `"Jpg"` is the README's *negative* example - `if (found === "Jpg")` is meant
+  // not to compile - so it is a real format that these particular rules did not
   // declare. Checking it against `allKinds()` is the right check, and it is worth
   // saying why the example uses a real name: a made-up one would be rejected by
   // the compiler for a reason that has nothing to do with the union, which is the
   // point the example is making.
   for (const name of claimed) {
     assert.ok(
-      known.has(name),
-      `the README puts "${name}" where a format name goes, and it is not one of ` +
-        `the ${known.size} formats`,
+      written.has(name),
+      `the README puts "${name}" where a format name goes, and it is neither one of ` +
+        `the ${known.size} formats nor a display name of one`,
     );
   }
   // Sanity, in both directions. A regex that stopped matching would make this
   // test pass forever, and so would an allowlist that grew to everything.
   assert.ok(claimed.has("Png"), "the scan no longer finds the example that is there");
+  assert.ok(claimed.has("PNG"), "the scan no longer finds the display name that is there");
   assert.ok(claimed.has("WEBP"), "the scan no longer finds the predicate format");
-  assert.ok(claimed.size < 20, `${claimed.size} matches: the scan is too wide now`);
+  assert.ok(claimed.size < 25, `${claimed.size} matches: the scan is too wide now`);
 });
 
 test("the levels the README says are present are the ones that are", () => {

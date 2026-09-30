@@ -14,10 +14,13 @@ import {
   allKinds,
   detectBytes,
   describe,
+  displayName,
+  extension,
   isFileKind,
   matchAllTypes,
   matchTypes,
   matches,
+  mime,
   neededBytes,
   readLimits,
   signatureTable,
@@ -227,3 +230,49 @@ void fixed;
 
 // @ts-expect-error - `Signature` has no field this package invented.
 void table[0].mimeType;
+
+// ---------------------------------------------------------------------------
+// Format metadata. `mime()` is the one worth pinning: `string` would compile
+// everywhere and would defeat the `?? "application/octet-stream"` that every
+// caller has to write, so the null has to survive into the declared type.
+// ---------------------------------------------------------------------------
+
+const name: string = displayName("Png");
+void name;
+
+// `displayName` takes the union, not `string` -- the same constraint as
+// `describe`, and for the same reason: a typo should not reach the lookup.
+// @ts-expect-error - not one of the 114.
+displayName("Png2");
+
+const type: string | null = mime("Png");
+void type;
+
+// @ts-expect-error - `string`, which is wider than the nullable answer. A `mime`
+// that answered `string` would make this an error and would make
+// `mime(kind) ?? "application/octet-stream"` an unused fallback.
+const alwaysThere: string = mime("Png");
+void alwaysThere;
+
+const suffix: string | null = extension("Png");
+void suffix;
+
+// @ts-expect-error - `null` is a real answer for 16 of the 114, so the return
+// type is not `string`.
+const alwaysAnExtension: string = extension("SevenZip");
+void alwaysAnExtension;
+
+// @ts-expect-error - the three take the union, like every other entry point.
+mime(fromJson);
+
+// The narrowing that follows a guard has to reach all three, or a caller
+// iterating `allKinds()` over untyped input has to cast three times.
+declare const maybeKind: string;
+if (isFileKind(maybeKind)) {
+  const guarded: string = displayName(maybeKind);
+  const guardedType: string | null = mime(maybeKind);
+  const guardedSuffix: string | null = extension(maybeKind);
+  void guarded;
+  void guardedType;
+  void guardedSuffix;
+}

@@ -9,10 +9,11 @@ This is not a port of `file-type` or `python-magic`. The API is designed for
 JavaScript, and the reason to use it over either is in the next section.
 
 ```js
-import { detectPath, describe } from "@reim-developer/magical-js";
+import { detectPath, describe, mime } from "@reim-developer/magical-js";
 
 detectPath("photo.png");          // "Png"
 describe("Png").signatures[0];    // Uint8Array [137, 80, 78, 71, 13, 10, 26, 10]
+mime("Png");                      // "image/png"
 ```
 
 ## Install
@@ -164,6 +165,47 @@ Python binding blanks the signature of every predicate entry. `#!` is a genuine
 prefilter the crate uses, so hiding it would make this a worse description of how
 detection actually works.
 
+### Format metadata
+
+```js
+displayName("Png")      // "PNG"
+mime("Png")            // "image/png"
+extension("Png")        // "png"
+mime("ELF")            // null
+```
+
+The two questions detection cannot answer. `detectBytes` reads bytes, so it can say
+a file *is* a PNG; it cannot say what to call it or what to serve it as.
+
+`displayName` is the human-facing spelling, not the identifier. `FileKind.Png` is how
+you refer to the format in this API and `"PNG"` is what goes in a file listing. They
+are the same thing written two ways, and the difference matters the moment a caller
+prints one and stores the other.
+
+`mime` and `extension` answer `null` for the 16 formats with no verified
+registration rather than a guess. A MIME type gets served to a browser, so an
+invented one is indistinguishable from a real one at the point it does harm:
+
+```js
+res.setHeader("Content-Type", mime(kind) ?? "application/octet-stream");
+```
+
+The fallback is at the call site on purpose. `application/octet-stream` is a
+decision — "this is opaque data, do not render it" — and a library that makes it for
+you has made it invisibly. There is no `bin` for the same reason: an extension is a
+convention a project is free to stop following.
+
+All three come from `formats.json` at the repository root, the same table that
+generates the Rust `FileKind::mime` and the Python `FileKind.mime`, so a format
+cannot be `image/png` in one binding and something else in another. They are the
+same strings as the crate's `display_name` and the Python `description`.
+
+Passing anything that is not one of the 114 names throws — a `RangeError` for a
+string that is not a format, a `TypeError` for a value that is not a string — rather
+than answering `undefined`. `undefined` would be ambiguous between "not a format we
+know" and "a format with no registered type", and only the first of those is a
+caller error.
+
 ### Custom rules
 
 ```js
@@ -215,25 +257,26 @@ Rust build would notice the no-imports claim going false; adding a dependency th
 needs an import compiles perfectly well, and the symptom would appear later as a
 `LinkError` in somebody else's project.
 
-## Two things this binding does not do
+## One thing this binding does not do
 
-**No MIME types or extensions.** The Python binding parses `readme.md` for its
-table; this one reports signatures and read limits, and `describe` does not
-answer "what should I call this file". A follow-up is possible, and the format
-count is pinned at 114 in both `scripts/gen_kinds.mjs` and `test/kinds.test.js`,
-so adding a format is a deliberate edit.
-
-**No CommonJS.** See "Install" above.
+**No CommonJS.** See "Install" above. The package is `"type": "module"` with a
+closed `exports` map, and the internals are not importable from outside — which is
+deliberate, because `_wasm.js` exports pointer-returning functions whose contract
+nothing documented.
 
 ## Building from source
 
 ```sh
-npm run gen      # regenerate _kinds.js and _kinds.d.ts from src/magical/magic.rs
+npm run gen      # regenerate _kinds.js and _kinds.d.ts from formats.json
 npm run build    # cargo build --target wasm32-unknown-unknown, install, and verify
 npm test         # build, then node --test
 npm run types    # tsc --noEmit over index.d.ts and test/types.ts
 npm run gates    # all of the above, in the order CI runs them
 ```
+
+`npm run gen` runs `scripts/gen_formats.mjs` at the repository root, not a script
+in this directory, because it reads `formats.json` — the dataset that also
+generates the Rust and Python metadata. Three languages, one table.
 
 `npm run build` needs the `wasm32-unknown-unknown` target
 (`rustup target add wasm32-unknown-unknown`) and nothing else — no `wasm-opt`, no
@@ -243,11 +286,13 @@ difference is 243 bytes and `s` keeps the matching loop faster for a caller
 scanning a directory.
 
 `_kinds.js` and `_kinds.d.ts` are generated and checked in. The names and their
-order come from `pub enum FileKind` in `src/magical/magic.rs`, because the order
-*is* the ABI: a format crosses the wasm boundary as its Rust discriminant. They
-are committed because `test/kinds.test.js` compares them against the compiled
-module, and a generated file nobody can diff is a generated file nobody can
-review.
+order come from `formats.json`'s `abi_order`, which is the position of each variant
+in `pub enum FileKind`, because the order *is* the ABI: a format crosses the wasm
+boundary as its Rust discriminant. They are committed because `test/kinds.test.js`
+compares them against the compiled module, and a generated file nobody can diff is a
+generated file nobody can review. `test/meta.test.js` compares the same tables
+against the dataset, and `crates/magical_rs/tests/dataset.rs` does it again from the
+Rust side.
 
 ## Licence
 

@@ -86,6 +86,55 @@ export declare function signatureTable(): Signature[];
 /** Every format name, in the crate's order. A fresh array per call. */
 export declare function allKinds(): FileKind[];
 
+// ---------------------------------------------------------------------------
+// Format metadata
+// ---------------------------------------------------------------------------
+
+/**
+ * The name this format is written with in documentation and in a file listing.
+ *
+ * `"PNG"`, not `"Png"`. The two answer different questions: the format's
+ * *identifier* is `FileKind.Png`, and this is the human-facing spelling of the
+ * same thing. It is the same string the Rust `display_name` and the Python
+ * `description` answer, so a table rendered from any of the three bindings reads
+ * the same.
+ *
+ * ```ts
+ * displayName("Png"); // "PNG"
+ * displayName("PkgZip"); // "Zip / JAR / APK"
+ * ```
+ *
+ * Throws a `RangeError` if `kind` is not one of the 114 format names.
+ */
+export declare function displayName<K extends FileKind>(kind: K): string;
+
+/**
+ * The registered MIME type, or `null` when there is none.
+ *
+ * `null` means "not registered or not verified", never "unknown" — the project
+ * does not invent a type, because an invented one is served to a browser and is
+ * indistinguishable from a real one. A caller that needs a value for a header
+ * should fall back itself:
+ *
+ * ```ts
+ * const type = mime(kind) ?? "application/octet-stream";
+ * ```
+ *
+ * Throws a `RangeError` if `kind` is not one of the 114 format names.
+ */
+export declare function mime<K extends FileKind>(kind: K): string | null;
+
+/**
+ * The conventional file extension, or `null` when there is none.
+ *
+ * Without a leading dot, and advisory: detection never reads a file name, so a
+ * `.jpg` holding a PNG is reported as a PNG. This is for choosing what to
+ * *write*, which is the one question a magic number cannot answer.
+ *
+ * Throws a `RangeError` if `kind` is not one of the 114 format names.
+ */
+export declare function extension<K extends FileKind>(kind: K): string | null;
+
 /**
  * Whether `value` is one of the format names.
  *

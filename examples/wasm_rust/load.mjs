@@ -185,5 +185,5 @@ if (failures.length > 0) {
   console.log();
   console.log("Four exports and the crate underneath them. That is the difference between a");
   console.log("crate that runs on WebAssembly and a binding somebody would install: the");
-  console.log("other 25 KB is the encoded detection table, level 2 rules and a released ABI.");
+  console.log("other 12 KB is the encoded detection table, level 2 rules and a released ABI.");
 }

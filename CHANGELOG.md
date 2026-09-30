@@ -1,5 +1,6 @@
 # CHANGELOG
 - [CHANGELOG](#changelog)
+  - [Unreleased: a first-byte detection index](#unreleased-a-first-byte-detection-index)
   - [Unreleased: one format dataset](#unreleased-one-format-dataset)
   - [magical-py: Version 0.4.0](#magical-py-version-040)
   - [magical-py: Version 0.3.0](#magical-py-version-030)
@@ -16,6 +17,39 @@
   - [Version: 0.6.2 `Overflow Fix and Release Gates`](#version-062-overflow-fix-and-release-gates)
   - [Version: 0.6.3 `Header Padding Fix`](#version-063-header-padding-fix)
   - [Version: 0.6.4 `Offset Arithmetic and a Wrong Constant`](#version-064-offset-arithmetic-and-a-wrong-constant)
+
+
+## Unreleased: a first-byte detection index
+
+**Detection no longer walks all 114 rules to answer.**
+
+* **Detection is indexed by the first byte of a signature.** `match_types` was
+  `SIGNATURE_KIND.iter().find(..)`, so its cost was the position of the match in the
+  table: 5 ns for PNG at position 0, 123 ns for GIF at 36, and 525 ns for a file the
+  table does not recognise, which had to be tried against all 114. It is now 5, 21 and
+  **31 ns**. The last figure is the one that matters, because scanning a directory is
+  mostly files this table does not recognise.
+
+* **Nothing about the answer changed.** Every input produces the same answer, and
+  that is a property of the construction rather than of the tests: an entry is
+  reachable through a bucket only if every offset it declares is `0`, so a file
+  starting with any other byte cannot match it; everything else is tried for every
+  input as before; and the two lists are merged by smallest table index, not by
+  trying one and then the other. Three differential tests then check that against a
+  separately written linear scan — the table's fixtures, non-matching inputs at every
+  declared offset, and 4,096 pseudo-random buffers.
+
+* **Both bindings now use it**, including the paths they used to reimplement.
+  `which_kind_max_at` in `bindings/asm` and `match_within` in `bindings/python` each
+  carried their own copy of the filtered scan, because the crate only compiles
+  `match_with_max_read_rule` under `no_std`. They call `dispatch::first_match` now.
+
+* **It costs bytes, and the two modules say very different numbers.** The npm
+  binding's module is 43,212 -> 44,616 bytes, +1,404 or 3.2%. The library-only
+  `examples/wasm_rust` module is 17,764 -> 32,847, +15,083 or 84.9%. The cost is
+  code, not data, so a module that is nearly all code pays the most for it. Both
+  numbers are in the readme and in `bindings/asm/Cargo.toml` rather than left for
+  someone to discover.
 
 
 ## Unreleased: one format dataset

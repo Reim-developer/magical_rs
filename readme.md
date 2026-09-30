@@ -28,9 +28,10 @@ verified by anything.
 | 0 dependencies | not "few" — `cargo tree --edges normal` prints this crate and nothing else, and the lockfile holds exactly one package | `Cargo.lock`; there is nothing to opt out of |
 | 114 formats | pinned in every binding and every generated file | `tests/table_size.rs`, `tests/dataset.rs`, `bindings/nodejs/test/kinds.test.js` |
 | 0 WebAssembly imports | measured on the built artifact, not assumed | `bindings/nodejs/scripts/build.mjs` fails the build otherwise |
-| 17 exports, 43,212 bytes | measured at build time and printed | `bindings/nodejs/scripts/build.mjs` |
+| 17 exports, 44,616 bytes | measured at build time and printed | `bindings/nodejs/scripts/build.mjs` |
 | Works on `wasm32` | compiled **and run**, from Rust, with no binding | `examples/wasm_rust/`, run by `make examples` |
 | Works without `std` | built for `thumbv7em-none-eabi` | `make test-nostd` |
+| Detection answers what the linear scan answered | every fixture, every non-matching input, 4,096 pseudo-random buffers | `src/magical/dispatch.rs` |
 | Every format's own rule matches itself | all 114 entries, from the table | `tests/signature_coverage.rs` |
 | No signature matches at an undeclared offset | all 114 entries | `tests/signature_coverage.rs` |
 | Padding is never misdetected | every entry, at every declared length | `tests/signature_coverage.rs` |
@@ -138,10 +139,10 @@ against `thumbv7em-none-eabi`.
 
 **WebAssembly.** The 114-entry table is data, so it is close to incompressible
 already and there is little left to optimise: a module exporting this crate at
-`opt-level = "s"` measures **17,764 bytes with 4 exports** —
+`opt-level = "s"` measures **32,847 bytes with 4 exports** -
 [`examples/wasm_rust`](examples/wasm_rust) builds exactly that and asserts the
-answer for nine headers — and the npm binding's, which adds the encoded table, level
-2 rules and a released ABI, measures **43,212 bytes with 17 exports**. Both declare
+answer for nine headers - and the npm binding's, which adds the encoded table, level
+2 rules and a released ABI, measures **44,616 bytes with 17 exports**. Both declare
 **zero imports**, which is what removes the glue file; `make examples` runs the
 first and `bindings/nodejs/scripts/build.mjs` fails the build if either claim goes
 false.
@@ -149,10 +150,9 @@ false.
 The profile's `opt-level` is `"s"`, and that is a middle default rather than a
 measured optimum. [`scripts/wasm_sizes.mjs`](scripts/wasm_sizes.mjs) builds the
 binding's module at every level and prints what it costs, because the figure this
-paragraph used to quote — "243 bytes between `z` and `s`" — was wrong in both the
-number and its direction: `"z"` is 183 bytes **larger**. The reason is the table. On
-a module that is nearly all code, `examples/wasm_rust`, `"z"` saves 9,557 of 17,764
-bytes. The spread on the shipped module is 2.4%.
+paragraph used to quote - "243 bytes between `z` and `s`" - was wrong in both the
+number and its direction: `"z"` is 196 bytes **larger**. The reason is the table. The
+spread on the shipped module is 2.3%.
 
 Both the `std` build and the bare build compile for `wasm32-unknown-unknown`. The
 dynamic levels are not part of that — 3 and 4 call back into a host language, which
@@ -689,11 +689,29 @@ asserts the answer for nine headers — including one with its magic at offset 2
 one at offset 32,769 that forces the module's memory to grow. A wrong answer is a
 non-zero exit.
 
-It is also the smallest honest comparison available: **17,764 bytes, 4 exports, 0
-imports**, against the binding's **43,212 bytes, 17 exports, 0 imports**. The 25 KB
-is what a *binding* is and a *library* is not — the encoded detection table, level 2
+It is also the smallest honest comparison available: **32,847 bytes, 4 exports, 0
+imports**, against the binding's **44,616 bytes, 17 exports, 0 imports**. The 12 KB
+is what a *binding* is and a *library* is not - the encoded detection table, level 2
 runtime rules, the introspection API and a released ABI. Neither number is a
 benchmark and neither is better; they answer different questions.
+
+The two sizes also answer a question worth asking on its own. Detection used to walk
+all 114 rules in order, which cost 525 ns for a file the table does not recognise
+and 5 ns for one that matches the first rule, so a hundred-fold spread came from
+position in the table alone. It is now a first-byte index built during const
+evaluation - `crates/magical_rs/src/magical/dispatch.rs` - and that case is 31 ns,
+GIF at position 36 is 21 ns rather than 123, and PNG is unchanged at 5. The index
+answers exactly what the walk answered, for every input; that is not established by
+the tests agreeing with the old code on the cases they happened to try, it is
+established by construction and then checked by differential tests against a
+separately written linear scan over the table, its fixtures, its non-matching
+inputs, and 4,096 pseudo-random buffers.
+
+It also cost 1,404 bytes in the binding and 15,083 in the example. The same code
+weighing ten times as much tells you the cost is code and not data, and that a
+module which is nearly all code - which is what a library-only module is - pays the
+most for it. If you are short on bytes rather than nanoseconds, that number is the
+one to weigh.
 
 The [`magical_py`](https://github.com/Reim-developer/magical_rs/tree/master/bindings/python)
 bindings carry their own six runnable scripts in

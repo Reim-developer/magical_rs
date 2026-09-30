@@ -29,5 +29,14 @@ std = []
 magical_dyn = []
 magical_async_dyn = []
 unsafe_context = []
+# `bytes.detect()` instead of `FileKind::match_types(&bytes)`. Gated because it
+# puts a method on `[u8]`, which is a dependency a caller takes on a type they do
+# not own and cannot opt out of afterwards — so it is opt-in rather than a
+# default. Nothing else in the crate is gated for that reason: a `macro_rules!`
+# costs nothing until invoked, and this costs a name in a namespace.
+#
+# The table of what each feature does is in the readme; this comment says only why
+# *this* one is gated.
+magical_fluent = []
 
 [dependencies]

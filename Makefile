@@ -2,7 +2,7 @@
 # root is a virtual workspace now, so they cover every crate in it, which is how
 # the CLI comes to be tested and linted at all without a target of its own. Only
 # the cross-compiled targets are scoped, and each of those says why in place.
-.PHONY: test linter fmt test-dyn test-unsafe test-nostd build-nostd build-wasm examples
+.PHONY: test linter fmt test-dyn test-unsafe test-fluent test-nostd build-nostd build-wasm examples
 
 test:
 	@cargo test
@@ -35,11 +35,25 @@ test-dyn:
 test-unsafe:
 	@cargo test --features unsafe_context
 
+# `magical_fluent` is a separate target for the same reason `unsafe_context` is.
+# The methods are behind a flag, so the code they wrap is only ever compiled when
+# somebody asks for the flag — and `make test` runs with default features, which do
+# not include it. Without this the flag's own code would be built by `linter`
+# (clippy runs --all-features) and never run by anything, which is the exact shape
+# of gap `test-unsafe` was added to close for `unsafe_context`.
+test-fluent:
+	@cargo test --features magical_fluent
+
 # The `no_std` claim is the one this crate makes that a default-features test
 # run cannot check at all, so it gets its own target rather than being assumed.
 build-nostd:
 	@rustup target add thumbv7em-none-eabi
 	@cargo build --no-default-features --target thumbv7em-none-eabi
+	# `magical_fluent` too, because a feature that only ever compiles against
+	# `std` would not be gated for anything. The second build is a separate
+	# invocation rather than a feature flag on the first: with the flag on the
+	# first, the second would prove nothing about the un-gated build.
+	@cargo build --no-default-features --features magical_fluent --target thumbv7em-none-eabi
 
 # Doctests are excluded here, and that is deliberate rather than convenient.
 # The readme's quick start and the `bytes_read` examples all call

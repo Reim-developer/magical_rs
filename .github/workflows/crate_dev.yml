@@ -64,6 +64,14 @@ jobs:
           run: |
             make test-unsafe
 
+        # `magical_fluent` for the reason the step above exists: a gated feature's
+        # code is compiled by `make linter` (clippy runs --all-features) and run by
+        # nothing unless a target says otherwise.
+        - name: Test feature magical_fluent
+          shell: bash
+          run: |
+            make test-fluent
+
         # The readme advertises `no_std` support, and nothing above checks it.
         # `make test` runs with default features, which include `std`.
         - name: Test and build without std

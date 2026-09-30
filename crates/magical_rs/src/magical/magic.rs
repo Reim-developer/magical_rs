@@ -1,3 +1,4 @@
+use crate::magical::dispatch;
 use crate::magical::signatures::SIGNATURE_KIND;
 
 // `Ord` and `Hash` are here for the collections, not for comparing formats.
@@ -230,10 +231,7 @@ impl FileKind {
     #[must_use]
     #[inline]
     pub fn match_types(bytes: &[u8]) -> Option<Self> {
-        SIGNATURE_KIND
-            .iter()
-            .find(|magic| magic.matches(bytes))
-            .map(|magic| magic.kind)
+        dispatch::first_match(bytes, usize::MAX).map(|index| SIGNATURE_KIND[index].kind)
     }
 
     /// Detects the file type by matching against built-in signatures, but only considers rules
@@ -311,11 +309,7 @@ impl FileKind {
     #[inline]
     #[cfg(not(feature = "std"))]
     pub fn match_with_max_read_rule(bytes: &[u8], allowed_max_read: usize) -> Option<Self> {
-        SIGNATURE_KIND
-            .iter()
-            .filter(|magic| magic.max_bytes_read <= allowed_max_read)
-            .find(|magic| magic.matches(bytes))
-            .map(|magic| magic.kind)
+        dispatch::first_match(bytes, allowed_max_read).map(|index| SIGNATURE_KIND[index].kind)
     }
 
     /// Detects the file type by matching against built-in signatures, without enforcing per-rule `max_bytes_read` limits.
@@ -380,9 +374,8 @@ impl FileKind {
             return None;
         }
 
-        SIGNATURE_KIND
-            .iter()
-            .find(|magic| magic.matches(bytes))
-            .map(|magic| magic.kind)
+        // No `max_bytes_read` filter here, which is the whole difference from
+        // `match_with_max_read_rule`. `usize::MAX` is how that is said to the index.
+        dispatch::first_match(bytes, usize::MAX).map(|index| SIGNATURE_KIND[index].kind)
     }
 }

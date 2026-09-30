@@ -10,6 +10,7 @@ extern crate std;
 
 pub mod magical {
     pub mod bytes_read;
+    pub mod dispatch;
 
     pub mod ext_fn {
         pub mod shebang;

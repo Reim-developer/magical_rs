@@ -484,7 +484,15 @@ fn the_readme_and_the_dataset_name_the_same_formats() {
         // `FileKind` after the backticks is an identifier like any other. Skipping
         // it by its first cell rather than by position is what keeps a table with
         // a different number of columns from being half-read.
-        if cells[1] == "Format" {
+        //
+        // An *empty* first cell is the other thing that looks like a row here, and
+        // it cost this test a false positive before anything was broken: a table
+        // whose header is `| | Crate | \`PyPI\` | \`npm\` |` has four columns and a
+        // blank leading cell, so `Crate` lands in the second position and reads as
+        // a variant name. That was the readme's table of the three bindings, and
+        // the count came out 115. A row with nothing in its first cell is a header
+        // or a separator, never a format.
+        if cells[1].is_empty() || cells[1] == "Format" {
             continue;
         }
         let variant = cells[2].trim_matches('`');

@@ -28,11 +28,29 @@ crate-type = ["cdylib", "rlib"]
 magical_rs = { path = "../../crates/magical_rs", default-features = false, features = ["std"] }
 
 [profile.release]
-# Two things pull in opposite directions here and the size wins, because the
-# whole point of shipping a wasm module is how much of it a browser or a Node
-# process downloads. `opt-level = "s"` over `z` because the table is data: the
-# measured difference between them is 243 bytes, and `s` keeps the matching loop
-# faster for a caller that is scanning a directory rather than one file.
+# Two things pull in opposite directions here and the size wins, because the whole
+# point of shipping a wasm module is how much of it a browser or a Node process
+# downloads.
+#
+# `"s"` over `"z"` because `"z"` is *larger* here, which is the opposite of what this
+# comment used to say. It claimed the difference was 243 bytes in the other
+# direction, and nobody could reproduce the figure because nothing in the repository
+# measured it. `node scripts/wasm_sizes.mjs` does, and prints:
+#
+#     "s"    43,212 raw / 17,080 gzip     <- this file
+#     "z"    43,395 raw / 17,412 gzip     +183
+#     3      42,203 raw / 16,676 gzip   -1,009
+#     2      43,060 raw / 17,012 gzip     -152
+#
+# The reason `"z"` loses is the table: 114 entries are encoded into linear memory at
+# import, that blob is close to incompressible already, and `z` has nothing left to
+# take from it. Only the code around it is being optimised.
+#
+# Which also means this is not a measured optimum. `3` is both smaller *and* faster
+# than `"s"`, and the spread across all four is 2.4% of the module. `"s"` is kept
+# because it is the middle of a range where none of the choices matters much and
+# there is no benchmark in this repository that would justify moving: `sizes` is a
+# reasonable default, and saying so is more useful than dressing it up.
 opt-level = "s"
 lto = true
 codegen-units = 1

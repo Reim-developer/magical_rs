@@ -1,5 +1,12 @@
 # `magical_rs`
 
+[![crates.io](https://img.shields.io/crates/v/magical_rs)](https://crates.io/crates/magical_rs)
+[![crates.io downloads](https://img.shields.io/crates/d/magical_rs)](https://crates.io/crates/magical_rs)
+[![MSRV](https://img.shields.io/crates/msrv/magical_rs)](https://github.com/Reim-developer/magical_rs/blob/master/crates/magical_rs/Cargo.toml)
+[![docs.rs](https://img.shields.io/badge/docs.rs-magical__rs-4d2e63?logo=docs.rs)](https://docs.rs/magical_rs)
+[![CI](https://github.com/Reim-developer/magical_rs/actions/workflows/crate_dev.yml/badge.svg?branch=dev)](https://github.com/Reim-developer/magical_rs/actions/workflows/crate_dev.yml)
+[![license](https://img.shields.io/github/license/license/reim-developer/magical_rs)](https://github.com/Reim-developer/magical_rs/blob/master/LICENSE)
+
 Zero-dependency file type detection for Rust, with a customization layer that
 stays out of your way until you need it.
 
@@ -7,6 +14,52 @@ stays out of your way until you need it.
 all** — not one — and it compiles for `no_std` targets, so it works in
 embedded, kernel-adjacent, and WebAssembly builds where most detection crates
 cannot go.
+
+## What is claimed here, and what checks it
+
+Every row below is a number or a property that a check in this repository holds. A
+project that asserts its own claims in its test suite is unusual enough to be worth
+showing rather than asserting, so the check is named. Nothing in this table is a
+benchmark or a comparison: those would move with the machine and could not be
+verified by anything.
+
+| | | Checked by |
+| --- | --- | --- |
+| 0 dependencies | not "few" — `cargo tree --edges normal` prints this crate and nothing else, and the lockfile holds exactly one package | `Cargo.lock`; there is nothing to opt out of |
+| 114 formats | pinned in every binding and every generated file | `tests/table_size.rs`, `tests/dataset.rs`, `bindings/nodejs/test/kinds.test.js` |
+| 0 WebAssembly imports | measured on the built artifact, not assumed | `bindings/nodejs/scripts/build.mjs` fails the build otherwise |
+| 17 exports, 43,212 bytes | measured at build time and printed | `bindings/nodejs/scripts/build.mjs` |
+| Works on `wasm32` | compiled **and run**, from Rust, with no binding | `examples/wasm_rust/`, run by `make examples` |
+| Works without `std` | built for `thumbv7em-none-eabi` | `make test-nostd` |
+| Every format's own rule matches itself | all 114 entries, from the table | `tests/signature_coverage.rs` |
+| No signature matches at an undeclared offset | all 114 entries | `tests/signature_coverage.rs` |
+| Padding is never misdetected | every entry, at every declared length | `tests/signature_coverage.rs` |
+| Truncated input never panics | every entry, at every truncation | `tests/signature_coverage.rs` |
+| The readme's format table matches the code | both directions | `tests/readme_coverage.rs` |
+| Every documented example compiles | the rustdoc tests run on this file | `cargo test --doc` |
+
+What is **not** claimed: that it is faster than anything else, that it is
+battle-tested, or that the format list is exhaustive. It is one author's crate with
+one author's tests. The formats it deliberately does not detect are listed under
+[Supported formats](#supported-formats), and the reasons are there too.
+
+## The three bindings
+
+All three detect the same 114 formats through the same detection table. The
+metadata they answer from — a display name, a short token, a MIME type, an
+extension — is generated from one file, [`formats.json`](formats.json), so a format
+cannot be `image/png` in Rust and something else in Python.
+
+| | Crate | `PyPI` | `npm` |
+| --- | --- | --- | --- |
+| Rust | `magical_rs` 0.6.4 | — | — |
+| Python | — | `magical-py` 0.4.0 | — |
+| JavaScript / TypeScript | — | — | `@reim-developer/magical-js` 0.1.0 |
+
+[![PyPI](https://img.shields.io/pypi/v/magical-py)](https://pypi.org/project/magical-py/)
+[![PyPI downloads/month](https://img.shields.io/pypi/dm/magical-py)](https://pypi.org/project/magical-py/)
+[![npm](https://img.shields.io/npm/v/@reim-developer/magical-js)](https://www.npmjs.com/package/@reim-developer/magical-js)
+[![npm downloads/month](https://img.shields.io/npm/dm/@reim-developer/magical-js)](https://www.npmjs.com/package/@reim-developer/magical-js)
 
 ```toml
 [dependencies]
@@ -83,13 +136,27 @@ audit, nothing to keep up to date, no version conflicts in your tree.
 **`no_std` support.** Levels 1 and 2 build for bare-metal targets. Verified
 against `thumbv7em-none-eabi`.
 
-**WebAssembly.** The 114-entry table is about 5.7 KB of wasm — 2.3 KB gzipped.
-It is data rather than code, so there is nothing left to optimize: a module
-exporting `FileKind::match_types` measures 5,858 bytes against a 73-byte
-baseline, and moves 243 bytes between `opt-level` `z` and `3`. Both the `std`
-build and the bare build compile for `wasm32-unknown-unknown`. The dynamic
-levels are not part of that — 3 and 4 call back into a host language, which in
-a browser would mean JavaScript and a different API. A `wasm-bindgen` wrapper
+**WebAssembly.** The 114-entry table is data, so it is close to incompressible
+already and there is little left to optimise: a module exporting this crate at
+`opt-level = "s"` measures **17,764 bytes with 4 exports** —
+[`examples/wasm_rust`](examples/wasm_rust) builds exactly that and asserts the
+answer for nine headers — and the npm binding's, which adds the encoded table, level
+2 rules and a released ABI, measures **43,212 bytes with 17 exports**. Both declare
+**zero imports**, which is what removes the glue file; `make examples` runs the
+first and `bindings/nodejs/scripts/build.mjs` fails the build if either claim goes
+false.
+
+The profile's `opt-level` is `"s"`, and that is a middle default rather than a
+measured optimum. [`scripts/wasm_sizes.mjs`](scripts/wasm_sizes.mjs) builds the
+binding's module at every level and prints what it costs, because the figure this
+paragraph used to quote — "243 bytes between `z` and `s`" — was wrong in both the
+number and its direction: `"z"` is 183 bytes **larger**. The reason is the table. On
+a module that is nearly all code, `examples/wasm_rust`, `"z"` saves 9,557 of 17,764
+bytes. The spread on the shipped module is 2.4%.
+
+Both the `std` build and the bare build compile for `wasm32-unknown-unknown`. The
+dynamic levels are not part of that — 3 and 4 call back into a host language, which
+in a browser would mean JavaScript and a different API. A `wasm-bindgen` wrapper
 depends on `wasm-bindgen`, so the zero-dependency promise above is untouched.
 
 **Detection is just bytes in, enum out.** `FileKind::match_types` takes a
@@ -606,6 +673,27 @@ Runnable examples live in
 | `dyn_magic` | Level 3, runtime rules |
 | `async_dyn_magic` | Level 4, async rules |
 | `unsafe_context` | Level 5, raw pointer rules |
+| `wasm_rust` | The crate on `wasm32`, from Rust, with no binding in between |
+
+`make examples` runs all six, and runs them rather than merely building them: an
+example that compiles and is wrong is invisible to a build, and the out-of-bounds
+read in `unsafe_context` compiled cleanly for two years before anything ran it.
+
+`wasm_rust` earns its place for a specific reason. `make build-wasm` proves the
+crate *compiles* for `wasm32-unknown-unknown`, and its own comment in the `Makefile`
+is careful about how little that means — a wasm32 `std` has a file system, sockets
+and threads that all compile and then fail at runtime. What that build cannot check
+is whether a built module answers correctly. `wasm_rust` does: it builds a
+four-export module from this crate, instantiates it with an empty import object, and
+asserts the answer for nine headers — including one with its magic at offset 257 and
+one at offset 32,769 that forces the module's memory to grow. A wrong answer is a
+non-zero exit.
+
+It is also the smallest honest comparison available: **17,764 bytes, 4 exports, 0
+imports**, against the binding's **43,212 bytes, 17 exports, 0 imports**. The 25 KB
+is what a *binding* is and a *library* is not — the encoded detection table, level 2
+runtime rules, the introspection API and a released ABI. Neither number is a
+benchmark and neither is better; they answer different questions.
 
 The [`magical_py`](https://github.com/Reim-developer/magical_rs/tree/master/bindings/python)
 bindings carry their own six runnable scripts in
@@ -617,9 +705,22 @@ failure to read the file. Their
 section covers levels 2, 3 and 4, the custom rules, and what each one costs.
 
 The [`@reim-developer/magical-js`](https://github.com/Reim-developer/magical_rs/tree/master/bindings/nodejs)
-bindings have no `examples/` directory, because everything in
-[`bindings/nodejs/README.md`](https://github.com/Reim-developer/magical_rs/tree/master/bindings/nodejs)
-is four lines long and the README is the example. The [workflow](.github/workflows/nodejs_bindings.yml)
+bindings have six runnable scripts in
+[`bindings/nodejs/examples/`](https://github.com/Reim-developer/magical_rs/tree/master/bindings/nodejs/examples),
+covering what a JavaScript caller actually needs shown and what four lines of API
+cannot: `detectPath` and the metadata it cannot answer,
+`maxBytesRead` and the one case where it changes *answers* rather than cost,
+`allKinds` tallied by media type, walking a tree, level 2 rules, and what the
+TypeScript declarations actually buy. Five are JavaScript and run on `node`; the
+sixth is TypeScript, and running it only proves the stripping works — `npm run types`
+is what makes it an example rather than a JavaScript file with annotations.
+
+`bindings/nodejs/scripts/gates.sh` runs all six. Run rather than merely type-checked
+or parsed, because `npm test` already imports every module the package ships: the
+examples are the only files there that nothing else would execute, which is exactly
+why one that had drifted would stay green until somebody read it.
+
+The [workflow](.github/workflows/nodejs_bindings.yml)
 packs the tarball and installs it into a throwaway project on Linux, macOS and
 Windows, so the published shape is checked rather than assumed.
 

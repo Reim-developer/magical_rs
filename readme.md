@@ -40,7 +40,7 @@ out of this table — see [Benchmarks](#benchmarks).
 | The readme's format table matches the code | both directions | `tests/readme_coverage.rs` |
 | Every documented example compiles | the rustdoc tests run on this file | `cargo test --doc` |
 | A gated feature leaves nothing behind | the crate root, read as text | `tests/fluent.rs` |
-| The benchmark harness is not quietly flattering | 21 changes to it, each of which must turn a test red | `benchmarks/mutations.ps1` |
+| The benchmark harness is not quietly flattering | 22 changes to it, each of which must turn a test red | `benchmarks/mutations.ps1` |
 
 What is **not** claimed: that it is faster than anything else, that it is
 battle-tested, or that the format list is exhaustive. It is one author's crate with
@@ -52,7 +52,7 @@ this crate against `infer` and libmagic on a shared corpus, and it is deliberate
 not in the table above. A number of nanoseconds is a fact about the machine, so it
 cannot be verified by anything in this repository and it does not belong next to
 claims that can. What the benchmark crate *can* be held to is that it is not lying
-about what it measured, and that is the last row: 21 mutations of the harness, each
+about what it measured, and that is the last row: 22 mutations of the harness, each
 one a way the report could flatter this crate, each caught by a test. The numbers
 are published in the pull request that a benchmark workflow runs on, and they are
 read there rather than copied here, where they would be a claim about a machine
@@ -1175,9 +1175,9 @@ that is what its table needs in order to reach ISO 9660, and `infer` reads only
 what its own table needs — so `infer` is the faster of the two from a path, and
 that row is in the report.
 
-**The harness is mutation-checked.** `make bench-mutations` applies 21 changes to
+**The harness is mutation-checked.** `make bench-mutations` applies 22 changes to
 it, each one a way the report could flatter this crate or hide a library, and
-requires a test to go red for each. All 21 are caught. Two of the twenty-one are
+requires a test to go red for each. All 22 are caught. Two of the twenty-two are
 bugs this crate actually had: libmagic's pass evicted the corpus from cache and
 charged the fast library for it, and a `NaN` median made every ratio in the table
 print as `inf`. Both are written up in [`benchmarks/README.md`](benchmarks/README.md).

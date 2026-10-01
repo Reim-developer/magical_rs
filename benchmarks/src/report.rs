@@ -24,7 +24,7 @@
 //! random and gets muted, which is worse than not having it at all.
 
 use std::fmt::Write as _;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::time::Instant;
 
 use crate::adapter::{Adapter, Answer, Startup};
@@ -180,10 +180,19 @@ pub fn build(adapters: &[Box<dyn Adapter>]) -> Report {
 
 /// The synthetic corpus, written to a temporary directory, and the paths.
 ///
+/// The synthetic corpus, written to disk, and the paths to it.
+///
+/// Public so the cleanup can be tested directly. The test that used to check it
+/// took a snapshot of the temporary directory before and after a whole
+/// `build`, which is only sound if nothing else is writing there — and
+/// `tests/harness.rs` runs fifteen tests in parallel, several of which build a
+/// report. It failed on CI and passed locally, which is the worst way for a test
+/// about hygiene to behave. Testing the guard itself has no such problem.
+///
 /// Dropped when this goes out of scope, which is the whole lifetime management
 /// this needs: the report is built in one function and the directory exists for
 /// exactly that.
-struct Written {
+pub struct Written {
     directory: PathBuf,
     paths: Vec<PathBuf>,
 }
@@ -194,11 +203,18 @@ impl Written {
     /// # Panics
     ///
     /// If the directory or any file cannot be written.
-    fn new(cases: &[Case]) -> Self {
-        // The process id, so two benchmark runs on one machine -- which is what
-        // happens when the crate is tested and benchmarked in the same CI job --
-        // do not fight over one directory.
-        let directory = std::env::temp_dir().join(format!("magical-bench-{}", std::process::id()));
+    #[must_use]
+    pub fn new(cases: &[Case]) -> Self {
+        // A counter, not just the process id. Two `build` calls in one process
+        // happen: `build` measures twice, and the tests call it fifteen times.
+        // With only the pid they would share one directory, so whichever finished
+        // first would `remove_dir_all` the files the other was still opening —
+        // and the from-path table would be a table of `magic_file` on a path that
+        // no longer exists, which is a number rather than an error.
+        static NEXT: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
+        let n = NEXT.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        let directory =
+            std::env::temp_dir().join(format!("magical-bench-{}-{n}", std::process::id()));
         std::fs::create_dir_all(&directory).unwrap_or_else(|e| {
             panic!("cannot create {}: {e}", directory.display());
         });
@@ -211,6 +227,15 @@ impl Written {
             paths.push(path);
         }
         Self { directory, paths }
+    }
+
+    /// The directory the corpus is in, and the files in it.
+    ///
+    /// A method rather than two public fields so a caller cannot hold the paths
+    /// without the directory that has to be removed alongside them.
+    #[must_use]
+    pub fn written(&self) -> (&Path, &[PathBuf]) {
+        (&self.directory, &self.paths)
     }
 }
 

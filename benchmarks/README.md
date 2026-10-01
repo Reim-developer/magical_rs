@@ -149,10 +149,10 @@ made every ratio print as `infx`. Every ratio in the column was unreadable
 rather than merely wrong. The fold now filters non-finite values first, and a
 library that produces a NaN sees its own NaN in its own row.
 
-`make bench-mutations` applies 21 changes that are each one of these, or a
-neighbour of one, and requires the tests to go red for each. All 21 are caught.
+`make bench-mutations` applies 22 changes that are each one of these, or a
+neighbour of one, and requires the tests to go red for each. All 22 are caught.
 
-Two of the twenty-one are housekeeping that turned out to matter more than it
+Two of the twenty-two are housekeeping that turned out to matter more than it
 looks, and both are in the script because of how they failed:
 
 - A mutation's `Find` string had to match the file byte for byte, so two of them
@@ -176,4 +176,4 @@ looks, and both are in the script because of how they failed:
 | `benches/detect.rs` | Criterion, per case, with its noise estimates. |
 | `src/bin/report.rs` | Writes that markdown, to stdout or to a file. |
 | `tests/harness.rs` | The harness's own tests. Every one of them is about a way the report could lie. |
-| `mutations.ps1` | The 21 changes above, applied and reverted. |
+| `mutations.ps1` | The 22 changes above, applied and reverted. |

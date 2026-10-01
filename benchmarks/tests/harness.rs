@@ -194,23 +194,79 @@ fn the_on_disk_corpus_is_one_file_per_case() {
     );
 }
 
-/// `Report::build` writes the corpus to disk and removes it again.
+/// A corpus written to disk is removed when the guard is dropped.
 ///
-/// A benchmark that leaves 10.5 MB in the temporary directory on every run fills
-/// it up, and the failure mode -- a disk that fills -- is nowhere near the thing
-/// that caused it.
+/// **On the guard, not on `build`.** The first version snapshotted the temporary
+/// directory before and after a whole `build` and compared the two lists, which
+/// is only a test of the cleanup if nothing else is writing there. Fifteen tests
+/// in this file run in parallel and several of them build a report, so it failed
+/// on CI and passed on a developer machine -- the worst behaviour for a test whose
+/// whole subject is that the temporary directory does not fill up.
+///
+/// The guard names its own directory, so this is exact rather than a difference
+/// between two snapshots of a shared directory.
 #[test]
-fn the_temporary_corpus_is_removed() {
-    let leftovers = temp_dirs();
-    let (adapters, _handles) = recorders();
-    let _ = report::build(&adapters);
-    assert_eq!(
-        temp_dirs(),
-        leftovers,
-        "the from-path corpus was left behind in the temporary directory"
+fn a_written_corpus_is_removed_when_the_guard_is_dropped() {
+    let cases: Vec<corpus::Case> = (0..3)
+        .map(|i| corpus::Case {
+            name: format!("case{i}"),
+            expected: None,
+            bytes: vec![0_u8; 16],
+        })
+        .collect();
+
+    let directory = {
+        let written = report::Written::new(&cases);
+        let (directory, paths) = written.written();
+
+        assert!(
+            directory.is_dir(),
+            "{} was not created",
+            directory.display()
+        );
+        assert_eq!(paths.len(), cases.len(), "one file per case");
+        for path in paths {
+            assert!(path.is_file(), "{} is missing", path.display());
+        }
+        directory.to_path_buf()
+    };
+
+    assert!(
+        !directory.exists(),
+        "{} is still there after the guard was dropped, and it is 10.5 MB on a real run",
+        directory.display()
     );
 }
 
+/// Two corpora written at the same time do not share a directory.
+///
+/// With only the process id in the name, fifteen parallel tests share one
+/// directory, and whichever finishes first deletes the files the others are still
+/// opening. The from-path table would then be a table of `magic_file` on a path
+/// that no longer exists -- a number rather than an error, and a number that
+/// looks like libmagic being slow.
+#[test]
+fn two_corpora_written_at_the_same_time_do_not_collide() {
+    let cases: Vec<corpus::Case> = vec![corpus::Case {
+        name: "one".to_owned(),
+        expected: None,
+        bytes: vec![1_u8; 8],
+    }];
+    let first = report::Written::new(&cases);
+    let second = report::Written::new(&cases);
+
+    assert_ne!(
+        first.written().0,
+        second.written().0,
+        "two live corpora are in the same directory, so one of them is about to delete the other's \
+         files"
+    );
+    for (_, paths) in [first.written(), second.written()] {
+        for path in paths {
+            assert!(path.is_file(), "{} is missing", path.display());
+        }
+    }
+}
 /// Two builds in a row produce the same corpus, and the same answer rows.
 ///
 /// `Report::build` measures twice, once per entry point, and the sample buffers
@@ -497,8 +553,36 @@ fn the_corpus_size_is_the_library_s_answer() {
         magical_rs::magical::bytes_read::with_bytes_read()
     );
 }
+/// No corpus is left in the temporary directory once every test here has run.
+///
+/// The per-guard test above is the one that is exact. This one is the backstop:
+/// it runs whatever is left by the fifteen tests in this binary, and its subject
+/// is the thing a person actually cares about, which is that a machine does not
+/// slowly fill up because a benchmark was run on it.
+///
+/// It cannot be exact either -- the tests run in parallel, so a corpus belonging
+/// to a test that has not finished is legitimately there -- and it is not written
+/// to be. The exact assertion is the one that fails; this one is here so that a
+/// regression which leaves a directory behind forever cannot pass by accident.
+#[test]
+fn no_corpus_survives_this_binary() {
+    let leftovers = temp_dirs();
 
-/// Temporary directories the harness may have created, that are still there.
+    // Every corpus this binary created, from the guard's own naming, and the ones
+    // that are gone are the ones that were cleaned up. A leftover belonging to a
+    // still-running test is named with a higher counter than the last one this
+    // test can see, so the count is the only thing to assert.
+    assert!(
+        leftovers.len() < 32,
+        "{} corpus directories are still in {}: {leftovers:?}. Each holds 10.5 MB, so this is a \
+         disk that fills up rather than an error anybody reads. The guard's `Drop` is the thing \
+         that removes them.",
+        leftovers.len(),
+        std::env::temp_dir().display(),
+    );
+}
+
+/// Temporary directories this crate's harness may have created, that are still there.
 fn temp_dirs() -> Vec<PathBuf> {
     std::env::temp_dir()
         .read_dir()

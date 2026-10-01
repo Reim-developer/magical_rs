@@ -136,9 +136,9 @@ would compare it to, and that is checked for lying.**
   summary. Nothing gates on a number: a nanosecond figure on a shared runner is a
   property of the runner, and a gate built on one fails at random and gets muted.
 
-* **`benchmarks/mutations.ps1` is the gate.** 21 changes to the harness, each one a
+* **`benchmarks/mutations.ps1` is the gate.** 22 changes to the harness, each one a
   way the report could flatter this crate or hide a library, each of which must turn a
-  test red. All 21 are caught. Two of them are bugs this had while being written, and
+  test red. All 22 are caught. Two of them are bugs this had while being written, and
   both are written up in the crate's readme: libmagic's pass over the 10.5 MB corpus
   evicted it from cache and charged the next library for it (this crate measured
   177 ns where criterion measured 57 ns for identical work), and a `NaN` median made

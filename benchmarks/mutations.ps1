@@ -216,6 +216,12 @@ $mutations = @(
         Replace = 'self.positives + self.negatives + 1,'
     },
     @{
+        Name = 'every corpus is written into the same directory, so they delete each other'
+        File = 'src\report.rs'
+        Find = '        let n = NEXT.fetch_add(1, std::sync::atomic::Ordering::Relaxed);'
+        Replace = '        let n = 0;'
+    },
+    @{
         Name = 'the corpus is not cleaned up out of the temporary directory'
         File = 'src\report.rs'
         Find = 'let _ = std::fs::remove_dir_all(&self.directory);'

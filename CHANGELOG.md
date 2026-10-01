@@ -90,6 +90,57 @@ readme lists what all three languages export.**
   number, and the readme was about to describe them as if they were.
 
 
+### The sparse list compares integers
+
+* **The seven entries whose signature sits past offset zero are compared as one
+  64-bit integer** rather than through `Magic::matches`. A signature of eight bytes
+  or fewer is held zero-padded in a `u64`, the input's eight bytes at the same
+  offset are loaded the same way, and the two are compared after masking. That
+  replaces a fat-pointer load, a bounds check at an offset the compiler cannot
+  know, and a `memcmp` call with one load, one `and` and one `cmp`.
+
+  Measured before and after in the same session with the same harness, median of
+  nine passes over 300,000 iterations each:
+
+  | input | before | after | |
+  | --- | --- | --- | --- |
+  | nothing matches, 36,870 bytes | 28.8 ns | **6.4 ns** | 4.5x |
+  | nothing matches, 2,048 bytes | 23.5 ns | **5.2 ns** | 4.5x |
+  | empty buffer | 16.0 ns | **3.2 ns** | 5.0x |
+  | GIF, table position 36 | 15.4 ns | **8.9 ns** | 1.7x |
+  | `SQLite`, a sixteen-byte signature | 11.7 ns | **8.8 ns** | 1.3x |
+  | `Tar` at offset 257 | 59.7 ns | **46.6 ns** | 1.3x |
+  | PNG, JPG, ZIP | 5.4-5.9 ns | 5.6-6.0 ns | 0.96x |
+
+  The last row is a 2-4% regression and it is the price of the rest. Those formats
+  never reach the sparse list, so they pay for the extra code and nothing else.
+
+* **Zero bytes.** `node scripts/wasm_sizes.mjs` reports 45,184 raw and 18,024
+  gzipped for the binding and 32,847 for the minimal example, before and after, on
+  a clean rebuild. The three small arrays cost 98 bytes and the code they replaced
+  cost the same.
+
+* **The mask is the safety argument, and it is checked.** A signature is
+  zero-padded to eight bytes and the input is not, so comparing the two integers
+  directly would compare the signature's padding against input bytes past its own
+  signature and would *pass* whenever those happened to be zero, which a binary
+  file contains a great deal of. `MASKS` is the low `n` bytes set, and a new test
+  checks that every probe's entry, offset and length are the ones the walk will
+  use -- the failure the differential tests cannot see, because they only ever
+  plant whole signatures.
+
+* **A compile-time assertion, not a silent truncation.** 21 of the 150 signatures
+  are longer than eight bytes, and `const _: () = assert!(longest_sparse_signature()
+  <= INLINE)` fails the build naming the constant to widen. A signature that
+  outgrew the register would otherwise be compared as its own first eight bytes
+  and match a prefix of the format.
+
+* **Two shapes were tried and measured slower, and are written down.**
+  Flattening the whole search is 2x slower on every bucket case: `SIGNATURE_KIND[0]`
+  is one cache line the fast libraries never leave, and a `memcmp` against it costs
+  about what three bounds-checked array indexes do. A struct-per-probe version was
+  10x slower, because every probe carried a `&'static [u8]` tail for the long
+  signatures. `src/magical/dispatch.rs` has both tables.
 ### A first-byte detection index
 
 **Detection no longer walks all 114 rules to answer.**

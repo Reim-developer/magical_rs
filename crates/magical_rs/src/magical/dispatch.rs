@@ -19,6 +19,63 @@
 //! paid for all 114 entries. That case is 17 times faster now; the early-match case
 //! is unchanged, which took an early exit to arrange -- see [`first_match`].
 //!
+//! # The sparse list compares integers
+//!
+//! The seven entries whose signature sits at a non-zero offset are compared as one
+//! 64-bit integer rather than through `Magic::matches`. A signature of eight bytes
+//! or fewer is held zero-padded in a `u64`, the input's eight bytes at the same
+//! offset are loaded the same way, and the two are compared after masking -- one
+//! load, one `and`, one `cmp`, against a fat-pointer load, a bounds check at an
+//! offset the compiler cannot know, and a `memcmp` call.
+//!
+//! Measured on this machine, `opt-level = 3`, 300,000 iterations each, median of
+//! nine passes, before and after measured in the same session with the same
+//! harness so the two columns are comparable:
+//!
+//! | input | before | after | |
+//! | --- | --- | --- | --- |
+//! | nothing matches, 36,870 bytes | 28.8 ns | **6.4 ns** | 4.5x |
+//! | nothing matches, 2,048 bytes | 23.5 ns | **5.2 ns** | 4.5x |
+//! | empty buffer | 16.0 ns | **3.2 ns** | 5.0x |
+//! | GIF, table position 36 | 15.4 ns | **8.9 ns** | 1.7x |
+//! | `SQLite`, a sixteen-byte signature | 11.7 ns | **8.8 ns** | 1.3x |
+//! | `Tar` at offset 257 | 59.7 ns | **46.6 ns** | 1.3x |
+//! | `ISO` at offset 36,865 | 52.0 ns | **47.9 ns** | 1.1x |
+//! | PNG, JPG, ZIP -- matches at the first probe | 5.4-5.9 ns | 5.6-6.0 ns | 0.96x |
+//!
+//! The last row is a 2-4% regression and it is the price of the rest. Those three
+//! never reach the sparse list -- their bucket matches at the first probe, and the
+//! `index >= best` exit stops the sparse walk before it starts -- so they pay for
+//! the extra code and nothing else. Six nanoseconds against four-and-a-half is not
+//! worth the fourteen the unrecognised case gave up, and a directory scan is mostly
+//! unrecognised files.
+//!
+//! **Zero bytes.** `node scripts/wasm_sizes.mjs` reports 45,184 raw and 18,024
+//! gzipped for the binding and 32,847 for the minimal example, before and after,
+//! on a clean rebuild. The three small arrays cost 98 bytes and the code they
+//! replaced cost the same.
+//!
+//! # What did not work, and why it is written down
+//!
+//! Flattening the *whole* search -- one probe per `(signature, offset)` pair, all
+//! of them compared as integers, including the offset-0 ones -- is 2x *slower* on
+//! every bucket case. Measured, three ways:
+//!
+//! | shape | PNG | GIF | no match | `ISO` at 36,865 |
+//! | --- | --- | --- | --- | --- |
+//! | the shipped code | 5.5 ns | 15 ns | 28 ns | 49 ns |
+//! | one struct per probe | 63 ns | 69 ns | 71 ns | 73 ns |
+//! | three parallel arrays | 7.3 ns | 23 ns | 55 ns | 16 ns |
+//!
+//! The first row of that table is the reason the change above is scoped to the
+//! sparse list. `SIGNATURE_KIND[0]` is one cache line that the fast libraries
+//! never leave, and a four-to-eight byte `memcmp` against it costs about what three
+//! bounds-checked array indexes do -- so flattening the bucket path buys nothing
+//! and costs a load. The struct version is worse still because every probe
+//! carried a `&'static [u8]` tail for the twenty-one signatures longer than eight
+//! bytes: 32 bytes per probe, and a pointer chase, for a comparison that almost
+//! never runs.
+//!
 //! # What it does not change
 //!
 //! **Nothing.** Every answer this crate gives is byte-for-byte what the linear scan
@@ -172,6 +229,7 @@ const fn candidate_total() -> usize {
 }
 
 /// How many entries are tried for every input, because they are not indexable.
+#[cfg(test)]
 const fn always_total() -> usize {
     let mut count = 0;
     let mut at = 0;
@@ -187,6 +245,18 @@ const fn always_total() -> usize {
 // Both totals are derived from the table, so adding a format re-derives the array
 // lengths and a stale one cannot compile rather than being a buffer overrun.
 const CANDIDATES: usize = candidate_total();
+/// How many entries are not indexable: a non-zero offset, or a predicate.
+///
+/// Test-only, and it is worth saying why it is not a runtime constant any more.
+/// The walk used to iterate one `ALWAYS` list holding all of them, so its length
+/// was the loop bound. The list is now three -- [`SPARSE`] for a byte signature at
+/// a non-zero offset, [`PREDICATES`] for a predicate, and the bucket for the rest
+/// -- each with its own bound derived from its own array's length, so nothing in
+/// the shipped path needs this number. It is kept because it is the total the
+/// three lists have to account for, and a table that grew an entry none of them
+/// reaches would otherwise show up as a format that is not detected rather than as
+/// an arithmetic failure.
+#[cfg(test)]
 const ALWAYS: usize = always_total();
 
 // The two `as` casts above are unchecked in const context -- `u16::try_from` is not
@@ -250,17 +320,20 @@ static ENTRIES: [u8; CANDIDATES] = {
     out
 };
 
-/// `SIGNATURE_KIND` indices tried for every input, ascending.
+/// The entries with a predicate, in table order.
 ///
-/// Ascending because [`first_match`] takes the minimum across both lists anyway, but
-/// a sorted list makes the common case -- this one is 7 entries and the answer is
-/// usually null -- predictable rather than merely correct.
-static UNSORTED: [u8; ALWAYS] = {
-    let mut out = [0_u8; ALWAYS];
+/// These are the only entries [`first_match`] still reaches through
+/// `SIGNATURE_KIND[..].matches(bytes)`. Everything else that is not indexable has
+/// a byte signature at a non-zero offset, and those are in [`SPARSE`] as integers.
+///
+/// Ascending because the `index >= best` early exit is only sound on a sorted
+/// list, and `sparse_is_ascending` is the test that says so.
+static PREDICATES: [u8; PREDICATE_TOTAL] = {
+    let mut out = [0_u8; PREDICATE_TOTAL];
     let mut cursor = 0_usize;
     let mut at = 0;
     while at < entry_count() {
-        if !is_indexable(at) {
+        if is_predicate(at) {
             out[cursor] = at as u8;
             cursor += 1;
         }
@@ -269,15 +342,256 @@ static UNSORTED: [u8; ALWAYS] = {
     out
 };
 
+/// Whether entry `index` is matched by calling a predicate rather than by bytes.
+const fn is_predicate(index: usize) -> bool {
+    !matches!(entry_at(index).rules, MatchRules::Default)
+}
+
+/// How many entries are matched by a predicate.
+const fn predicate_total() -> usize {
+    let mut count = 0;
+    let mut at = 0;
+    while at < entry_count() {
+        if is_predicate(at) {
+            count += 1;
+        }
+        at += 1;
+    }
+    count
+}
+
+const PREDICATE_TOTAL: usize = predicate_total();
+
+/// The number of signature bytes compared as one integer.
+///
+/// Eight, because that is the width of the load and of the register the compiler
+/// has for it. It is *not* the longest signature: 21 of the 150 in the table are
+/// longer than this, and [`SPARSE_TOTAL`] is asserted against the count of the
+/// ones that are not, so a table that grew a longer signature is a compile error
+/// naming this constant rather than a signature silently truncated to a prefix.
+const INLINE: usize = 8;
+
+/// A zero-filled width, for the `try_from` that a `get` has already made infallible.
+static ZERO: [u8; INLINE] = [0; INLINE];
+
+/// `MASKS[n]` is the low `n` bytes set.
+///
+/// This is the whole safety argument for comparing signatures as integers, so it is
+/// worth being explicit about what it prevents. A signature is zero-padded to
+/// `INLINE` bytes and the input's are not, so comparing the two integers directly
+/// would compare the signature's padding against the input's bytes past its own
+/// signature -- and would *pass* whenever those happened to be zero, which a
+/// binary file contains a great deal of. Masking the input to the signature's own
+/// length is what makes the comparison mean what `bytes[a..a + len] == sig` means.
+static MASKS: [u64; INLINE + 1] = {
+    let mut out = [0_u64; INLINE + 1];
+    let mut at = 1;
+    while at <= INLINE {
+        out[at] = out[at - 1] | (0xFF << (8 * (at - 1)));
+        at += 1;
+    }
+    out
+};
+
+/// The longest signature among the entries that reach the sparse list.
+const fn longest_sparse_signature() -> usize {
+    let mut longest = 0;
+    let mut at = 0;
+    while at < entry_count() {
+        if is_sparse_probe(at) {
+            let mut which = 0;
+            while which < entry_at(at).signatures.len() {
+                let len = entry_at(at).signatures[which].len();
+                if len > longest {
+                    longest = len;
+                }
+                which += 1;
+            }
+        }
+        at += 1;
+    }
+    longest
+}
+
+/// Whether entry `index` contributes a probe at a non-zero offset.
+///
+/// The mirror image of [`is_indexable`]: a byte signature at an offset that is not
+/// `0` cannot be reached through `bytes[0]`, so it is tried for every input, and
+/// it is the one case where comparing the bytes as an integer pays. A predicate
+/// has no bytes to inline and stays a call.
+const fn is_sparse_probe(index: usize) -> bool {
+    let magic = entry_at(index);
+    if magic.signatures.is_empty() || !matches!(magic.rules, MatchRules::Default) {
+        return false;
+    }
+    let mut at = 0;
+    while at < magic.offsets.len() {
+        if magic.offsets[at] != 0 {
+            return true;
+        }
+        at += 1;
+    }
+    false
+}
+
+/// How many `(signature, offset)` pairs reach the sparse list.
+const fn sparse_total() -> usize {
+    let mut total = 0;
+    let mut at = 0;
+    while at < entry_count() {
+        if is_sparse_probe(at) {
+            let magic = entry_at(at);
+            let mut usable = 0;
+            let mut which = 0;
+            while which < magic.signatures.len() {
+                if !magic.signatures[which].is_empty() && magic.signatures[which].len() <= INLINE {
+                    usable += 1;
+                }
+                which += 1;
+            }
+            let mut non_zero = 0;
+            let mut o = 0;
+            while o < magic.offsets.len() {
+                if magic.offsets[o] != 0 {
+                    non_zero += 1;
+                }
+                o += 1;
+            }
+            total += usable * non_zero;
+        }
+        at += 1;
+    }
+    total
+}
+
+const SPARSE_TOTAL: usize = sparse_total();
+
+const _: () = assert!(
+    longest_sparse_signature() <= INLINE,
+    "a signature reaching the sparse list is longer than the integer comparison covers. Widen \
+     INLINE, or move the entry to `is_indexable` by declaring its offset as 0. Silently \
+     truncating it would match a prefix of the format."
+);
+
+/// The sparse probes' signature bytes, zero-padded, as one little-endian integer.
+///
+/// Four parallel arrays rather than one array of a struct, and the reason is the
+/// measurement: a struct holding a `u64` is padded to sixteen bytes, so the
+/// alternative loads twice the bytes per probe for the same answer. Measured with
+/// the struct, this table was 7x *slower* than `&SIGNATURE_KIND[index]` and a
+/// `memcmp`.
+static SPARSE_HEAD: [u64; SPARSE_TOTAL] = {
+    let mut out = [0_u64; SPARSE_TOTAL];
+    let mut cursor = 0;
+    let mut at = 0;
+    while at < entry_count() {
+        if is_sparse_probe(at) {
+            let magic = entry_at(at);
+            let mut which = 0;
+            while which < magic.signatures.len() {
+                if !magic.signatures[which].is_empty() && magic.signatures[which].len() <= INLINE {
+                    let mut head = [0_u8; INLINE];
+                    let mut byte = 0;
+                    while byte < magic.signatures[which].len() {
+                        head[byte] = magic.signatures[which][byte];
+                        byte += 1;
+                    }
+                    let mut o = 0;
+                    while o < magic.offsets.len() {
+                        if magic.offsets[o] != 0 {
+                            out[cursor] = u64::from_le_bytes(head);
+                            cursor += 1;
+                        }
+                        o += 1;
+                    }
+                }
+                which += 1;
+            }
+        }
+        at += 1;
+    }
+    out
+};
+
+/// The sparse probes' offsets, and their entries and lengths.
+///
+/// Ascending by entry, because [`first_match`]'s `index >= best` early exit is
+/// only sound on a sorted list -- see `always_is_ascending`, which is the test
+/// that says so. Entries with more than one usable signature appear more than
+/// once, which is sound for the same reason `min` is: the first one that matches
+/// gives that entry's index and the rest are never reached.
+/// The sparse probes' offsets, entries and lengths: one walk, three arrays.
+///
+/// Built together rather than by three copies of the same loop, because three
+/// copies of a twenty-line `const fn` that have to agree is three chances not to.
+/// Their counts are `SPARSE_TOTAL` each, so a table that grew a probe out of one
+/// array and not the others would not compile.
+const SPARSE: Sparse = build_sparse();
+
+/// The three views of the sparse probe list, built at compile time.
+struct Sparse {
+    /// Where each probe's bytes have to be in the input.
+    offset: [u32; SPARSE_TOTAL],
+    /// Which entry each probe came from, for the answer and the read-window filter.
+    entry: [u8; SPARSE_TOTAL],
+    /// How long each probe's signature is, for the mask.
+    len: [u8; SPARSE_TOTAL],
+}
+
+/// Walks the table once and fills all three arrays.
+///
+/// Ascending by entry, because [`first_match`]'s `index >= best` early exit is
+/// only sound on a sorted list -- `always_is_ascending` is the test that says so.
+/// An entry with more than one usable signature appears more than once, which is
+/// sound for the same reason `min` is: the first one that matches gives that
+/// entry's index and the rest are never reached.
+const fn build_sparse() -> Sparse {
+    let mut out = Sparse {
+        offset: [0_u32; SPARSE_TOTAL],
+        entry: [0_u8; SPARSE_TOTAL],
+        len: [0_u8; SPARSE_TOTAL],
+    };
+    let mut cursor = 0;
+    let mut at = 0;
+    while at < entry_count() {
+        if is_sparse_probe(at) {
+            let magic = entry_at(at);
+            let mut which = 0;
+            while which < magic.signatures.len() {
+                let signature = magic.signatures[which];
+                if !signature.is_empty() && signature.len() <= INLINE {
+                    let mut o = 0;
+                    while o < magic.offsets.len() {
+                        if magic.offsets[o] != 0 {
+                            out.offset[cursor] = magic.offsets[o] as u32;
+                            out.entry[cursor] = at as u8;
+                            out.len[cursor] = signature.len() as u8;
+                            cursor += 1;
+                        }
+                        o += 1;
+                    }
+                }
+                which += 1;
+            }
+        }
+        at += 1;
+    }
+    out
+}
+
 /// How many entries a given input causes [`first_match`] to try at worst.
 ///
 /// Exposed for the tests, and for the benchmark, because "how many entries does a
 /// non-matching file cost" is the number the whole index exists to move.
 #[must_use]
 pub fn probes_for(bytes: &[u8]) -> usize {
-    bytes.first().map_or(ALWAYS, |&first| {
-        usize::from(SLOTS[usize::from(first) + 1] - SLOTS[usize::from(first)]) + ALWAYS
-    })
+    bytes
+        .first()
+        .map_or(SPARSE_TOTAL + PREDICATE_TOTAL, |&first| {
+            usize::from(SLOTS[usize::from(first) + 1] - SLOTS[usize::from(first)])
+                + SPARSE_TOTAL
+                + PREDICATE_TOTAL
+        })
 }
 
 /// The index of the first entry in table order that matches `bytes`.
@@ -353,24 +667,56 @@ pub fn first_match(bytes: &[u8], allowed_max_read: usize) -> Option<usize> {
         }
     }
 
-    // `UNSORTED` is ascending, so the guard below is sound: an entry at or past
-    // `best` cannot improve on it, and neither can anything after it. It is an
-    // optimisation, not the correctness argument -- `best` is a minimum here, so
-    // deleting the guard costs time and nothing else. `always_is_ascending` is what
-    // makes the guard sound in the first place; without that test the guard would
-    // be an unchecked assumption about a sorted list.
+    // The sparse probes, compared as integers. `SPARSE` is ascending by entry, so
+    // the guard below is sound: an entry at or past `best` cannot improve on it,
+    // and neither can anything after it. It is an optimisation, not the correctness
+    // argument -- `best` is a minimum here, so deleting the guard costs time and
+    // answers nothing differently. `sparse_is_ascending` is what makes the guard
+    // sound in the first place; without that test the guard would be an unchecked
+    // assumption about a sorted list.
     let mut cursor = 0;
-    while cursor < ALWAYS {
-        let index = usize::from(UNSORTED[cursor]);
-        if best != usize::MAX && index >= best {
+    while cursor < SPARSE_TOTAL {
+        let index = usize::from(SPARSE.entry[cursor]);
+        if index >= best {
+            break;
+        }
+        let len = usize::from(SPARSE.len[cursor]);
+        let at = SPARSE.offset[cursor] as usize;
+        // `map_or_else` rather than a `match`, because the `None` arm has to come
+        // first in a `match` and that reads as though the narrow path were the
+        // common one. It is not: it needs fewer than eight bytes at the probe's
+        // offset, which for a 36,870-byte buffer and an offset of 257 never
+        // happens.
+        let hit = bytes.get(at..at + INLINE).map_or_else(
+            || {
+                len <= INLINE
+                    && bytes.get(at..at + len) == Some(&SPARSE_HEAD[cursor].to_le_bytes()[..len])
+            },
+            |wide| {
+                let got = u64::from_le_bytes(<[u8; INLINE]>::try_from(wide).unwrap_or(ZERO));
+                (got & MASKS[len]) == SPARSE_HEAD[cursor]
+            },
+        );
+        if hit && SIGNATURE_KIND[index].max_bytes_read <= allowed_max_read {
+            // A minimum, not an assignment. The guard already rules out anything
+            // larger, but a min states the intent and holds if the guard is ever
+            // loosened.
+            best = index;
+            break;
+        }
+        cursor += 1;
+    }
+
+    // The predicate entries, which have no bytes to inline and stay calls.
+    let mut cursor = 0;
+    while cursor < PREDICATE_TOTAL {
+        let index = usize::from(PREDICATES[cursor]);
+        if index >= best {
             break;
         }
         let magic = &SIGNATURE_KIND[index];
         if magic.max_bytes_read <= allowed_max_read && magic.matches(bytes) {
-            // A minimum, not an assignment. The guard already rules out anything
-            // larger, but a min states the intent and holds if the guard is ever
-            // loosened.
-            best = if index < best { index } else { best };
+            best = index;
             break;
         }
         cursor += 1;
@@ -387,11 +733,12 @@ mod tests {
     // one configuration that exists to prove the crate needs no `std`.
     extern crate alloc;
     use super::{
-        ALWAYS, CANDIDATES, ENTRIES, SLOTS, UNSORTED, entry_count, first_match, is_indexable,
-        probes_for,
+        ALWAYS, CANDIDATES, ENTRIES, PREDICATE_TOTAL, PREDICATES, SLOTS, SPARSE, SPARSE_TOTAL,
+        entry_count, first_match, is_indexable, probes_for,
     };
     use crate::magical::match_rules::MatchRules;
     use crate::magical::signatures::SIGNATURE_KIND;
+    use alloc::collections::BTreeSet;
     use alloc::{vec, vec::Vec};
 
     /// One byte's bucket, as the indices it holds.
@@ -416,37 +763,66 @@ mod tests {
             .position(|magic| magic.max_bytes_read <= allowed_max_read && magic.matches(bytes))
     }
 
-    /// The two lists partition the table: every entry is in exactly one of them.
+    /// The three lists partition the table: every entry is in exactly one of them.
     ///
     /// Without this, an entry in neither would be skipped and detection would
-    /// quietly lose a format, and an entry in both would be tried twice.
+    /// quietly lose a format, and an entry in two of them would be tried twice.
+    ///
+    /// Three lists rather than two, because the entries that are not indexable
+    /// split: a byte signature at a non-zero offset is compared as an integer from
+    /// `SPARSE`, and a predicate has no bytes to inline and stays a call.
     #[test]
     fn every_entry_is_in_exactly_one_list() {
         let mut in_bucket = [false; 256];
         for index in ENTRIES {
             in_bucket[usize::from(index)] = true;
         }
-        let mut in_always = [false; 256];
-        for index in UNSORTED {
-            in_always[usize::from(index)] = true;
+        let mut in_sparse = [false; 256];
+        for index in SPARSE.entry {
+            in_sparse[usize::from(index)] = true;
+        }
+        let mut in_predicate = [false; 256];
+        for index in PREDICATES {
+            in_predicate[usize::from(index)] = true;
         }
 
         for at in 0..entry_count() {
-            assert!(
-                in_bucket[at] != in_always[at],
-                "entry {at} ({}) is in {} of the two lists",
+            let lists = [
+                ("bucket", in_bucket[at]),
+                ("sparse", in_sparse[at]),
+                ("predicate", in_predicate[at]),
+            ];
+            let here = lists.iter().filter(|(_, in_it)| *in_it).count();
+            assert_eq!(
+                here,
+                1,
+                "entry {at} ({}) is in {here} of the three lists: {lists:?}",
                 SIGNATURE_KIND[at].kind.variant_name(),
-                match (in_bucket[at], in_always[at]) {
-                    (true, true) => "both",
-                    _ => "neither",
-                },
             );
         }
 
         assert_eq!(
-            ENTRIES.len() + UNSORTED.len(),
-            CANDIDATES + ALWAYS,
-            "the candidate totals do not add up",
+            ENTRIES.len(),
+            CANDIDATES,
+            "the candidate total does not match"
+        );
+
+        // `SPARSE_TOTAL` counts *probes* and `ALWAYS` counts *entries*, so they
+        // are not comparable and adding them was the bug in the first version of
+        // this assertion. What has to add up is the number of distinct entries
+        // the sparse list reaches, plus the predicates, against the number of
+        // entries that are not indexable -- otherwise a non-indexable entry with a
+        // signature the integer comparison cannot hold is in no list at all, and
+        // that is a format silently not detected.
+        let mut distinct: BTreeSet<usize> = SPARSE.entry.iter().map(|i| usize::from(*i)).collect();
+        distinct.extend(PREDICATES.iter().map(|i| usize::from(*i)));
+        assert_eq!(
+            distinct.len(),
+            ALWAYS,
+            "{} distinct entries across the sparse and predicate lists, against {ALWAYS} \
+             entries that are not indexable. An entry in neither is a format that is not \
+             detected.",
+            distinct.len(),
         );
     }
 
@@ -489,20 +865,62 @@ mod tests {
         }
     }
 
-    /// `UNSORTED` is ascending, which the early exit in `first_match` relies on.
+    /// The sparse list is ascending by entry, which the early exit relies on.
     ///
-    /// The failure this catches is silent and total: with `UNSORTED` unsorted, the
-    /// `index >= best` break stops at the wrong place, so a match at a late index is
+    /// The failure this catches is silent and total: with the list unsorted, the
+    /// `index >= best` break stops at the wrong place, so a match at a late entry is
     /// reported in preference to an earlier one -- which is the linear scan's answer
     /// inverted. Every differential test below would catch it, and this says why.
+    ///
+    /// Non-strict, because an entry with more than one usable signature appears more
+    /// than once. That is sound: the first probe of an entry that matches gives that
+    /// entry's index, and the rest are never reached.
     #[test]
-    fn always_is_ascending() {
-        for cursor in 1..ALWAYS {
+    fn sparse_is_ascending() {
+        for cursor in 1..SPARSE_TOTAL {
             assert!(
-                UNSORTED[cursor - 1] < UNSORTED[cursor],
-                "ALWAYS holds {} then {}, which is not ascending",
-                UNSORTED[cursor - 1],
-                UNSORTED[cursor],
+                SPARSE.entry[cursor - 1] <= SPARSE.entry[cursor],
+                "the sparse list holds {} then {}, which is not ascending by entry",
+                SPARSE.entry[cursor - 1],
+                SPARSE.entry[cursor],
+            );
+        }
+        for cursor in 1..PREDICATE_TOTAL {
+            assert!(
+                PREDICATES[cursor - 1] < PREDICATES[cursor],
+                "the predicate list holds {} then {}, which is not ascending",
+                PREDICATES[cursor - 1],
+                PREDICATES[cursor],
+            );
+        }
+    }
+
+    /// Every sparse probe's entry, offset and length are the ones the walk will use.
+    ///
+    /// The integer comparison reads `SPARSE.len` to build its mask and `SPARSE.offset`
+    /// to index, so a table where either is wrong answers something other than what
+    /// it claims. And a mask of the wrong length is exactly the failure the
+    /// differential tests below cannot see, because they only ever plant whole
+    /// signatures -- the bytes past a short signature are never anything.
+    #[test]
+    fn every_sparse_probe_is_a_real_signature_at_its_own_offset() {
+        for cursor in 0..SPARSE_TOTAL {
+            let entry = usize::from(SPARSE.entry[cursor]);
+            let offset = SPARSE.offset[cursor] as usize;
+            let len = usize::from(SPARSE.len[cursor]);
+            let magic = &SIGNATURE_KIND[entry];
+
+            assert_ne!(offset, 0, "a sparse probe at offset 0 belongs in a bucket");
+            assert!(
+                magic.offsets.contains(&offset),
+                "entry {entry} ({}) declares offsets {:?} and the probe claims {offset}",
+                magic.kind.variant_name(),
+                magic.offsets,
+            );
+            assert!(
+                magic.signatures.iter().any(|s| s.len() == len),
+                "entry {entry} ({}) has no signature of length {len}",
+                magic.kind.variant_name(),
             );
         }
     }
@@ -621,8 +1039,8 @@ mod tests {
                 magic.kind.variant_name(),
             );
             assert!(
-                UNSORTED.contains(&(at as u8)),
-                "entry {at} ({}) has a predicate and is in neither list",
+                PREDICATES.contains(&(at as u8)),
+                "entry {at} ({}) has a predicate and is in no list, so it is never tried",
                 magic.kind.variant_name(),
             );
             checked += 1;

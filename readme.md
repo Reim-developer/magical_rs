@@ -33,6 +33,7 @@ out of this table — see [Benchmarks](#benchmarks).
 | Works on `wasm32` | compiled **and run**, from Rust, with no binding | `examples/wasm_rust/`, run by `make examples` |
 | Works without `std` | built for `thumbv7em-none-eabi` | `make test-nostd` |
 | Detection answers what the linear scan answered | every fixture, every non-matching input, 4,096 pseudo-random buffers | `src/magical/dispatch.rs` |
+| An unrecognised file costs 6.4 ns, not 525 | measured before and after in one session, same harness | `src/magical/dispatch.rs` |
 | Every format's own rule matches itself | all 114 entries, from the table | `tests/signature_coverage.rs` |
 | No signature matches at an undeclared offset | all 114 entries | `tests/signature_coverage.rs` |
 | Padding is never misdetected | every entry, at every declared length | `tests/signature_coverage.rs` |
@@ -259,7 +260,7 @@ the ABI. Two entries overlap on purpose — a `#!` line is a shebang or the AMR
 audio header, and the shebang rule wins because it is asked first.
 
 Detection is a first-byte index over that table, built during const evaluation.
-It costs 525 ns → 31 ns for a file the table does not recognise, and it answers
+It costs 525 ns → 6.4 ns for a file the table does not recognise, and it answers
 exactly what a walk of the table answered, for every input. Both halves of that
 last sentence are worth reading: the speed is in
 [`src/magical/dispatch.rs`](https://github.com/Reim-developer/magical_rs/blob/master/crates/magical_rs/src/magical/dispatch.rs),
@@ -1024,13 +1025,21 @@ The two sizes also answer a question worth asking on its own. Detection used to 
 all 114 rules in order, which cost 525 ns for a file the table does not recognise
 and 5 ns for one that matches the first rule, so a hundred-fold spread came from
 position in the table alone. It is now a first-byte index built during const
-evaluation - `crates/magical_rs/src/magical/dispatch.rs` - and that case is 31 ns,
-GIF at position 36 is 21 ns rather than 123, and PNG is unchanged at 5. The index
-answers exactly what the walk answered, for every input; that is not established by
-the tests agreeing with the old code on the cases they happened to try, it is
-established by construction and then checked by differential tests against a
-separately written linear scan over the table, its fixtures, its non-matching
-inputs, and 4,096 pseudo-random buffers.
+evaluation - `crates/magical_rs/src/magical/dispatch.rs` - and the seven entries
+whose signature sits past offset zero are compared as one 64-bit integer rather
+than through a `memcmp` call, because a signature of eight bytes or fewer fits in
+a register. That case is 6.4 ns, measured against 28.8 ns for the index alone in
+the same session with the same harness; GIF at position 36 is 8.9 ns rather than
+15.4; and PNG is 6.0 rather than 5.8, which is the 2-4% the other cases paid for
+it. Both changes are zero bytes - the binding is 45,184 raw and 18,024 gzipped
+before and after, on a clean rebuild. The index answers exactly what the walk
+answered, for every input; that is not established by the tests agreeing with the
+old code on the cases they happened to try, it is established by construction and
+then checked by differential tests against a separately written linear scan over
+the table, its fixtures, its non-matching inputs, and 4,096 pseudo-random buffers.
+`src/magical/dispatch.rs` also records the two shapes that were tried and
+measured *slower*, because a table of only the things that worked is a table of
+only the things somebody kept.
 
 It also cost 1,404 bytes in the binding and 15,083 in the example. The same code
 weighing ten times as much tells you the cost is code and not data, and that a

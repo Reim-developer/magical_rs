@@ -2,6 +2,7 @@
 - [CHANGELOG](#changelog)
   - [Unreleased: macros, a fluent API, and an API reference](#unreleased-macros-a-fluent-api-and-an-api-reference)
   - [Unreleased: a first-byte detection index](#unreleased-a-first-byte-detection-index)
+  - [Unreleased: benchmarks against infer and libmagic](#unreleased-benchmarks-against-infer-and-libmagic)
   - [Unreleased: one format dataset](#unreleased-one-format-dataset)
   - [magical-py: Version 0.4.0](#magical-py-version-040)
   - [magical-py: Version 0.3.0](#magical-py-version-030)
@@ -99,6 +100,53 @@ readme lists what all three languages export.**
   someone to discover.
 
 
+## Unreleased: benchmarks against infer and libmagic
+
+**A benchmark crate that measures this crate against the libraries a reader
+would compare it to, and that is checked for lying.**
+
+* **Added `benchmarks/`.** Its own workspace, on purpose: the readme's first table
+  claims the root lockfile holds exactly one package, and criterion is a few hundred.
+  `crates/magical_rs/tests/workspace.rs` now fails if `benchmarks` is ever dropped
+  from `workspace.exclude`.
+
+* **Three libraries on one corpus.** 286 buffers of 36,870 bytes — half with a
+  format planted at a declared signature and offset, half matching nothing — plus the
+  same 286 written to disk and opened by each library. The two entry points are
+  separate tables, because the numbers are not close: from a file, `infer` is faster
+  than this crate, since `magical_rs` reads 36,870 bytes to reach ISO 9660 and `infer`
+  reads only what its own table needs. That row is in the report on purpose.
+
+* **The answer table is not a score and says so.** The format cases are generated from
+  this crate's own `SIGNATURE_KIND`, so a correctness figure over them would be
+  measuring the generator. The report prints what each library said about the four
+  real files the repository already commits. That split was found rather than
+  designed: libmagic reports `application/octet-stream` for a buffer holding a valid
+  eight-byte PNG signature and 36,862 zero bytes, and `image/png` for a real PNG
+  whose first eight bytes are the same eight, because its rules look past the header.
+
+* **libmagic is behind the crate's `libmagic` feature.** `magic-sys`'s build script
+  tries `pkg-config` then `vcpkg` and fails rather than degrading, so a missing
+  libmagic has to be a benchmark with one fewer row rather than a red build. The
+  report prints which libraries ran, so a two-row table is never mistaken for a
+  three-row one. `benchmarks/README.md` has the per-platform instructions.
+
+* **Added `make bench`, `make bench-report` and `make bench-mutations`,** and
+  `.github/workflows/benchmarks.yml`, which publishes the numbers to the job's step
+  summary. Nothing gates on a number: a nanosecond figure on a shared runner is a
+  property of the runner, and a gate built on one fails at random and gets muted.
+
+* **`benchmarks/mutations.ps1` is the gate.** 21 changes to the harness, each one a
+  way the report could flatter this crate or hide a library, each of which must turn a
+  test red. All 21 are caught. Two of them are bugs this had while being written, and
+  both are written up in the crate's readme: libmagic's pass over the 10.5 MB corpus
+  evicted it from cache and charged the next library for it (this crate measured
+  177 ns where criterion measured 57 ns for identical work), and a `NaN` median made
+  every ratio in the table print as `inf`.
+
+* **`tests/ci_coverage.rs` reads every workflow rather than `crate_dev.yml`.** The
+  subject of that test is a `Makefile` target nothing runs, and `bench` is run by a
+  workflow that did not exist when the test was written.
 ## Unreleased: one format dataset
 
 **`@reim-developer/magical-js` can now answer what a format is called and served as.**

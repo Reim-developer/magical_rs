@@ -25,7 +25,7 @@ use std::path::{Path, PathBuf};
 
 /// Directories whose crates are excluded from the workspace, and which
 /// therefore have to be listed in `Cargo.toml` one crate at a time.
-const EXCLUDED_TREES: [&str; 2] = ["bindings", "examples"];
+const EXCLUDED_TREES: [&str; 3] = ["benchmarks", "bindings", "examples"];
 
 /// The repository root.
 ///
@@ -90,26 +90,35 @@ fn declared_excludes(root: &Path) -> BTreeSet<String> {
 
 /// Every crate under the excluded trees, as a path relative to the root.
 ///
-/// One level deep only, which is the shape every one of them has. A crate two
-/// levels down would be missed, and the fix would be a recursion here rather
-/// than a change to any manifest.
+/// Two shapes, because there are two shapes. `bindings/` and `examples/` are
+/// directories *of* crates; `benchmarks/` **is** one crate, and looking only one
+/// level down missed it -- which showed up as the reverse failure, the `exclude`
+/// entry being reported as stale. So each tree is checked for its own manifest
+/// and for one on each of its children.
+///
+/// One level below a tree, and no recursion. A crate two levels down would be
+/// missed, and the fix would be a recursion here rather than a change to any
+/// manifest.
 fn crates_under(root: &Path) -> BTreeSet<String> {
     let mut found = BTreeSet::new();
+    let add = |found: &mut BTreeSet<String>, path: &Path| {
+        if path.join("Cargo.toml").is_file() {
+            found.insert(
+                path.strip_prefix(root)
+                    .expect("a tree is under the root")
+                    .to_string_lossy()
+                    .replace('\\', "/"),
+            );
+        }
+    };
+
     for tree in EXCLUDED_TREES {
         let dir = root.join(tree);
         let entries = std::fs::read_dir(&dir)
             .unwrap_or_else(|e| panic!("cannot read {}: {e}", dir.display()));
+        add(&mut found, &dir);
         for entry in entries.flatten() {
-            let manifest = entry.path().join("Cargo.toml");
-            if manifest.is_file() {
-                let relative = entry
-                    .path()
-                    .strip_prefix(root)
-                    .expect("read_dir yielded a path outside the root")
-                    .to_string_lossy()
-                    .replace('\\', "/");
-                found.insert(relative);
-            }
+            add(&mut found, &entry.path());
         }
     }
     found

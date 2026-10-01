@@ -1,0 +1,192 @@
+name: Detection benchmarks, for a human to read.
+
+# This workflow never fails on a number, and that is the whole design.
+#
+# A nanosecond figure on a shared GitHub Actions runner is a property of the
+# runner: two jobs on the same workflow can differ by a factor of two, and a
+# neighbouring workflow competing for the same host makes it worse. A gate built
+# on such a number fails at random, and a gate that fails at random gets muted
+# within a month -- which is strictly worse than having no gate, because a muted
+# gate looks like a passing one.
+#
+# So this publishes numbers and exits zero. What it does check is that the
+# harness still builds, still passes its tests, and still says which libraries it
+# actually ran: a benchmark that has quietly stopped measuring one of the three
+# is a benchmark whose two-row table reads like a three-row result.
+
+on:
+    push:
+        branches: [ "dev" ]
+
+    pull_request:
+        branches: [ "dev", "master"]
+
+    # A caller opened the pull request themselves and is waiting on the numbers.
+    # Benchmark runs are minutes, so it is opt-in rather than automatic, and the
+    # reason it exists at all is that the summary is in the checks tab and a
+    # person asking "how fast is it now?" should not have to go and find it.
+    workflow_dispatch:
+
+permissions:
+    contents: read
+
+env:
+    CARGO_TERM_COLOR: always
+    # Criterion writes here; the HTML report is uploaded as an artifact so the
+    # per-case numbers are available without re-running anything.
+    CRITERION_HOME: ${{ github.workspace }}/benchmarks/target/criterion
+
+jobs:
+    benchmarks:
+        # `continue-on-error` on the whole job, not on the steps, because a
+        # runner that is out of disk or a criterion that panics should not turn
+        # a pull request red over a measurement. The steps below are what must
+        # hold for the numbers to mean anything, and they are the steps whose
+        # failure is worth seeing as a failure.
+        runs-on: ubuntu-latest
+        continue-on-error: true
+        timeout-minutes: 45
+
+        steps:
+        - name: Checkout code
+          uses: actions/checkout@v4
+
+        - name: Install Rust
+          shell: bash
+          run: |
+            curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
+            echo "$HOME/.cargo/bin:$PATH" >> $GITHUB_PATH
+
+        - name: Add Rust component
+          shell: bash
+          run: |
+            rustup component add clippy
+
+        # libmagic, and nothing else in this file depends on it succeeding.
+        #
+        # `libmagic-dev` for the headers, because `magic-sys` finds the library
+        # through `pkg-config` on Linux and there is no other route it will take.
+        # If the install fails the report still runs, with two rows instead of
+        # three and a line saying so -- which is the whole reason the comparison
+        # is behind a feature rather than a dependency.
+        - name: Install libmagic
+          shell: bash
+          run: |
+            sudo apt-get update
+            sudo apt-get install -y libmagic-dev
+            # The database is a separate package from the library, and without
+            # it `magic_load` succeeds and every buffer is reported as
+            # `application/octet-stream`. That is a libmagic with no rules, and a
+            # table full of it is worse than no table.
+            ls -l /usr/share/misc/magic.mgc || \
+              sudo apt-get install -y libmagic-mgc
+          continue-on-error: true
+
+        - name: Lint the benchmark crate
+          shell: bash
+          run: |
+            cd benchmarks
+            cargo clippy --all-targets --features libmagic -- -D warnings
+
+        - name: Test the benchmark crate, with and without libmagic
+          shell: bash
+          run: |
+            cd benchmarks
+            cargo test --features libmagic
+            # The same crate with the feature off, because a benchmark that only
+            # compiles where libmagic is installed is a benchmark that only runs
+            # for the people who have it.
+            cargo test
+
+        # The harness's own tests, including the ones that check the report says
+        # what it cannot claim. They are in `cargo test` above; this step exists
+        # to name the reason in the log, because a future failure here is very
+        # likely to be somebody widening a claim rather than breaking code.
+        - name: Say which of the harness tests is which
+          shell: bash
+          run: |
+            cd benchmarks
+            cargo test --features libmagic -- --list | sed 's/: test$//'
+
+        - name: The pull-request summary
+          shell: bash
+          run: |
+            make bench-report
+            cat benchmarks/summary.md >> "$GITHUB_STEP_SUMMARY"
+
+        # The per-case numbers, with Criterion's noise estimates and its change
+        # detection. This is the half to believe when the summary and the
+        # criterion numbers disagree: the summary is one median of nine passes
+        # and criterion estimates whether a difference is distinguishable from a
+        # busier machine.
+        #
+        # Through `make bench` rather than a `cargo bench` line of its own, so
+        # there is one place the benchmark invocation lives. `BENCH_ARGS` shortens
+        # criterion's timings because the defaults are five seconds of
+        # measurement per benchmark and there are 26 of them, which is over two
+        # minutes of pure measurement on a runner this noisy. Three seconds is
+        # enough to separate 12 ns from 45 ns and 400 us from both.
+        - name: Criterion, per case
+          shell: bash
+          run: |
+            make bench BENCH_ARGS="-- --warm-up-time 1 --measurement-time 3 --sample-size 20 --noplot"
+
+        - name: The criterion numbers
+          shell: bash
+          run: |
+            cd benchmarks
+            {
+              echo "### Per case, with noise estimates"
+              echo ""
+              echo 'Criterion, not the table above. The table is a median of nine'
+              echo 'whole-corpus passes; this is per format, and it says whether a'
+              echo 'difference is distinguishable from a busier machine.'
+              echo ""
+              echo '```'
+              # Read from criterion's own files rather than from the text it
+              # prints, so a change in its output format does not turn this step
+              # into a step that fails.
+              find target/criterion -name 'estimates.json' | sort | while read -r f; do
+                echo "  ${f#target/criterion/}"
+                sed 's/,/,&\n     /g' "$f" | head -40
+                echo ""
+              done
+              echo '```'
+            } >> "$GITHUB_STEP_SUMMARY"
+
+        # The one part of this crate that is a gate. Twenty-one changes to the
+        # harness, each one a way the report could flatter this repository or hide
+        # a library, and a test has to go red for each. It is here rather than in
+        # `crate_dev.yml` because it needs libmagic and `pwsh`, and because it
+        # takes about seven minutes: twenty-one `cargo test` runs, each of which
+        # builds the report.
+        #
+        # Last, because it is the slowest and the least likely to be the thing
+        # that broke.
+        - name: The harness is not quietly flattering
+          shell: bash
+          run: |
+            make bench-mutations
+
+        - name: Upload the criterion report
+          uses: actions/upload-artifact@v4
+          with:
+            name: criterion
+            path: benchmarks/target/criterion/report
+            retention-days: 14
+            if-no-files-found: ignore
+
+        # A note on the job itself, so a reader of the checks tab knows the green
+        # tick next to this workflow does not mean the numbers were within
+        # anything. It means the harness ran.
+        - name: What the green tick means
+          shell: bash
+          run: |
+            {
+              echo ""
+              echo "---"
+              echo ""
+              echo "This job passes whether or not any number above is good. A gate"
+              echo "on a shared runner's nanoseconds fails at random and gets muted,"
+              echo "and a muted gate looks like a passing one."
+            } >> "$GITHUB_STEP_SUMMARY"

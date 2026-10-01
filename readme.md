@@ -21,7 +21,8 @@ Every row below is a number or a property that a check in this repository holds.
 project that asserts its own claims in its test suite is unusual enough to be worth
 showing rather than asserting, so the check is named. Nothing in this table is a
 benchmark or a comparison: those would move with the machine and could not be
-verified by anything.
+verified by anything, and there is a whole crate of them that is deliberately kept
+out of this table — see [Benchmarks](#benchmarks).
 
 | | | Checked by |
 | --- | --- | --- |
@@ -39,11 +40,23 @@ verified by anything.
 | The readme's format table matches the code | both directions | `tests/readme_coverage.rs` |
 | Every documented example compiles | the rustdoc tests run on this file | `cargo test --doc` |
 | A gated feature leaves nothing behind | the crate root, read as text | `tests/fluent.rs` |
+| The benchmark harness is not quietly flattering | 21 changes to it, each of which must turn a test red | `benchmarks/mutations.ps1` |
 
 What is **not** claimed: that it is faster than anything else, that it is
 battle-tested, or that the format list is exhaustive. It is one author's crate with
 one author's tests. The formats it deliberately does not detect are listed under
 [Supported formats](#supported-formats), and the reasons are there too.
+
+**On speed specifically.** There is a [benchmark crate](benchmarks/) that measures
+this crate against `infer` and libmagic on a shared corpus, and it is deliberately
+not in the table above. A number of nanoseconds is a fact about the machine, so it
+cannot be verified by anything in this repository and it does not belong next to
+claims that can. What the benchmark crate *can* be held to is that it is not lying
+about what it measured, and that is the last row: 21 mutations of the harness, each
+one a way the report could flatter this crate, each caught by a test. The numbers
+are published in the pull request that a benchmark workflow runs on, and they are
+read there rather than copied here, where they would be a claim about a machine
+nobody else has.
 
 ## The three bindings
 
@@ -1125,13 +1138,65 @@ It regenerates the format tables from `formats.json`, runs the binding's own Rus
 tests, builds the module and checks it declares no imports, type-checks the
 hand-written declarations, runs the test suite, then runs rustfmt and clippy.
 
+## Benchmarks
+
+[`benchmarks/`](benchmarks/) measures this crate against `infer` and libmagic on
+one shared corpus: 286 generated buffers of 36,870 bytes, half of them with a
+format planted at a declared signature and offset and half matching nothing. It is
+outside the root workspace so that Criterion does not put three hundred packages
+into the lockfile the first table of this readme says holds exactly one.
+
+```bash
+make bench           # criterion per case, then the pull-request summary
+make bench-report    # the summary alone, about ten seconds
+make bench-mutations # the harness's own mutation check
+```
+
+The numbers are published in the pull request, not here, and this section does
+not quote them. A nanosecond figure is a fact about the machine that produced it;
+putting one in a readme turns it into a claim about every machine, and it would be
+the first claim on this page that nothing in the repository could check.
+
+Three things about how it measures, because all three are ways a benchmark of
+this crate could have been quietly flattering to it:
+
+**The corpus is generated from this crate's own signature table.** So of course it
+recognises all of the format cases. A correctness score over that corpus would be
+measuring the generator, so there is no score. What the report prints instead is
+what each library said about the four real files the repository already commits,
+which is a question that can be answered. That split was not designed in: libmagic
+reports `application/octet-stream` for a buffer holding a valid eight-byte PNG
+signature and 36,862 zero bytes, and `image/png` for a real PNG whose first eight
+bytes are the same eight, because its rules look past the header.
+
+**Both entry points are measured.** A caller has a buffer or has a path, and the
+two numbers are not close. From a file, `magical_rs` reads 36,870 bytes because
+that is what its table needs in order to reach ISO 9660, and `infer` reads only
+what its own table needs — so `infer` is the faster of the two from a path, and
+that row is in the report.
+
+**The harness is mutation-checked.** `make bench-mutations` applies 21 changes to
+it, each one a way the report could flatter this crate or hide a library, and
+requires a test to go red for each. All 21 are caught. Two of the twenty-one are
+bugs this crate actually had: libmagic's pass evicted the corpus from cache and
+charged the fast library for it, and a `NaN` median made every ratio in the table
+print as `inf`. Both are written up in [`benchmarks/README.md`](benchmarks/README.md).
+
+libmagic is behind the crate's `libmagic` feature because it is a C library and
+`magic-sys`'s build script fails rather than degrading when it cannot find one. The
+report says which libraries actually ran, so a two-row table is never mistaken for
+a three-row one.
+
 Three tests exist because the layout above is a thing that can drift, and none of
 the drift is caught by a build:
 
 - `crates/magical_rs/tests/workspace.rs` checks that every crate under
-  `bindings/` and `examples/` is named in `exclude`, and that each one reaches
-  the library at its new home. An unlisted crate fails to build *on its own*,
-  and not from `cargo test` at the root, which never looks at it.
+  `benchmarks/`, `bindings/` and `examples/` is named in `exclude`, and that each
+  one reaches the library at its new home. An unlisted crate fails to build *on its
+  own*, and not from `cargo test` at the root, which never looks at it — so the
+  benchmark crate is in that test for the same reason the bindings are: drop it
+  from the list and `cargo bench` stops working with an error that names the root
+  manifest rather than the line that is wrong.
 - `crates/magical_rs/tests/packaging.rs` checks the copies of `LICENSE` and
   `CHANGELOG.md` that sit beside the crate's manifest. Cargo will not package a
   file from outside the package — `include = ["../../LICENSE"]` is silently

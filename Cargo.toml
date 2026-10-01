@@ -28,6 +28,12 @@ members = ["crates/*"]
 # member resolves against the workspace's single lockfile and is built
 # for the host by default, which is the opposite of what it is for.
 #
+# `benchmarks` is excluded for the same reason, and it is the one
+# exclusion that would be actively misleading to drop: Criterion is a
+# few hundred packages, so a member would put every one of them into
+# the lockfile the readme quotes as holding exactly one package, and
+# would do it for a target that has nothing to do with the library.
+#
 # The cost of excluding is that the path dependencies below have to be
 # written out. The benefit is that `cargo test` at the root tests the
 # library and the CLI and nothing else, and neither binding's toolchain
@@ -42,6 +48,7 @@ members = ["crates/*"]
 # checks that every crate under these two directories is named here, so
 # a new example joins the list at the moment it is created.
 exclude = [
+  "benchmarks",
   "bindings/asm",
   "bindings/python",
   "examples/async_dyn_magic",

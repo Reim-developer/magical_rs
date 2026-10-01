@@ -40,3 +40,10 @@ bindings/nodejs/dist/
 # not belong here. They are written to the agent's scratch directory instead.
 # `PLAN.md` has no leading slash, so this matches the name at any depth.
 PLAN.md
+
+# The benchmark crate's output. `make bench-report` writes it next to the crate's
+# manifest so CI has a file to append to the step summary, and it is regenerated
+# on every run -- a checked-in copy would be a set of numbers from one machine
+# that a reader would reasonably take for a claim. `benchmarks/target/` is
+# already covered by the `target` rule above.
+benchmarks/summary.md

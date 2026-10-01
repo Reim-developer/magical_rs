@@ -1,5 +1,5 @@
-//! The `Makefile` and `crate_dev.yml` have to agree, checked rather than kept in
-//! step by hand.
+//! The `Makefile` and the workflows under `.github/workflows/` have to agree,
+//! checked rather than kept in step by hand.
 //!
 //! `test-unsafe` has been in the `Makefile` since `8e09005` on 2025-08-07 and was
 //! never in `crate_dev.yml`. Nothing was wrong with the target and nothing was
@@ -27,14 +27,26 @@
 //! The rule this states is that a target belongs in the `Makefile` only if CI
 //! should be running it. A convenience nobody wants CI to run does not need a
 //! target, and a helper that a step needs is reached with `$(MAKE)` from the
-//! target that needs it, which is what `test-nostd` does with `build-nostd`.
+//! target that needs it, which is what `test-nostd` does with `build-nostd` and
+//! what `bench` does with `bench-report`.
 //! Reachability rather than membership, so a helper counts as covered without
 //! needing a step of its own.
 
 use std::collections::{BTreeMap, BTreeSet};
 
-/// The workflow that has to cover the `Makefile`.
-const WORKFLOW: &str = ".github/workflows/crate_dev.yml";
+/// The workflows that between them have to cover the `Makefile`.
+///
+/// Was one name, `crate_dev.yml`, and became a list when `benchmarks.yml` was
+/// added. The test's subject has not changed: what it is looking for is a
+/// `Makefile` target that nothing runs, and `bench` and `bench-report` are run
+/// — by a workflow, in a file that exists next to the one this used to read. The
+/// thing that would have been wrong is adding a third target to the `Makefile`
+/// and putting its step in a workflow nobody reads, and that is still caught.
+///
+/// Every file in the directory, not a list maintained here. A second name in
+/// this array would be a third place for a workflow to be forgotten in, which is
+/// the failure this file exists to prevent.
+const WORKFLOWS: &str = ".github/workflows";
 
 /// What the `Makefile` declares.
 struct Makefile {
@@ -230,12 +242,40 @@ fn workflow_targets(text: &str) -> BTreeSet<String> {
     found
 }
 
-/// Every target in the `Makefile` is run by a step in the workflow, or by a
+/// Every target in the `Makefile` is run by a step in some workflow, or by a
 /// target that a step runs.
 #[test]
 fn every_makefile_target_is_reachable_from_a_ci_step() {
     let makefile = parse_makefile(&read("Makefile"));
-    let steps = workflow_targets(&read(WORKFLOW));
+
+    // Every workflow, and every step in each. Sorted so the failure message names
+    // the workflows in a fixed order rather than in whatever order the
+    // filesystem returned them.
+    let mut steps: BTreeSet<String> = BTreeSet::new();
+    let mut searched: Vec<String> = Vec::new();
+    for entry in std::fs::read_dir(repo_root().join(WORKFLOWS)).expect("cannot read the workflows")
+    {
+        let path = entry
+            .expect("cannot read a workflow directory entry")
+            .path();
+        if path.extension().and_then(|e| e.to_str()) != Some("yml") {
+            continue;
+        }
+        searched.push(
+            path.file_name()
+                .and_then(|n| n.to_str())
+                .unwrap_or("<unnamed>")
+                .to_owned(),
+        );
+        steps.extend(workflow_targets(
+            &std::fs::read_to_string(&path).expect("cannot read a workflow"),
+        ));
+    }
+    searched.sort();
+    assert!(
+        !searched.is_empty(),
+        "no workflow was found under {WORKFLOWS}, so this test is not looking at anything",
+    );
 
     // Walk the `$(MAKE)` edges out from whatever the steps name. `build-nostd`
     // is reached this way, from `test-nostd`, so it needs no step of its own.
@@ -258,11 +298,12 @@ fn every_makefile_target_is_reachable_from_a_ci_step() {
 
     assert!(
         unreached.is_empty(),
-        "the Makefile declares {} that nothing in {WORKFLOW} reaches: {}. Add a step that runs it, \
-         or, if it is a helper another target needs, have that target call it with `$(MAKE) \
+        "the Makefile declares {} that no workflow reaches: {}. Searched {}. Add a step that runs \
+         it, or, if it is a helper another target needs, have that target call it with `$(MAKE) \
          {}`.",
         unreached.len(),
         unreached.join(", "),
+        searched.join(", "),
         unreached.first().copied().unwrap_or("target"),
     );
 }

@@ -31,6 +31,7 @@ use {
             DEFAULT_MAX_BYTES_READ, DEFAULT_OFFSET, ISO_MAX_BYTES_READ, ISO_OFFSETS,
             TAR_MAX_BYTES_READ, TAR_OFFSETS, max_bytes, read_file_header, with_bytes_read,
         },
+        dispatch,
         magic::FileKind,
         match_rules::MatchRules,
         signatures::SIGNATURE_KIND,
@@ -210,22 +211,17 @@ define_kinds!(
 /// Classifies `data` using only the rules that fit inside `limit` bytes.
 ///
 /// This is `FileKind::match_with_max_read_rule`, which the crate compiles only
-/// under `not(feature = "std")` — not the configuration this module builds in.
-/// `SIGNATURE_KIND` and `Magic::matches` are both public, so the filter is
-/// reproduced here rather than the crate's public API being widened to cover a
-/// case only the `no_std` build happened to have. This is the same trade
-/// `signatures_match` makes, and the same price: eight lines that have to stay
-/// in step, pinned by a test on each side rather than trusted.
+/// under `not(feature = "std")` — not the configuration this module builds in. The
+/// crate does export the search itself, as `dispatch::first_match`, unconditionally
+/// and for any `allowed_max_read`, so this calls that rather than reproducing the
+/// filter: one implementation, the crate's, whose answers its own differential
+/// tests hold against the scan it replaced.
 ///
 /// `limit` is the window the caller claims to hold, not a length `data` is
 /// checked against. A 100-byte file classified with a 2,048-byte window is
-/// ordinary, and both this and the crate's version answer it the same way.
+/// ordinary, and this answers it the same way the scan did.
 fn match_within(data: &[u8], limit: usize) -> Option<FileKind> {
-    SIGNATURE_KIND
-        .iter()
-        .filter(|magic| magic.max_bytes_read <= limit)
-        .find(|magic| magic.matches(data))
-        .map(|magic| magic.kind)
+    dispatch::first_match(data, limit).map(|index| SIGNATURE_KIND[index].kind)
 }
 
 /// The classification step both entry points share.

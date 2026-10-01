@@ -37,20 +37,25 @@ magical_rs = { path = "../../crates/magical_rs", default-features = false, featu
 # direction, and nobody could reproduce the figure because nothing in the repository
 # measured it. `node scripts/wasm_sizes.mjs` does, and prints:
 #
-#     "s"    43,212 raw / 17,080 gzip     <- this file
-#     "z"    43,395 raw / 17,412 gzip     +183
-#     3      42,203 raw / 16,676 gzip   -1,009
-#     2      43,060 raw / 17,012 gzip     -152
+#     "s"    44,616 raw / 17,771 gzip     <- this file
+#     "z"    44,812 raw / 18,057 gzip     +196
+#     3      43,606 raw / 17,284 gzip   -1,010
+#     2      44,463 raw / 17,582 gzip     -153
 #
 # The reason `"z"` loses is the table: 114 entries are encoded into linear memory at
 # import, that blob is close to incompressible already, and `z` has nothing left to
 # take from it. Only the code around it is being optimised.
 #
 # Which also means this is not a measured optimum. `3` is both smaller *and* faster
-# than `"s"`, and the spread across all four is 2.4% of the module. `"s"` is kept
+# than `"s"`, and the spread across all four is 2.3% of the module. `"s"` is kept
 # because it is the middle of a range where none of the choices matters much and
 # there is no benchmark in this repository that would justify moving: `sizes` is a
 # reasonable default, and saying so is more useful than dressing it up.
+#
+# These figures are 1,404 larger than the ones this comment carried before the
+# detection index in `crates/magical_rs/src/magical/dispatch.rs`, which took
+# matching from 525 ns to 31 ns on a file the table does not recognise. 3.2% for
+# 17x on the common case, which is why it is stated rather than quietly absorbed.
 opt-level = "s"
 lto = true
 codegen-units = 1

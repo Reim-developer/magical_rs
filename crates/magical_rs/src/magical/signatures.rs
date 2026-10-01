@@ -141,7 +141,22 @@ impl Magic {
     }
 }
 
-pub static SIGNATURE_KIND: &[Magic] = &[
+/// The detection table.
+///
+/// A `static`, which is the type every caller in this repository and both bindings
+/// already see. The array itself lives in a private `const` underneath so that the
+/// dispatch index below can read it during const evaluation -- a `const fn` cannot
+/// read a `static`, and this keeps the public type unchanged rather than making
+/// `SIGNATURE_KIND` a `const` and breaking every `&SIGNATURE_KIND` in a `static`.
+pub static SIGNATURE_KIND: &[Magic] = TABLE;
+
+/// The detection table, as a `const` so [`crate::magical::dispatch`] can read it at
+/// compile time.
+///
+/// A `const fn` cannot read a `static`, so the dispatch index cannot be built from
+/// `SIGNATURE_KIND` directly. This is that `const`, and `SIGNATURE_KIND` is derived
+/// from it rather than the other way round.
+pub(crate) const TABLE: &[Magic] = &[
     Magic {
         signatures: &[PNG_SIGNATURE],
         offsets: &[DEFAULT_OFFSET],

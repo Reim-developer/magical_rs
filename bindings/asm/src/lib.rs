@@ -72,6 +72,7 @@ use magical_rs::magical::bytes_read::{
     DEFAULT_MAX_BYTES_READ, DEFAULT_OFFSET, ISO_MAX_BYTES_READ, ISO_OFFSETS, TAR_MAX_BYTES_READ,
     TAR_OFFSETS, with_bytes_read,
 };
+use magical_rs::magical::dispatch;
 use magical_rs::magical::magic::FileKind;
 use magical_rs::magical::magic_custom::{CustomMatchRules, MagicCustom, match_types_custom};
 use magical_rs::magical::match_rules::MatchRules;
@@ -141,11 +142,16 @@ pub unsafe extern "C" fn which_kind_max_at(
 ) -> u32 {
     // SAFETY: forwarded from this function's own contract.
     let bytes = unsafe { borrow(ptr, len) };
-    SIGNATURE_KIND
-        .iter()
-        .filter(|magic| magic.max_bytes_read <= max_bytes_read)
-        .find(|magic| magic.matches(bytes))
-        .map_or(NO_MATCH, |magic| narrow(magic.kind as usize))
+    // The crate's own dispatch index rather than a scan of the table. It answers
+    // the same question with the same rule -- `first_match` returns the first entry
+    // in `SIGNATURE_KIND` order whose `max_bytes_read` fits the window and whose
+    // signature matches, and the crate's differential tests hold it to exactly the
+    // scan this replaces. The scan was written out here because the crate only
+    // compiles `match_with_max_read_rule` under `no_std`; the index is public and
+    // unconditional, so there is no reason to keep reimplementing the loop.
+    dispatch::first_match(bytes, max_bytes_read).map_or(NO_MATCH, |index| {
+        narrow(SIGNATURE_KIND[index].kind as usize)
+    })
 }
 
 /// Report whether one named format's own rule matches, ignoring the table.

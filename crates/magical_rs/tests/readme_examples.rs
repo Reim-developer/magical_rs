@@ -159,3 +159,65 @@ fn readme_level_4() {
     let result = block_on(match_dyn_types_as::<String>(b"MAGICAL", &rules));
     assert_eq!(result.map(String::as_str), Some("custom format"));
 }
+
+/// README: the `magic_rules!` table, and the `magical_fluent` methods.
+///
+/// Two in one test because both are the same kind of claim — an example in the
+/// readme that runs — and the difference is only which feature has to be on.
+/// `magic_rules!` needs none, so it is here unconditionally.
+#[test]
+fn readme_magic_rules_and_fluent() {
+    use magical_rs::magic_rules;
+    use magical_rs::magical::magic_custom::{MagicCustom, match_types_custom};
+
+    #[derive(Clone, Copy, PartialEq, Eq, Debug)]
+    enum Kind {
+        CadFile,
+        ShortFile,
+        Fallback,
+    }
+
+    fn is_cad(bytes: &[u8]) -> bool {
+        bytes.starts_with(b"ACAD")
+    }
+
+    fn is_short(bytes: &[u8]) -> bool {
+        bytes.len() <= 4
+    }
+
+    // The readme's table, rule for rule.
+    static RULES: &[MagicCustom<Kind>] = magic_rules![
+        (Kind::CadFile, b"ACAD", read 2048),
+        (Kind::ShortFile, [b"<<", b">>"], read 4),
+        (Kind::Fallback, via all [is_cad, is_short]),
+    ];
+
+    assert_eq!(
+        match_types_custom(b"ACAD", RULES, Kind::Fallback),
+        Kind::CadFile
+    );
+    assert_eq!(
+        match_types_custom(b">>", RULES, Kind::Fallback),
+        Kind::ShortFile
+    );
+    assert_eq!(
+        match_types_custom(b"nope", RULES, Kind::Fallback),
+        Kind::Fallback
+    );
+}
+
+/// README: the `magical_fluent` block, gated the way the readme gates it.
+#[cfg(feature = "magical_fluent")]
+#[test]
+fn readme_fluent() {
+    use magical_rs::magical::fluent::Detect;
+    use magical_rs::magical::magic::FileKind;
+
+    let gif = b"GIF89a";
+
+    assert_eq!(gif.detect(), Some(FileKind::GIF));
+    assert_eq!(gif.detect_within(2_048), Some(FileKind::GIF));
+    assert!(gif.is(FileKind::GIF));
+    assert!(!gif.is(FileKind::Png));
+    assert!(gif.is_any([FileKind::Png, FileKind::GIF]));
+}

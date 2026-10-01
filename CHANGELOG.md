@@ -1,6 +1,10 @@
 # CHANGELOG
 - [CHANGELOG](#changelog)
-  - [Unreleased: one format dataset](#unreleased-one-format-dataset)
+  - [Version: 0.6.5 `A first-byte index, a macro, a fluent API, and benchmarks`](#version-065-a-first-byte-index-a-macro-a-fluent-api-and-benchmarks)
+    - [Level 2 rules as a table, a fluent API, and an API reference](#level-2-rules-as-a-table-a-fluent-api-and-an-api-reference)
+    - [A first-byte detection index](#a-first-byte-detection-index)
+    - [Benchmarks against `infer` and libmagic](#benchmarks-against-infer-and-libmagic)
+    - [One format dataset](#one-format-dataset)
   - [magical-py: Version 0.4.0](#magical-py-version-040)
   - [magical-py: Version 0.3.0](#magical-py-version-030)
   - [magical-py: Version 0.2.0](#magical-py-version-020)
@@ -18,7 +22,206 @@
   - [Version: 0.6.4 `Offset Arithmetic and a Wrong Constant`](#version-064-offset-arithmetic-and-a-wrong-constant)
 
 
-## Unreleased: one format dataset
+## Version: 0.6.5 `A first-byte index, a macro, a fluent API, and benchmarks`
+
+**What has been changed:**
+
+* **Detection is indexed by the first byte of a signature.** 525 ns for a file the
+  table does not recognise is now **31 ns**. See below.
+* **`magic_rules!`, so level 2 rules are a table instead of five-field struct
+  literals.** See below.
+* **`magical_fluent`, an opt-in trait for chaining.** Gated, because it puts a
+  method on `[u8]`, which is a dependency a caller takes on a type they do not own.
+  See below.
+* **An API reference for all three languages, and a table of what is deliberately
+  not the same across them.** See below.
+* **A benchmark crate**, against `infer` and libmagic, outside the workspace so the
+  lockfile still holds one package. See below.
+* **The format list is generated from one file** rather than written down three
+  times. See below.
+
+Nothing in the public API was removed. `FileKind::match_types` answers exactly what
+it answered in 0.6.4, from the same table, in the same order; the index is behind
+it.
+
+### Level 2 rules as a table, a fluent API, and an API reference
+
+**Level 2 stops asking for five fields, level 1 has a shorter spelling, and the
+readme lists what all three languages export.**
+
+* **Added `magic_rules!`.** Level 2 rule sets as a table:
+
+  ```rust
+  static RULES: &[MagicCustom<Kind>] = magic_rules![
+      (Kind::CadFile, b"ACAD", read 2048),
+      (Kind::ShortFile, [b"<<", b">>"], read 4),
+      (Kind::Fallback, via all [is_cad, is_short]),
+  ];
+  ```
+
+  Sugar for the five-field `MagicCustom` literal and nothing else. A byte rule
+  stops spelling out `offsets: &[0]` every time and a predicate rule stops
+  spelling out `signatures: &[]` and `offsets: &[]` — two fields that are noise,
+  and where leaving a signature in place reads as "and also" and means nothing.
+  `at` and `read` are optional and default to the crate's own `DEFAULT_OFFSET` and
+  `DEFAULT_MAX_BYTES_READ`. Not behind a feature flag: it adds no dependency,
+  allocates nothing, and emits no code unless invoked.
+
+* **Added the `magical_fluent` feature: `bytes.detect()`.** Plus `detect_within`,
+  `is`, `is_any`, and `detect_in` for level 2. Gated, and the only flag here that
+  is not about a level — it puts a method on `[u8]`, so writing it is a dependency
+  on this crate for a slice of bytes you could have handed to anything, and
+  nothing in the signature says so afterwards. With the flag off there is no
+  trait, no type, and not an empty module in the documentation either: the `cfg`
+  is on the `pub mod` line rather than only inside the module, and a test reads the
+  crate root to check it.
+
+  There is deliberately no `detect_or`. `FileKind` has no "unknown" variant — all
+  114 of them are real formats — so there is no honest value to substitute.
+
+* **The readme has an API reference for all three languages**, one table each, and
+  a fourth that lists where the three are deliberately *not* the same. A reader
+  who knew the crate had `is_shebang` had no way to find that out from the
+  documentation before.
+
+  Writing it turned up two claims that were about to be written down wrong:
+  `releaseRules` drops a handle rather than freeing the wasm-side memory, and
+  `neededBytes()` is 36,870 while `DEFAULT_MAX_BYTES_READ` is 2,048 — not the same
+  number, and the readme was about to describe them as if they were.
+
+
+### The sparse list compares integers
+
+* **The seven entries whose signature sits past offset zero are compared as one
+  64-bit integer** rather than through `Magic::matches`. A signature of eight bytes
+  or fewer is held zero-padded in a `u64`, the input's eight bytes at the same
+  offset are loaded the same way, and the two are compared after masking. That
+  replaces a fat-pointer load, a bounds check at an offset the compiler cannot
+  know, and a `memcmp` call with one load, one `and` and one `cmp`.
+
+  Measured before and after in the same session with the same harness, median of
+  nine passes over 300,000 iterations each:
+
+  | input | before | after | |
+  | --- | --- | --- | --- |
+  | nothing matches, 36,870 bytes | 28.8 ns | **6.4 ns** | 4.5x |
+  | nothing matches, 2,048 bytes | 23.5 ns | **5.2 ns** | 4.5x |
+  | empty buffer | 16.0 ns | **3.2 ns** | 5.0x |
+  | GIF, table position 36 | 15.4 ns | **8.9 ns** | 1.7x |
+  | `SQLite`, a sixteen-byte signature | 11.7 ns | **8.8 ns** | 1.3x |
+  | `Tar` at offset 257 | 59.7 ns | **46.6 ns** | 1.3x |
+  | PNG, JPG, ZIP | 5.4-5.9 ns | 5.6-6.0 ns | 0.96x |
+
+  The last row is a 2-4% regression and it is the price of the rest. Those formats
+  never reach the sparse list, so they pay for the extra code and nothing else.
+
+* **Zero bytes.** `node scripts/wasm_sizes.mjs` reports 45,184 raw and 18,024
+  gzipped for the binding and 32,847 for the minimal example, before and after, on
+  a clean rebuild. The three small arrays cost 98 bytes and the code they replaced
+  cost the same.
+
+* **The mask is the safety argument, and it is checked.** A signature is
+  zero-padded to eight bytes and the input is not, so comparing the two integers
+  directly would compare the signature's padding against input bytes past its own
+  signature and would *pass* whenever those happened to be zero, which a binary
+  file contains a great deal of. `MASKS` is the low `n` bytes set, and a new test
+  checks that every probe's entry, offset and length are the ones the walk will
+  use -- the failure the differential tests cannot see, because they only ever
+  plant whole signatures.
+
+* **A compile-time assertion, not a silent truncation.** 21 of the 150 signatures
+  are longer than eight bytes, and `const _: () = assert!(longest_sparse_signature()
+  <= INLINE)` fails the build naming the constant to widen. A signature that
+  outgrew the register would otherwise be compared as its own first eight bytes
+  and match a prefix of the format.
+
+* **Two shapes were tried and measured slower, and are written down.**
+  Flattening the whole search is 2x slower on every bucket case: `SIGNATURE_KIND[0]`
+  is one cache line the fast libraries never leave, and a `memcmp` against it costs
+  about what three bounds-checked array indexes do. A struct-per-probe version was
+  10x slower, because every probe carried a `&'static [u8]` tail for the long
+  signatures. `src/magical/dispatch.rs` has both tables.
+### A first-byte detection index
+
+**Detection no longer walks all 114 rules to answer.**
+
+* **Detection is indexed by the first byte of a signature.** `match_types` was
+  `SIGNATURE_KIND.iter().find(..)`, so its cost was the position of the match in the
+  table: 5 ns for PNG at position 0, 123 ns for GIF at 36, and 525 ns for a file the
+  table does not recognise, which had to be tried against all 114. It is now 5, 21 and
+  **31 ns**. The last figure is the one that matters, because scanning a directory is
+  mostly files this table does not recognise.
+
+* **Nothing about the answer changed.** Every input produces the same answer, and
+  that is a property of the construction rather than of the tests: an entry is
+  reachable through a bucket only if every offset it declares is `0`, so a file
+  starting with any other byte cannot match it; everything else is tried for every
+  input as before; and the two lists are merged by smallest table index, not by
+  trying one and then the other. Three differential tests then check that against a
+  separately written linear scan — the table's fixtures, non-matching inputs at every
+  declared offset, and 4,096 pseudo-random buffers.
+
+* **Both bindings now use it**, including the paths they used to reimplement.
+  `which_kind_max_at` in `bindings/asm` and `match_within` in `bindings/python` each
+  carried their own copy of the filtered scan, because the crate only compiles
+  `match_with_max_read_rule` under `no_std`. They call `dispatch::first_match` now.
+
+* **It costs bytes, and the two modules say very different numbers.** The npm
+  binding's module is 43,212 -> 44,616 bytes, +1,404 or 3.2%. The library-only
+  `examples/wasm_rust` module is 17,764 -> 32,847, +15,083 or 84.9%. The cost is
+  code, not data, so a module that is nearly all code pays the most for it. Both
+  numbers are in the readme and in `bindings/asm/Cargo.toml` rather than left for
+  someone to discover.
+
+
+### Benchmarks against `infer` and libmagic
+
+**A benchmark crate that measures this crate against the libraries a reader
+would compare it to, and that is checked for lying.**
+
+* **Added `benchmarks/`.** Its own workspace, on purpose: the readme's first table
+  claims the root lockfile holds exactly one package, and criterion is a few hundred.
+  `crates/magical_rs/tests/workspace.rs` now fails if `benchmarks` is ever dropped
+  from `workspace.exclude`.
+
+* **Three libraries on one corpus.** 286 buffers of 36,870 bytes — half with a
+  format planted at a declared signature and offset, half matching nothing — plus the
+  same 286 written to disk and opened by each library. The two entry points are
+  separate tables, because the numbers are not close: from a file, `infer` is faster
+  than this crate, since `magical_rs` reads 36,870 bytes to reach ISO 9660 and `infer`
+  reads only what its own table needs. That row is in the report on purpose.
+
+* **The answer table is not a score and says so.** The format cases are generated from
+  this crate's own `SIGNATURE_KIND`, so a correctness figure over them would be
+  measuring the generator. The report prints what each library said about the four
+  real files the repository already commits. That split was found rather than
+  designed: libmagic reports `application/octet-stream` for a buffer holding a valid
+  eight-byte PNG signature and 36,862 zero bytes, and `image/png` for a real PNG
+  whose first eight bytes are the same eight, because its rules look past the header.
+
+* **libmagic is behind the crate's `libmagic` feature.** `magic-sys`'s build script
+  tries `pkg-config` then `vcpkg` and fails rather than degrading, so a missing
+  libmagic has to be a benchmark with one fewer row rather than a red build. The
+  report prints which libraries ran, so a two-row table is never mistaken for a
+  three-row one. `benchmarks/README.md` has the per-platform instructions.
+
+* **Added `make bench`, `make bench-report` and `make bench-mutations`,** and
+  `.github/workflows/benchmarks.yml`, which publishes the numbers to the job's step
+  summary. Nothing gates on a number: a nanosecond figure on a shared runner is a
+  property of the runner, and a gate built on one fails at random and gets muted.
+
+* **`benchmarks/mutations.ps1` is the gate.** 22 changes to the harness, each one a
+  way the report could flatter this crate or hide a library, each of which must turn a
+  test red. All 22 are caught. Two of them are bugs this had while being written, and
+  both are written up in the crate's readme: libmagic's pass over the 10.5 MB corpus
+  evicted it from cache and charged the next library for it (this crate measured
+  177 ns where criterion measured 57 ns for identical work), and a `NaN` median made
+  every ratio in the table print as `inf`.
+
+* **`tests/ci_coverage.rs` reads every workflow rather than `crate_dev.yml`.** The
+  subject of that test is a `Makefile` target nothing runs, and `bench` is run by a
+  workflow that did not exist when the test was written.
+### One format dataset
 
 **`@reim-developer/magical-js` can now answer what a format is called and served as.**
 

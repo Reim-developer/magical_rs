@@ -8,7 +8,9 @@
 // in three places by a figure nobody could reproduce, and the figure turned out to
 // be wrong - in both the number and its direction. `bindings/asm/Cargo.toml` said
 // `"s"` over `"z"` because "the measured difference between them is 243 bytes", and
-// `"z"` is actually 183 bytes *larger*.
+// `"z"` is actually 196 bytes *larger*. The direction does not change when the
+// module grows, so that part of the claim still holds; the number moved because the
+// module did, and that is the point of printing it rather than writing it down.
 //
 // A claim you cannot re-run is a claim you cannot correct either. This script is
 // that correction, written down as the thing to run rather than as a number to

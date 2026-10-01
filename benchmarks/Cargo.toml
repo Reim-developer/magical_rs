@@ -1,0 +1,64 @@
+# The benchmark crate, and its own workspace, on purpose.
+#
+# The root manifest is a virtual manifest whose `Cargo.lock` is quoted in the
+# readme as holding exactly one package. Criterion is a few hundred packages, so
+# a benchmark target inside the root workspace would make that claim false for
+# the sake of a directory that has nothing to do with the library. This crate is
+# in `workspace.exclude` for the same reason the bindings and the examples are,
+# and `tests/workspace.rs` fails if it is ever dropped from that list.
+#
+# `magical_rs` is a path dependency so a benchmark run measures the checkout this
+# crate sits beside rather than a release from crates.io -- the same reason the
+# bindings and the examples use path dependencies. A benchmark that measured a
+# published version would be a benchmark of someone else's number.
+
+[package]
+name = "magical-benchmarks"
+version = "0.0.0"
+edition = "2024"
+publish = false
+
+[dependencies]
+magical_rs = { path = "../crates/magical_rs" }
+infer = "0.22"
+criterion = { version = "0.8", features = ["html_reports"] }
+
+# libmagic is behind a feature, and not behind a feature that is on.
+#
+# It is a C library, and `magic-sys`'s build script does not degrade when it
+# cannot find one: it tries `pkg-config`, tries `vcpkg`, and if neither answers
+# it returns `ExitCode::FAILURE`. So a missing libmagic is a build that is red,
+# not a benchmark that runs with one fewer row -- which is why this is an
+# optional dependency rather than a dependency behind `cfg`. `make bench`
+# probes for libmagic and turns it on where it is present; the report says in
+# its own output which libraries actually ran, so a two-row table is never
+# mistaken for a three-row one.
+magic-sys = { version = "0.4.3", optional = true }
+
+[features]
+default = []
+libmagic = ["dep:magic-sys"]
+
+[dev-dependencies]
+# Only to read the `criterion` output back for the summary. A benchmark-only
+# dependency, in the same way criterion is.
+serde_json = "1"
+
+[[bench]]
+name = "detect"
+harness = false
+
+[profile.release]
+# `opt-level = 3`, not the `"s"` the wasm modules are built with.
+#
+# A profile that trades speed for bytes measures the wrong build: the bytes are
+# already accounted for separately, by `scripts/wasm_sizes.mjs`, and a library
+# that is slow because it was compiled for a download is a fact about the
+# download profile rather than about the library. Three libraries are compared
+# here, and the only way that comparison means anything is if they are all
+# compiled the same way -- so the profile is chosen to be the fast one, and
+# `debug = true` keeps a stack symbol for the report's numbers to be blamed on.
+opt-level = 3
+lto = true
+codegen-units = 1
+debug = true

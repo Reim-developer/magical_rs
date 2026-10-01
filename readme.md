@@ -21,27 +21,43 @@ Every row below is a number or a property that a check in this repository holds.
 project that asserts its own claims in its test suite is unusual enough to be worth
 showing rather than asserting, so the check is named. Nothing in this table is a
 benchmark or a comparison: those would move with the machine and could not be
-verified by anything.
+verified by anything, and there is a whole crate of them that is deliberately kept
+out of this table — see [Benchmarks](#benchmarks).
 
 | | | Checked by |
 | --- | --- | --- |
 | 0 dependencies | not "few" — `cargo tree --edges normal` prints this crate and nothing else, and the lockfile holds exactly one package | `Cargo.lock`; there is nothing to opt out of |
 | 114 formats | pinned in every binding and every generated file | `tests/table_size.rs`, `tests/dataset.rs`, `bindings/nodejs/test/kinds.test.js` |
 | 0 WebAssembly imports | measured on the built artifact, not assumed | `bindings/nodejs/scripts/build.mjs` fails the build otherwise |
-| 17 exports, 43,212 bytes | measured at build time and printed | `bindings/nodejs/scripts/build.mjs` |
+| 17 exports, 44,616 bytes | measured at build time and printed | `bindings/nodejs/scripts/build.mjs` |
 | Works on `wasm32` | compiled **and run**, from Rust, with no binding | `examples/wasm_rust/`, run by `make examples` |
 | Works without `std` | built for `thumbv7em-none-eabi` | `make test-nostd` |
+| Detection answers what the linear scan answered | every fixture, every non-matching input, 4,096 pseudo-random buffers | `src/magical/dispatch.rs` |
+| An unrecognised file costs 6.4 ns, not 525 | measured before and after in one session, same harness | `src/magical/dispatch.rs` |
 | Every format's own rule matches itself | all 114 entries, from the table | `tests/signature_coverage.rs` |
 | No signature matches at an undeclared offset | all 114 entries | `tests/signature_coverage.rs` |
 | Padding is never misdetected | every entry, at every declared length | `tests/signature_coverage.rs` |
 | Truncated input never panics | every entry, at every truncation | `tests/signature_coverage.rs` |
 | The readme's format table matches the code | both directions | `tests/readme_coverage.rs` |
 | Every documented example compiles | the rustdoc tests run on this file | `cargo test --doc` |
+| A gated feature leaves nothing behind | the crate root, read as text | `tests/fluent.rs` |
+| The benchmark harness is not quietly flattering | 22 changes to it, each of which must turn a test red | `benchmarks/mutations.ps1` |
 
 What is **not** claimed: that it is faster than anything else, that it is
 battle-tested, or that the format list is exhaustive. It is one author's crate with
 one author's tests. The formats it deliberately does not detect are listed under
 [Supported formats](#supported-formats), and the reasons are there too.
+
+**On speed specifically.** There is a [benchmark crate](benchmarks/) that measures
+this crate against `infer` and libmagic on a shared corpus, and it is deliberately
+not in the table above. A number of nanoseconds is a fact about the machine, so it
+cannot be verified by anything in this repository and it does not belong next to
+claims that can. What the benchmark crate *can* be held to is that it is not lying
+about what it measured, and that is the last row: 22 mutations of the harness, each
+one a way the report could flatter this crate, each caught by a test. The numbers
+are published in the pull request that a benchmark workflow runs on, and they are
+read there rather than copied here, where they would be a claim about a machine
+nobody else has.
 
 ## The three bindings
 
@@ -52,7 +68,7 @@ cannot be `image/png` in Rust and something else in Python.
 
 | | Crate | `PyPI` | `npm` |
 | --- | --- | --- | --- |
-| Rust | `magical_rs` 0.6.4 | — | — |
+| Rust | `magical_rs` 0.6.5 | — | — |
 | Python | — | `magical-py` 0.4.0 | — |
 | JavaScript / TypeScript | — | — | `@reim-developer/magical-js` 0.1.0 |
 
@@ -87,7 +103,7 @@ table, with no separate list to keep in step. See
 [`bindings/python`](bindings/python).
 
 Not writing Rust or Python? There are JavaScript and TypeScript bindings, shipped
-as a 42 KB WebAssembly module with hand-written generics:
+as a 44.6 KB WebAssembly module with hand-written generics:
 
 ```bash
 npm install @reim-developer/magical-js
@@ -128,6 +144,22 @@ fn main() -> Result<(), std::io::Error> {
 }
 ```
 
+The same call with the `magical_fluent` feature puts the data first:
+
+```rust,no_run
+#[cfg(feature = "magical_fluent")]
+use magical_rs::magical::fluent::Detect;
+
+#[cfg(feature = "magical_fluent")]
+fn fluent() -> Result<(), std::io::Error> {
+    use magical_rs::magical::bytes_read::{read_file_header, with_bytes_read};
+
+    let header = read_file_header("photo.png", with_bytes_read())?;
+    println!("{:?}", header.detect());
+    Ok(())
+}
+```
+
 ## Why it might fit your project
 
 **Zero dependencies.** The `Cargo.toml` dependency list is empty. Nothing to
@@ -138,10 +170,10 @@ against `thumbv7em-none-eabi`.
 
 **WebAssembly.** The 114-entry table is data, so it is close to incompressible
 already and there is little left to optimise: a module exporting this crate at
-`opt-level = "s"` measures **17,764 bytes with 4 exports** —
+`opt-level = "s"` measures **32,847 bytes with 4 exports** -
 [`examples/wasm_rust`](examples/wasm_rust) builds exactly that and asserts the
-answer for nine headers — and the npm binding's, which adds the encoded table, level
-2 rules and a released ABI, measures **43,212 bytes with 17 exports**. Both declare
+answer for nine headers - and the npm binding's, which adds the encoded table, level
+2 rules and a released ABI, measures **44,616 bytes with 17 exports**. Both declare
 **zero imports**, which is what removes the glue file; `make examples` runs the
 first and `bindings/nodejs/scripts/build.mjs` fails the build if either claim goes
 false.
@@ -149,10 +181,9 @@ false.
 The profile's `opt-level` is `"s"`, and that is a middle default rather than a
 measured optimum. [`scripts/wasm_sizes.mjs`](scripts/wasm_sizes.mjs) builds the
 binding's module at every level and prints what it costs, because the figure this
-paragraph used to quote — "243 bytes between `z` and `s`" — was wrong in both the
-number and its direction: `"z"` is 183 bytes **larger**. The reason is the table. On
-a module that is nearly all code, `examples/wasm_rust`, `"z"` saves 9,557 of 17,764
-bytes. The spread on the shipped module is 2.4%.
+paragraph used to quote - "243 bytes between `z` and `s`" - was wrong in both the
+number and its direction: `"z"` is 196 bytes **larger**. The reason is the table. The
+spread on the shipped module is 2.3%.
 
 Both the `std` build and the bare build compile for `wasm32-unknown-unknown`. The
 dynamic levels are not part of that — 3 and 4 call back into a host language, which
@@ -222,6 +253,20 @@ assert_eq!(kind, Some(FileKind::Png));
 Returns `None` when nothing matches. This level and level 2 both support
 `no_std`.
 
+**First match wins, and the table's order is the reason.** `SIGNATURE_KIND` is not
+alphabetical and not negotiable: `ScriptExecute` sits at 17 and `RAR` at 18,
+swapped, and both bindings' tests pin that order because the discriminants *are*
+the ABI. Two entries overlap on purpose — a `#!` line is a shebang or the AMR
+audio header, and the shebang rule wins because it is asked first.
+
+Detection is a first-byte index over that table, built during const evaluation.
+It costs 525 ns → 6.4 ns for a file the table does not recognise, and it answers
+exactly what a walk of the table answered, for every input. Both halves of that
+last sentence are worth reading: the speed is in
+[`src/magical/dispatch.rs`](https://github.com/Reim-developer/magical_rs/blob/master/crates/magical_rs/src/magical/dispatch.rs),
+and the proof is three differential tests against a separately written scan, not
+the tests agreeing with the old code on the cases they happened to try.
+
 ### Level 2 — custom rules at compile time
 
 Define your own signatures, offsets, and predicates. Predicates are plain
@@ -259,6 +304,74 @@ assert_eq!(result, Kind::CadFile);
 ```
 
 Combine predicates with `all_matches!`, `any_matches!`, or `with_fn_matches!`.
+
+#### `magic_rules!` — a rule set as a table
+
+The five-field `MagicCustom` literal is the one place this crate asks for more than
+it needs, so `magic_rules!` is sugar for exactly that struct. It expands to
+`MagicCustom { .. }` literals and nothing else, and it is not behind a feature
+flag: it adds no dependency, allocates nothing, and emits no code unless invoked.
+
+```rust
+use magical_rs::magic_rules;
+use magical_rs::magical::magic_custom::{MagicCustom, match_types_custom};
+
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+enum Kind {
+    CadFile,
+    ShortFile,
+    Fallback,
+}
+
+fn is_cad(bytes: &[u8]) -> bool {
+    bytes.starts_with(b"ACAD")
+}
+
+fn is_short(bytes: &[u8]) -> bool {
+    bytes.len() <= 4
+}
+
+static RULES: &[MagicCustom<Kind>] = magic_rules![
+    // A byte signature. `at` and `read` are both optional, and default to
+    // `DEFAULT_OFFSET` (0) and `DEFAULT_MAX_BYTES_READ` (2,048).
+    (Kind::CadFile, b"ACAD", read 2048),
+
+    // Several signatures: the rule matches on any of them.
+    (Kind::ShortFile, [b"<<", b">>"], read 4),
+
+    // A predicate instead of bytes. The macro leaves `signatures` and `offsets`
+    // empty, which is a step the literal makes easy to get wrong.
+    (Kind::Fallback, via all [is_cad, is_short]),
+];
+
+let found = match_types_custom(b"ACAD", RULES, Kind::Fallback);
+assert_eq!(found, Kind::CadFile);
+```
+
+The full syntax, and what each form expands to:
+
+| Form | Means |
+| --- | --- |
+| `(Kind, b"SIG")` | one signature at offset 0 |
+| `(Kind, [b"A", b"B"])` | any of these signatures, at offset 0 |
+| `(Kind, b"SIG", at N)` | one signature at one offset |
+| `(Kind, b"SIG", at [A, B])` | one signature at any of these offsets |
+| `(Kind, [..], at [..], read N)` | the two nest |
+| `(Kind, via PRED)` | decided by `fn(&[u8]) -> bool` |
+| `(Kind, via any [P, ..])` / `via all [P, ..]` | one of / every one of |
+| `(Kind, unsafe via [P, ..])` | the `unsafe_context` predicates |
+
+Order is the answer, and the macro does not sort it. `match_types_custom` returns
+the first rule that matches, so a predicate that matches everything placed first
+means nothing after it can ever run.
+
+`magic_custom!` and the bare struct literal both still work, and the tests in
+[`tests/magic_rules.rs`](https://github.com/Reim-developer/magical_rs/blob/master/crates/magical_rs/tests/magic_rules.rs)
+build every rule set twice — once through the macro, once as a literal — and
+assert the two agree field by field. A `#[cfg]` on the module body rather than on
+its `pub mod` line would leave a module that exists and holds nothing when the
+feature is off, so the tests read the source to check the flag is where it should
+be.
 
 ### Level 3 — rules decided at runtime
 
@@ -444,6 +557,175 @@ invented one is indistinguishable from a real one at the point it does harm. The
 fallback — `application/octet-stream`, or no extension at all — is a decision the
 caller makes where the decision is visible.
 
+## API reference
+
+Everything the three of them export, in one place, so you can find it without
+reading the source. Each entry says what it does and which level it belongs to.
+
+Nothing here is generated, and the readme does not claim to be complete against
+the compiler. What *is* checked is the part that can be: `tests/readme_examples.rs`
+compiles every Rust example on this page, and
+`crates/magical_rs/tests/dataset.rs` holds the format names in the table below
+against `SIGNATURE_KIND` and against `formats.json` in both directions. A function
+added to a binding without a row here is a documentation gap, not a broken build —
+which is the honest thing to say about it rather than implying a check that does
+not exist.
+
+### `magical_rs`
+
+```toml
+[dependencies]
+magical_rs = "0.6"
+```
+
+| Call | Level | What it does |
+| --- | --- | --- |
+| `FileKind::match_types(&[u8])` | 1 | `Option<FileKind>` from the built-in table. First match in `SIGNATURE_KIND` order |
+| `FileKind::match_with_max_read_rule(&[u8], usize)` | 1 | The same, restricted to rules whose own `max_bytes_read` fits the window. **`no_std` only** |
+| `FileKind::match_with_custom_max_read(&[u8], usize)` | 1 | The same, with no per-rule filter but a minimum buffer length. **`no_std` only** |
+| `read_file_header(path, limit)` | 1 | The `std` path: read the first `limit` bytes of a file. `read_file_header` is `#[cfg(feature = "std")]` |
+| `with_bytes_read()` | 1 | The crate's own default window: 36,870 bytes, which is what ISO 9660 needs |
+| `FileKind::display_name()` | — | `'static str`, e.g. `"JPEG image"` |
+| `FileKind::mime()` | — | `Option<&'static str>`, e.g. `Some("image/jpeg")`. `None` where there is no verified type |
+| `FileKind::extension()` | — | `Option<&'static str>`, e.g. `Some("jpg")` |
+| `FileKind::variant_name()` | — | The token the other two languages use, e.g. `"Jpg"` |
+| `FileKind::from_name(&str)` | — | The reverse of `variant_name`, and what the bindings' name lookup is |
+| `kinds_meta::ALL_KINDS` | — | All 114, in table order. The order is the ABI every binding indexes by |
+| `magic_rules![ .. ]` | 2 | A `&'static [MagicCustom<K>]` from a rule table. Not gated |
+| `magic_custom!( .. )` | 2 | One `MagicCustom` from named fields. The older spelling; still public |
+| `match_types_custom(&[u8], rules, fallback)` | 2 | The kind of the first rule that matches, or the fallback |
+| `any_matches!` / `all_matches!` / `with_fn_matches!` | 2 | Sugar for the `CustomMatchRules` variants |
+| `Detect::detect` and friends | 1, 2 | `bytes.detect()`. Behind `magical_fluent` |
+| `dispatch::first_match(&[u8], usize)` | 1 | The index the three functions above share, for a caller who wants it directly |
+| `dispatch::probes_for(&[u8])` | 1 | How many table entries an input causes to be tried. For tests and benchmarks |
+| `DynMagicCustom::new` / `match_dyn_types*` | 3 | Runtime rules. Behind `magical_dyn` |
+| `AsyncDynMagic::new` | 4 | Async rules. Behind `magical_async_dyn` |
+| `CustomMatchRules::AllMatchesUnsafe` and friends | 5 | Raw-pointer rules. Behind `unsafe_context` |
+
+Two of the level 1 entry points exist only without `std`, and that is not an
+oversight — the `std` build has a faster path for the same question, and the
+bindings call `dispatch::first_match` rather than depending on either. The
+`no_std` restriction on `match_with_max_read_rule` and
+`match_with_custom_max_read` is the reason
+[`bindings/asm`](https://github.com/Reim-developer/magical_rs/tree/master/bindings/asm)
+used to carry its own copy of that scan; it does not any more.
+
+### `magical-py`
+
+```bash
+pip install magical-py
+```
+
+| Call | Level | What it does |
+| --- | --- | --- |
+| `detect(path)` | 1 | `FileKind \| None` from a path, with the header read for you |
+| `detect_bytes(data, *, max_bytes_read=None)` | 1 | The same from bytes you already have |
+| `bytes_read()` | 1 | 36,870 — the header size every format needs. Rust's `with_bytes_read()` |
+| `DEFAULT_MAX_BYTES_READ` | 1 | 2,048 — the crate's per-rule default, which is *not* the same number |
+| `read_header(source, limit=None)` | 1 | The first `limit` bytes, from a path or anything file-like |
+| `version()` | — | The extension module's version, so a caller can branch on it |
+| `FileKind.description` / `.mime` / `.extension` | — | The same three metadata calls, as properties. `None` means "none registered", never "unknown" |
+| `FileKind` | — | A real `enum` of 114 members. Not a string to parse |
+| `describe(kind)` | — | A `Signature`: the offsets, the bytes, and the read size for one format |
+| `signature_table()` | — | All 114, in table order. A tuple, so it cannot be mutated |
+| `read_limits()` | — | A `ReadLimits`: the smallest window that finds each format, and the crate's default |
+| `MagicCustom` / `MatchRules` / `Predicate` | 2 | Rule sets, the same order-is-the-answer rule as Rust |
+| `match_types_custom` | 2 | The kind of the first rule that matches, or your fallback |
+| `match_types_custom_all` | 2 | Every rule that matches, not just the first |
+| `DynMagicCustom` / `match_dyn_types` / `match_dyn_types_all` | 3 | Runtime rules |
+| `AsyncDynMagic` / `AsyncPredicate` / `match_async_dyn_types*` | 4 | Async rules |
+
+`detect` is deliberately blocking. It reads a header and compares bytes, and a
+file read is a file read — making it `async` would mean either an executor this
+crate does not have or a thread this crate should not start. For many files, read
+them yourself and use `detect_bytes`. Level 4 is the async one, and it takes
+*predicates*, not paths: the coroutine is yours, so a caller reads the file
+wherever it likes.
+
+### `@reim-developer/magical-js`
+
+```bash
+npm install @reim-developer/magical-js
+```
+
+| Call | Level | What it does |
+| --- | --- | --- |
+| `detectPath(path, options?)` | 1 | `FileKind \| null` from a path. Synchronous, not a `Promise` |
+| `detectBytes(bytes, options?)` | 1 | The same from bytes you already have |
+| `readHeader(path, options?)` | 1 | The header itself, if you want to keep it |
+| `neededBytes()` | 1 | 36,870 — the header size every format needs to be distinguishable. Rust's `with_bytes_read()` |
+| `DEFAULT_MAX_BYTES_READ` | 1 | 2,048 — the crate's per-rule default, which is *not* the same number. A caller who wants a narrow window wants this one |
+| `readLimits()` | 1 | The smallest window that finds each format, and the default |
+| `displayName(kind)` | — | e.g. `"JPEG image"` |
+| `mime(kind)` | — | `string \| null` |
+| `extension(kind)` | — | `string \| null` |
+| `allKinds()` | — | All 114 tokens, in table order |
+| `isFileKind(value)` | — | A type guard, for a name from a config file or a query string |
+| `describe(kind)` | — | A `Signature` for one format |
+| `signatureTable()` | — | All 114, in table order |
+| `matches(kind, bytes)` | 1 | Is it *this* format, ignoring table order — the same question as Rust's `Detect::is` |
+| `matchTypes(rules, bytes)` | 2 | The first rule that matches, with the answer typed as the union of the kinds *you* declared |
+| `matchAllTypes(rules, bytes)` | 2 | Every rule that matches |
+| `releaseRules(rules)` | 2 | Drops the compiled rule set's handle. `false` if there was nothing to release, so "already released" and "never compiled" are distinguishable | |
+
+`matchTypes` is the piece worth understanding before using:
+
+```ts
+import { matchTypes } from "@reim-developer/magical-js";
+
+// `const` type parameter: the answer is the union of the kinds you declared.
+const rules = [
+  { kind: "Png", signatures: [PNG_BYTES], offsets: [0] },
+  { kind: "GIF", signatures: [GIF_BYTES], offsets: [0] },
+] as const;
+
+const found = matchTypes(rules, bytes);   // "Png" | "GIF" | null
+if (found === "Jpg") { }                  // error: "Jpg" is a real format, just not one of these two
+```
+
+A rule set is a `readonly` array of plain objects, so it can be written in a JSON
+file, sent over a message, or built at run time. It is compiled into the module's
+linear memory on first use.
+
+`releaseRules` drops the *handle*, not the memory: the compiled copy is leaked
+once, deliberately, so the `MagicCustom` values inside the module can hold a
+reference to it. That is a documented trade in `bindings/asm/src/lib.rs` and it is
+repeated here because the function's name implies something stronger than it does.
+A caller who builds rule sets once at startup never needs it. A caller building
+them in a loop should call it when done with one, and should understand that the
+wasm-side allocation is not returned to the allocator — the honest advice is to
+build fewer, larger rule sets rather than many small ones.
+
+### What is deliberately not the same across the three
+
+Parity is a goal, not an accident, and the places where it is not are listed here
+rather than left to be discovered.
+
+| | Rust | Python | JavaScript |
+| --- | --- | --- | --- |
+| Unknown answer | `Option<FileKind>` | `FileKind \| None` | `FileKind \| null` |
+| The kind itself | an enum | an enum | a `string` union — the discriminants *are* the ABI |
+| Read size has a hard minimum | yes: ISO 9660 needs 36,870 bytes | same | same, and `readLimits()` reports it |
+| A rule set lives in | the caller's binary | the caller's objects | compiled into the module, leaked once |
+| Rule sets are mutable | no, `&'static` | the list is a `Sequence`, the caller owns it | no, `readonly`, and compiled on use |
+| "Is it this format?" | `Detect::is` | none — add it in a `Predicate` | `matches(kind, bytes)` |
+| `no_std` | yes, levels 1 and 2 | not applicable | not applicable — the module is `wasm32` |
+
+The two rows that will surprise somebody:
+
+**JavaScript has no `is_any`** and **Python has no `is` at all.** Both are one
+line on top of what exists — Python writes a `Predicate` that looks the kind up,
+JavaScript calls `matches` in a loop — and neither is in the binding because each
+is a wrapper over something the language already has. A binding that ships a
+one-line wrapper for every call site in Rust does not have parity, it has a bigger
+API to keep in step.
+
+**The rule-set lifetime differs**, and the reason is the boundary. In Rust and
+Python the rules are yours and cost nothing to keep. In JavaScript they cross into
+a module whose address space you do not own, so a loop that compiles a fresh rule
+set per file grows that module's heap per file. `releaseRules` bounds the handles;
+it does not return the memory.
+
 ## Feature flags
 
 | Flag | Default | Effect |
@@ -452,9 +734,53 @@ caller makes where the decision is visible.
 | `magical_dyn` | no | Level 3, runtime rules |
 | `magical_async_dyn` | no | Level 4, async rules |
 | `unsafe_context` | no | Level 5, raw pointer rules |
+| `magical_fluent` | no | `bytes.detect()` and friends |
 
 Building with `--no-default-features` gives a `no_std` library with only levels
 1 and 2 available.
+
+### Why `magical_fluent` is the one flag that is not about a level
+
+Every other flag adds a capability. This one adds a spelling, and it is gated
+because a spelling on a type you do not own is not free to take: `bytes.detect()`
+is a method on `[u8]`, so writing it is a dependency on this crate for a slice of
+bytes you could have handed to anything, and nothing in the signature lets you
+see that afterwards. A `macro_rules!` costs nothing until invoked, so
+`magic_rules!` is not gated; a trait method is a name in a namespace, so it is.
+
+```rust
+#[cfg(feature = "magical_fluent")]
+use magical_rs::magical::fluent::Detect;
+
+#[cfg(feature = "magical_fluent")]
+fn example() {
+    use magical_rs::magical::magic::FileKind;
+
+    let gif = b"GIF89a";
+
+    gif.detect();                             // Option<FileKind>
+    gif.detect_within(2_048);                 // only rules that fit in 2,048 bytes
+    gif.is(FileKind::GIF);                    // is it *this* format, ignoring table order
+    gif.is_any([FileKind::Png, FileKind::GIF]);
+}
+```
+
+Turning the flag off leaves nothing behind: no trait, no type, and not an empty
+module in the documentation either. The `#[cfg]` is on the `pub mod` line rather
+than only inside the module, and `tests/fluent.rs` reads the crate root to check
+it — a `#[cfg]` inside the body compiles perfectly and leaves exactly the hole the
+flag exists to close.
+
+`is` is not the same question as `detect() == Some(kind)`, and the difference is
+worth naming: `is` asks whether *that format's own rule* matches, ignoring every
+rule that would have been tried first. A file that is both CBOR and, by its first
+bytes, an earlier entry in the table is the earlier one as far as `detect` is
+concerned and is still "yes, it is CBOR" as far as `is` is concerned.
+
+There is deliberately no `detect_or`. `FileKind` has no "unknown" variant — all
+114 of them are real formats — so there is no honest value to substitute, and an
+`Option` is the better answer. `unwrap_or` on `detect()` is four characters if you
+have your own sentinel.
 
 ## Supported formats
 
@@ -689,11 +1015,37 @@ asserts the answer for nine headers — including one with its magic at offset 2
 one at offset 32,769 that forces the module's memory to grow. A wrong answer is a
 non-zero exit.
 
-It is also the smallest honest comparison available: **17,764 bytes, 4 exports, 0
-imports**, against the binding's **43,212 bytes, 17 exports, 0 imports**. The 25 KB
-is what a *binding* is and a *library* is not — the encoded detection table, level 2
+It is also the smallest honest comparison available: **32,847 bytes, 4 exports, 0
+imports**, against the binding's **44,616 bytes, 17 exports, 0 imports**. The 12 KB
+is what a *binding* is and a *library* is not - the encoded detection table, level 2
 runtime rules, the introspection API and a released ABI. Neither number is a
 benchmark and neither is better; they answer different questions.
+
+The two sizes also answer a question worth asking on its own. Detection used to walk
+all 114 rules in order, which cost 525 ns for a file the table does not recognise
+and 5 ns for one that matches the first rule, so a hundred-fold spread came from
+position in the table alone. It is now a first-byte index built during const
+evaluation - `crates/magical_rs/src/magical/dispatch.rs` - and the seven entries
+whose signature sits past offset zero are compared as one 64-bit integer rather
+than through a `memcmp` call, because a signature of eight bytes or fewer fits in
+a register. That case is 6.4 ns, measured against 28.8 ns for the index alone in
+the same session with the same harness; GIF at position 36 is 8.9 ns rather than
+15.4; and PNG is 6.0 rather than 5.8, which is the 2-4% the other cases paid for
+it. Both changes are zero bytes - the binding is 45,184 raw and 18,024 gzipped
+before and after, on a clean rebuild. The index answers exactly what the walk
+answered, for every input; that is not established by the tests agreeing with the
+old code on the cases they happened to try, it is established by construction and
+then checked by differential tests against a separately written linear scan over
+the table, its fixtures, its non-matching inputs, and 4,096 pseudo-random buffers.
+`src/magical/dispatch.rs` also records the two shapes that were tried and
+measured *slower*, because a table of only the things that worked is a table of
+only the things somebody kept.
+
+It also cost 1,404 bytes in the binding and 15,083 in the example. The same code
+weighing ten times as much tells you the cost is code and not data, and that a
+module which is nearly all code - which is what a library-only module is - pays the
+most for it. If you are short on bytes rather than nanoseconds, that number is the
+one to weigh.
 
 The [`magical_py`](https://github.com/Reim-developer/magical_rs/tree/master/bindings/python)
 bindings carry their own six runnable scripts in
@@ -795,13 +1147,65 @@ It regenerates the format tables from `formats.json`, runs the binding's own Rus
 tests, builds the module and checks it declares no imports, type-checks the
 hand-written declarations, runs the test suite, then runs rustfmt and clippy.
 
+## Benchmarks
+
+[`benchmarks/`](benchmarks/) measures this crate against `infer` and libmagic on
+one shared corpus: 286 generated buffers of 36,870 bytes, half of them with a
+format planted at a declared signature and offset and half matching nothing. It is
+outside the root workspace so that Criterion does not put three hundred packages
+into the lockfile the first table of this readme says holds exactly one.
+
+```bash
+make bench           # criterion per case, then the pull-request summary
+make bench-report    # the summary alone, about ten seconds
+make bench-mutations # the harness's own mutation check
+```
+
+The numbers are published in the pull request, not here, and this section does
+not quote them. A nanosecond figure is a fact about the machine that produced it;
+putting one in a readme turns it into a claim about every machine, and it would be
+the first claim on this page that nothing in the repository could check.
+
+Three things about how it measures, because all three are ways a benchmark of
+this crate could have been quietly flattering to it:
+
+**The corpus is generated from this crate's own signature table.** So of course it
+recognises all of the format cases. A correctness score over that corpus would be
+measuring the generator, so there is no score. What the report prints instead is
+what each library said about the four real files the repository already commits,
+which is a question that can be answered. That split was not designed in: libmagic
+reports `application/octet-stream` for a buffer holding a valid eight-byte PNG
+signature and 36,862 zero bytes, and `image/png` for a real PNG whose first eight
+bytes are the same eight, because its rules look past the header.
+
+**Both entry points are measured.** A caller has a buffer or has a path, and the
+two numbers are not close. From a file, `magical_rs` reads 36,870 bytes because
+that is what its table needs in order to reach ISO 9660, and `infer` reads only
+what its own table needs — so `infer` is the faster of the two from a path, and
+that row is in the report.
+
+**The harness is mutation-checked.** `make bench-mutations` applies 22 changes to
+it, each one a way the report could flatter this crate or hide a library, and
+requires a test to go red for each. All 22 are caught. Two of the twenty-two are
+bugs this crate actually had: libmagic's pass evicted the corpus from cache and
+charged the fast library for it, and a `NaN` median made every ratio in the table
+print as `inf`. Both are written up in [`benchmarks/README.md`](benchmarks/README.md).
+
+libmagic is behind the crate's `libmagic` feature because it is a C library and
+`magic-sys`'s build script fails rather than degrading when it cannot find one. The
+report says which libraries actually ran, so a two-row table is never mistaken for
+a three-row one.
+
 Three tests exist because the layout above is a thing that can drift, and none of
 the drift is caught by a build:
 
 - `crates/magical_rs/tests/workspace.rs` checks that every crate under
-  `bindings/` and `examples/` is named in `exclude`, and that each one reaches
-  the library at its new home. An unlisted crate fails to build *on its own*,
-  and not from `cargo test` at the root, which never looks at it.
+  `benchmarks/`, `bindings/` and `examples/` is named in `exclude`, and that each
+  one reaches the library at its new home. An unlisted crate fails to build *on its
+  own*, and not from `cargo test` at the root, which never looks at it — so the
+  benchmark crate is in that test for the same reason the bindings are: drop it
+  from the list and `cargo bench` stops working with an error that names the root
+  manifest rather than the line that is wrong.
 - `crates/magical_rs/tests/packaging.rs` checks the copies of `LICENSE` and
   `CHANGELOG.md` that sit beside the crate's manifest. Cargo will not package a
   file from outside the package — `include = ["../../LICENSE"]` is silently

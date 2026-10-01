@@ -10,6 +10,7 @@ extern crate std;
 
 pub mod magical {
     pub mod bytes_read;
+    pub mod dispatch;
 
     pub mod ext_fn {
         pub mod shebang;
@@ -18,10 +19,20 @@ pub mod magical {
 
     pub mod async_dyn_magic;
     pub mod dyn_magic;
+
+    // The `cfg` is on this line and not only inside the module, so that turning
+    // `magical_fluent` off leaves no trace in the public API — not a trait, not a
+    // type, and not a module that exists and holds nothing. `tests/fluent.rs`
+    // asserts that by reading this file, and the failure it would otherwise cause
+    // is one a caller finds out about from documentation.
+    #[cfg(feature = "magical_fluent")]
+    pub mod fluent;
+
     pub mod kinds_meta;
     pub mod magic;
     pub mod magic_custom;
     pub mod match_rules;
+    pub mod rules_dsl;
     pub mod signatures;
     pub mod signatures_ext;
 }

@@ -11,7 +11,7 @@ node load.mjs
 ```
 
 ```
-module: 17764 bytes, 4 exports, 0 imports
+module: 32847 bytes, 4 exports, 0 imports
   no imports, so no glue file and no import object
   exports: memory, display_name_bytes, display_name_len, which_kind_at
 
@@ -54,9 +54,9 @@ all compile and then fail at runtime. What that build catches is target-gated `s
 It does not catch "the module runs and answers correctly". That is what `load.mjs`
 is for, and `make examples` runs it in CI.
 
-## 17,764 bytes against 43,212
+## 32,847 bytes against 44,616
 
-The npm binding's module is 43,212 bytes. This one is 17,764. The 25 KB difference
+The npm binding's module is 44,616 bytes. This one is 32,847. The 12 KB difference
 is everything a *binding* is and a *library* is not:
 
 | | this example | `bindings/asm` |

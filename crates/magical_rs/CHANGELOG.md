@@ -2,6 +2,7 @@
 - [CHANGELOG](#changelog)
   - [Version: 0.6.5 `A first-byte index, a macro, a fluent API, and benchmarks`](#version-065-a-first-byte-index-a-macro-a-fluent-api-and-benchmarks)
     - [Level 2 rules as a table, a fluent API, and an API reference](#level-2-rules-as-a-table-a-fluent-api-and-an-api-reference)
+    - [A publish failure, and the test that was written backwards](#a-publish-failure-and-the-test-that-was-written-backwards)
     - [A first-byte detection index](#a-first-byte-detection-index)
     - [Benchmarks against `infer` and libmagic](#benchmarks-against-infer-and-libmagic)
     - [One format dataset](#one-format-dataset)
@@ -141,6 +142,40 @@ readme lists what all three languages export.**
   about what three bounds-checked array indexes do. A struct-per-probe version was
   10x slower, because every probe carried a `&'static [u8]` tail for the long
   signatures. `src/magical/dispatch.rs` has both tables.
+### A publish failure, and the test that was written backwards
+
+* **Fixed the path that `src/lib.rs` reaches the readme by.**
+  `include_str!("../../../readme.md")` is three levels up, which is the repository
+  readme and correct in the source tree, and `cargo publish` failed on 0.6.5 with:
+
+  ```text
+  error: couldn't read `src/../../../readme.md`: No such file or directory
+  ```
+
+  It fails because `cargo publish` does not compile the source tree. It compiles
+  the *archive*, whose root is the package directory, where `src/..` is already the
+  package root and `src/../..` is outside the archive with nothing there. Every
+  build in CI passed, because CI compiles the tree.
+
+* **`readme.md` is now copied into the crate**, beside `LICENSE` and
+  `CHANGELOG.md`, rather than referenced as `readme = "../../readme.md"`. One level
+  up from `src/` then resolves in both places, and `tests/packaging.rs` fails and
+  names both paths if a copy ever differs from the file at the repository root.
+
+* **Added a test for it, and the first version of that test was wrong in the
+  interesting way.** It resolved the path against `CARGO_MANIFEST_DIR` and asserted
+  the result existed -- which is the source tree, the one place the broken path
+  *does* resolve. It passed on the exact code that could not be published. The
+  property worth testing is how far the path climbs, counted, because inside the
+  archive any `..` past the package root leaves the archive. Verified by putting the
+  broken path back: the test fails and says
+  `climbs 3 level(s) out of src/`.
+
+* **Also fixed: six `examples/*/Cargo.lock` still pinned 0.6.4.** Produced by
+  `cargo check`, not `cargo generate-lockfile` -- the latter resolves from scratch
+  and moved `async-std`'s tree by 300 lines in a commit whose subject is a version
+  string.
+
 ### A first-byte detection index
 
 **Detection no longer walks all 114 rules to answer.**

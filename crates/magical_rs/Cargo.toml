@@ -6,17 +6,19 @@ edition = "2024"
 license = "MIT"
 keywords = ["detect-file", "no-dependency", "no-std", "magic", "rlib"]
 categories = ["filesystem", "no-std", "asynchronous"]
-# `readme` is the repository's own readme, one level up and two across.
-# Cargo copies a readme from outside the package into the published
-# archive as `readme.md`, so the published docs and the repository
-# document are one file rather than two that can disagree. It is
-# `readme` and not `include` that does this: `include` silently ignores
-# a `..` segment, so the `LICENSE` that used to be listed here would
-# have stopped being packaged without a word. `LICENSE` beside this
-# manifest is what ships, and `tests/workspace.rs` checks it is
-# byte-identical to the one at the repository root.
-readme = "../../readme.md"
-include = ["src/**/*.rs", "LICENSE", "CHANGELOG.md"]
+# `readme` is the checked-in copy beside this manifest, and it is a copy for the
+# same reason `LICENSE` and `CHANGELOG.md` are: `src/lib.rs` reaches it with
+# `include_str!`, and the published crate is not the source tree. Cargo copies
+# whatever `readme` names into the archive as `readme.md` at the package root, so
+# naming the repository's own readme two levels up shipped an archive whose
+# `src/lib.rs` pointed at a file that was not in it — and `cargo publish` failed
+# on the verify step with `couldn't read src/../../../readme.md`.
+#
+# The repository's readme is the one a human edits. This file is checked in beside
+# the manifest, and `tests/packaging.rs` fails and names both paths if they ever
+# differ, which is the only thing making a checked-in copy safe.
+readme = "readme.md"
+include = ["src/**/*.rs", "LICENSE", "CHANGELOG.md", "readme.md"]
 authors = ["Reim-developer", "contact.kaxtr@gmail.com"]
 repository = "https://github.com/reim-developer/magical_rs"
 

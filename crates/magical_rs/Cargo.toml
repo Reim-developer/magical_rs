@@ -1,7 +1,7 @@
 [package]
 name = "magical_rs"
 description = """Rust framework for file recognition, aiming for high extensibility and customization."""
-version = "0.6.4"
+version = "0.6.5"
 edition = "2024"
 license = "MIT"
 keywords = ["detect-file", "no-dependency", "no-std", "magic", "rlib"]

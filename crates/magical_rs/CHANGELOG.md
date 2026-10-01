@@ -1,9 +1,10 @@
 # CHANGELOG
 - [CHANGELOG](#changelog)
-  - [Unreleased: macros, a fluent API, and an API reference](#unreleased-macros-a-fluent-api-and-an-api-reference)
-  - [Unreleased: a first-byte detection index](#unreleased-a-first-byte-detection-index)
-  - [Unreleased: benchmarks against infer and libmagic](#unreleased-benchmarks-against-infer-and-libmagic)
-  - [Unreleased: one format dataset](#unreleased-one-format-dataset)
+  - [Version: 0.6.5 `A first-byte index, a macro, a fluent API, and benchmarks`](#version-065-a-first-byte-index-a-macro-a-fluent-api-and-benchmarks)
+    - [Level 2 rules as a table, a fluent API, and an API reference](#level-2-rules-as-a-table-a-fluent-api-and-an-api-reference)
+    - [A first-byte detection index](#a-first-byte-detection-index)
+    - [Benchmarks against `infer` and libmagic](#benchmarks-against-infer-and-libmagic)
+    - [One format dataset](#one-format-dataset)
   - [magical-py: Version 0.4.0](#magical-py-version-040)
   - [magical-py: Version 0.3.0](#magical-py-version-030)
   - [magical-py: Version 0.2.0](#magical-py-version-020)
@@ -21,7 +22,29 @@
   - [Version: 0.6.4 `Offset Arithmetic and a Wrong Constant`](#version-064-offset-arithmetic-and-a-wrong-constant)
 
 
-## Unreleased: macros, a fluent API, and an API reference
+## Version: 0.6.5 `A first-byte index, a macro, a fluent API, and benchmarks`
+
+**What has been changed:**
+
+* **Detection is indexed by the first byte of a signature.** 525 ns for a file the
+  table does not recognise is now **31 ns**. See below.
+* **`magic_rules!`, so level 2 rules are a table instead of five-field struct
+  literals.** See below.
+* **`magical_fluent`, an opt-in trait for chaining.** Gated, because it puts a
+  method on `[u8]`, which is a dependency a caller takes on a type they do not own.
+  See below.
+* **An API reference for all three languages, and a table of what is deliberately
+  not the same across them.** See below.
+* **A benchmark crate**, against `infer` and libmagic, outside the workspace so the
+  lockfile still holds one package. See below.
+* **The format list is generated from one file** rather than written down three
+  times. See below.
+
+Nothing in the public API was removed. `FileKind::match_types` answers exactly what
+it answered in 0.6.4, from the same table, in the same order; the index is behind
+it.
+
+### Level 2 rules as a table, a fluent API, and an API reference
 
 **Level 2 stops asking for five fields, level 1 has a shorter spelling, and the
 readme lists what all three languages export.**
@@ -67,7 +90,7 @@ readme lists what all three languages export.**
   number, and the readme was about to describe them as if they were.
 
 
-## Unreleased: a first-byte detection index
+### A first-byte detection index
 
 **Detection no longer walks all 114 rules to answer.**
 
@@ -100,7 +123,7 @@ readme lists what all three languages export.**
   someone to discover.
 
 
-## Unreleased: benchmarks against infer and libmagic
+### Benchmarks against `infer` and libmagic
 
 **A benchmark crate that measures this crate against the libraries a reader
 would compare it to, and that is checked for lying.**
@@ -147,7 +170,7 @@ would compare it to, and that is checked for lying.**
 * **`tests/ci_coverage.rs` reads every workflow rather than `crate_dev.yml`.** The
   subject of that test is a `Makefile` target nothing runs, and `bench` is run by a
   workflow that did not exist when the test was written.
-## Unreleased: one format dataset
+### One format dataset
 
 **`@reim-developer/magical-js` can now answer what a format is called and served as.**
 

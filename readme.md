@@ -67,7 +67,7 @@ cannot be `image/png` in Rust and something else in Python.
 
 | | Crate | `PyPI` | `npm` |
 | --- | --- | --- | --- |
-| Rust | `magical_rs` 0.6.4 | — | — |
+| Rust | `magical_rs` 0.6.5 | — | — |
 | Python | — | `magical-py` 0.4.0 | — |
 | JavaScript / TypeScript | — | — | `@reim-developer/magical-js` 0.1.0 |
 

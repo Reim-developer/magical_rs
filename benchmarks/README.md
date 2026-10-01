@@ -95,11 +95,20 @@ includes the I/O. On a developer laptop `infer` is *faster* from a path than
 ISO 9660 and `infer` reads only what its own table needs. That row is in the
 report on purpose.
 
+**libmagic is asked twice, and the report counts the difference rather than
+naming it.** `magic_buffer` and `magic_file` are different code paths inside
+libmagic and can disagree about the same bytes, which its `libmagic(3)` man page
+lists under BUGS. The report prints how many of the four files they disagreed
+about *on that run*. An earlier version named the file, which was true of the
+libmagic 5.47 this was developed against on Windows and false of the 5.45 on the
+Linux CI runner — a sentence in a report that is a fact about one machine's
+library build. On 5.47 the answer is one file; on 5.45 it is none.
+
 **No threshold.** There is no number in this crate that a test compares against a
 limit, and adding one would defeat the purpose. A shared runner varies by a
 factor of two between jobs.
 
-## Three things the harness got wrong, and what they cost
+## Four things the harness got wrong, and what they cost
 
 Both were found by comparing this crate's output against Criterion's, and both
 are recorded here because the fix is not obvious from the code.
@@ -111,6 +120,14 @@ search, which skipped every step that produces a number, and the workflow
 reported success. The job no longer has it: there is no threshold here to fail,
 so the only steps that can fail are lint and test, and those should be red when
 they are red.
+
+**A sentence that was true of one machine.** The report said libmagic's two
+entry points disagree about the WebP file. That was measured on libmagic 5.47 on
+Windows and it is false on 5.45, which is what the Linux CI runner has — so the
+sentence was a fact about the library build this crate happened to be developed
+against, written in a report whose argument is that it states the measurement
+rather than the author's experience. It now counts what it counted and prints
+either consequence, and a test rejects a paragraph that names a file.
 
 **Cache pollution between libraries.** The first version timed library A over
 the whole corpus, then B, then C, rotating the order between passes. libmagic

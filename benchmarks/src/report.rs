@@ -596,19 +596,77 @@ impl Report {
             out.push('\n');
         }
 
+        self.write_entry_point_difference(out);
+
         out.push_str(
             "A `-` means the library named no format. `application/octet-stream` is libmagic \
              saying exactly that, and it is shown as `-` rather than passed through, because \
-             \"I do not know this\" and \"this is binary data\" are different things for a caller \
-             to have to handle next.\n\n\
-             **libmagic is asked twice, on purpose.** `magic_buffer` and `magic_file` are different \
-             code paths inside libmagic and they do not always agree: on the WebP file, the buffer \
-               entry point says nothing and the path entry point says `image/webp`. A benchmark that \
-               had picked one would have picked whichever made libmagic look better, so both are \
-               printed. And it is not a measurement artefact: libmagic's own `libmagic(3)` man page \
-               lists it under BUGS, because in the `magic_file` case the program can `lseek(2)` and \
-               `stat(2)` the descriptor and in the `magic_buffer` case it cannot.\n",
+             \"I do not know this\" and \"this is binary data\" are different things for a caller to \
+             have to handle next.\n",
         );
+    }
+
+    /// How many files libmagic answers differently depending on how it was given them.
+    ///
+    /// **Measured, not asserted.** The first version of this said "on the WebP
+    /// file, the buffer entry point says nothing and the path entry point says
+    /// `image/webp`", which was true of the libmagic 5.47 this crate was developed
+    /// against and false of the 5.45 on the CI runner. A sentence in a report that
+    /// is a fact about one machine's library build is a claim, and this report's
+    /// whole argument is that it makes claims about the measurement rather than
+    /// about the author.
+    ///
+    /// So it prints the number it counted. On a build where the two agree, that is
+    /// zero, and the zero is the finding.
+    ///
+    /// libmagic's own `libmagic(3)` man page lists the underlying behaviour under
+    /// BUGS: *"The results from `magic_buffer()` and `magic_file()` where the buffer
+    /// and the file contain the same data can produce different results, because in
+    /// the `magic_file()` case, the program can `lseek(2)` and `stat(2)` the file
+    /// descriptor."* That is why both are asked at all rather than one of them.
+    fn write_entry_point_difference(&self, out: &mut String) {
+        // The last adapter is the one with a path-based entry point, so it is the
+        // one whose two answers can differ.
+        let Some(libmagic) = self.in_memory.last().map(|m| m.name.as_str()) else {
+            return;
+        };
+        let differing: Vec<&str> = self
+            .answers
+            .iter()
+            .filter(|row| {
+                let (Some((_, from_bytes)), Some((_, from_path))) =
+                    (row.in_memory.last(), row.from_path.last())
+                else {
+                    return false;
+                };
+                from_bytes.mime != from_path.mime
+            })
+            .map(|row| row.file.as_str())
+            .collect();
+
+        let _ = writeln!(
+            out,
+            "\n**`{libmagic}` is asked twice, on purpose.** `magic_buffer` and `magic_file` are \
+             different code paths inside libmagic, and libmagic's `libmagic(3)` man page lists it \
+             under BUGS that they can disagree on the same bytes, because the path case can \
+             `lseek(2)` and `stat(2)` the descriptor and the buffer case cannot. A benchmark that \
+             had picked one would have picked whichever made libmagic look better, so both are \
+             above.",
+        );
+        if differing.is_empty() {
+            out.push_str(
+                "\nOn this build they agreed on all of them. That is a fact about this build, not a \
+                 correction of the man page.\n",
+            );
+        } else {
+            let _ = writeln!(
+                out,
+                "\nOn this build they disagreed about {}: {}. A different libmagic version may \
+                 disagree about different files, or about none.",
+                differing.len(),
+                differing.join(", ")
+            );
+        }
     }
 }
 

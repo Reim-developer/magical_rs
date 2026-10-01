@@ -354,6 +354,12 @@ fn the_report_states_what_it_cannot_claim() {
     if cfg!(feature = "libmagic") {
         expected.push("magic_buffer` and `magic_file` are different");
         expected.push("not a faster detector");
+        // The entry-point paragraph has to state a count and a consequence
+        // either way. The first version asserted "on the WebP file the buffer
+        // entry point says nothing", which was true of libmagic 5.47 on Windows
+        // and false of 5.45 on the CI runner -- a sentence in a report that is a
+        // fact about one machine's library build.
+        expected.push("On this build they");
     }
 
     for claim in expected {
@@ -364,6 +370,36 @@ fn the_report_states_what_it_cannot_claim() {
     }
 }
 
+/// The report counts the entry-point disagreements rather than naming them.
+///
+/// libmagic's `magic_buffer` and `magic_file` can disagree about the same bytes,
+/// which its man page lists under BUGS. The first version of this report said
+/// which file they disagreed about, in a sentence: true of the libmagic 5.47 this
+/// crate was developed against on Windows, false of the 5.45 on the Linux CI
+/// runner. A sentence like that is a claim about one machine's library build, in
+/// a report whose whole argument is that it makes claims about the measurement.
+///
+/// So the paragraph has to state a count this run produced, and either
+/// consequence has to be acceptable.
+#[test]
+fn the_report_counts_rather_than_names_the_entry_point_disagreements() {
+    if !cfg!(feature = "libmagic") {
+        return;
+    }
+    let markdown = report::build(&adapter::all()).to_markdown();
+
+    assert!(
+        !markdown.contains("on the WebP file, the buffer entry point"),
+        "the report names which file the two libmagic entry points disagree about, which is a \
+         fact about the libmagic build it was written against rather than about this run"
+    );
+    assert!(
+        markdown.contains("On this build they agreed on all of them")
+            || markdown.contains("On this build they disagreed about"),
+        "the report does not say what it counted, so the paragraph is asserting rather than \
+         measuring. The report is:\n{markdown}"
+    );
+}
 /// The report does not sort its rows by time.
 ///
 /// A table ordered by the winner is a table that has been arranged, and the

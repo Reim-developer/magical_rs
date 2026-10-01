@@ -263,9 +263,10 @@ impl LibMagic {
         let database = database().unwrap_or_else(|| {
             panic!(
                 "no libmagic database found. Tried, in order: $MAGIC, libmagic's own compiled-in \
-                 default, then every vcpkg layout under $VCPKG_INSTALLED_DIR and $VCPKG_ROOT. Set \
-                 $MAGIC to a magic.mgc, or install libmagic where one of those points. The list is \
-                 in adapter::database_search_order."
+                 default, the paths distributions put it in, then every vcpkg layout under \
+                 $VCPKG_INSTALLED_DIR and $VCPKG_ROOT. Set $MAGIC to a magic.mgc, or install \
+                 libmagic where one of those points. The list is in \
+                 adapter::database_search_order."
             )
         });
 
@@ -286,31 +287,52 @@ impl LibMagic {
 }
 
 /// Where libmagic's `magic.mgc` is looked for, in order.
-///
-/// The order is not arbitrary. `$MAGIC` first because it is libmagic's own
 /// documented override and a person who set it meant it. Then the null path,
-/// which is what makes this work on a Linux runner with `libmagic-dev`
-/// installed and nothing configured -- the common CI case, and the one that
-/// needs no code here. Then the vcpkg layouts.
+/// which is libmagic's own compiled-in default. Then the places distributions
+/// and package managers actually put it, then the vcpkg layouts.
 ///
-/// Windows has no compiled-in default at all: libmagic's `MAGIC` macro resolves
-/// to `/usr/share/misc/magic.mgc`, and `magic_load(cookie, NULL)` there simply
-/// fails. That is not a bug in this crate and it is why this list exists.
+/// **The compiled-in default is not a fixed path.** libmagic's `MAGIC` macro
+/// resolves to whatever its build passed, and the man page documents the
+/// upstream value as `/usr/local/share/misc/magic` while Debian and Ubuntu ship
+/// the file in `/usr/share/misc`. So `magic_load(cookie, NULL)` works on some
+/// machines and not others for reasons nothing on this side can see -- and the
+/// first version of this crate relied on it alone, so the benchmark workflow's
+/// first run on Linux panicked and produced no numbers at all. A green job that
+/// measured nothing is worse than a red one.
+///
+/// Every candidate below is validated by a real `magic_load` in
+/// [`find_database`], so being in this list does not mean a path is right. It
+/// means it is worth asking.
 #[cfg(feature = "libmagic")]
 fn database_search_order() -> Vec<Option<std::path::PathBuf>> {
     let mut order = vec![std::env::var_os("MAGIC").map(std::path::PathBuf::from)];
     // `None` is `magic_load(cookie, NULL)`: libmagic's own default search.
     order.push(None);
 
+    // Debian and Ubuntu, Fedora and RHEL, Homebrew, and the two spellings of the
+    // upstream default. Written out rather than globbed, because walking the
+    // filesystem on every start is a way to find a database the operator did not
+    // mean to use, and this list is short enough to read.
+    for path in [
+        "/usr/share/misc/magic.mgc",
+        "/usr/local/share/misc/magic.mgc",
+        "/usr/share/file/magic.mgc",
+        "/usr/local/share/file/magic.mgc",
+        "/opt/homebrew/etc/magic.mgc",
+        "/usr/local/etc/magic.mgc",
+    ] {
+        order.push(Some(std::path::PathBuf::from(path)));
+    }
+
     for root_var in ["VCPKG_INSTALLED_DIR", "VCPKG_ROOT"] {
         let Some(root) = std::env::var_os(root_var).map(std::path::PathBuf::from) else {
             continue;
         };
         // Classic trees put it under `installed/`, manifest trees under
-        // `vcpkg_installed/`, and the `vcpkg` crate that `magic-sys` uses to
-        // find the library insists on the classic spelling. So: all of them, for
-        // the triplet the caller named and then for each host's default, because
-        // a benchmark that only works when the triplet happens to match is a
+        // `vcpkg_installed/`, and the `vcpkg` crate that `magic-sys` uses to find
+        // the library insists on the classic spelling. So: all of them, for the
+        // triplet the caller named and then for each host's default, because a
+        // benchmark that only works when the triplet happens to match is a
         // benchmark that silently does not run.
         for prefix in ["installed", "vcpkg_installed", ""] {
             for triplet in [

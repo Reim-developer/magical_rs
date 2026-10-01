@@ -603,9 +603,11 @@ impl Report {
              to have to handle next.\n\n\
              **libmagic is asked twice, on purpose.** `magic_buffer` and `magic_file` are different \
              code paths inside libmagic and they do not always agree: on the WebP file, the buffer \
-             entry point says nothing and the path entry point says `image/webp`. A benchmark that \
-             had picked one would have picked whichever made libmagic look better, so both are \
-             printed.\n",
+               entry point says nothing and the path entry point says `image/webp`. A benchmark that \
+               had picked one would have picked whichever made libmagic look better, so both are \
+               printed. And it is not a measurement artefact: libmagic's own `libmagic(3)` man page \
+               lists it under BUGS, because in the `magic_file` case the program can `lseek(2)` and \
+               `stat(2)` the descriptor and in the `magic_buffer` case it cannot.\n",
         );
     }
 }

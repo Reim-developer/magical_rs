@@ -50,12 +50,25 @@ function Invoke-Mutation {
 
     $path = Join-Path $crate $File
     $original = [System.IO.File]::ReadAllText($path)
-    if (-not $original.Contains($Find)) {
+
+    # A `Find` or `Replace` written here with a line break in it has to match the
+    # file it is applied to, and the line ending of a source file in this
+    # repository is not something to reason about: it depends on which tool last
+    # wrote it, and `cargo fmt` does not change it. Two mutations were reported
+    # stale for exactly this reason -- the code was fine and the newline was not.
+    #
+    # So the ending is worked out from the file and applied to both strings,
+    # rather than being written down here and having to be right.
+    $eol = if ($original.Contains("`r`n")) { "`r`n" } else { "`n" }
+    $find = $Find.Replace("`r`n", "`n").Replace("`n", $eol)
+    $replace = $Replace.Replace("`r`n", "`n").Replace("`n", $eol)
+
+    if (-not $original.Contains($find)) {
         Write-Host ("  SKIP  {0}: the text to change is not in {1} any more -- the mutation is stale" -f $Name, $File) -ForegroundColor DarkYellow
         return [pscustomobject]@{ Name = $Name; Caught = $false; Stale = $true }
     }
 
-    [System.IO.File]::WriteAllText($path, $original.Replace($Find, $Replace))
+    [System.IO.File]::WriteAllText($path, $original.Replace($find, $replace))
     try {
         $run = Invoke-Cargo (@('test') + $CargoArgs + @($Test))
         $caught = $run.Code -ne 0
@@ -112,8 +125,8 @@ $mutations = @(
         Name = 'the warm read is removed, so the slow library evicts the corpus'
         File = 'src\report.rs'
         Find = '            warm(cases);
-            samples[index].push'
-        Replace = '            samples[index].push'
+            samples[index].push(pass('
+        Replace = '            samples[index].push(pass('
     },
     @{
         Name = 'the in-memory corpus is shorter than the on-disk one, so the two tables are not comparable'

@@ -33,7 +33,7 @@ that is red.
 
 | Platform | What to do | What the crate needs |
 |---|---|---|
-| Debian / Ubuntu | `sudo apt-get install libmagic-dev libmagic-mgc` | `pkg-config` finds it; no environment variables |
+| Debian / Ubuntu | `sudo apt-get install libmagic-dev libmagic-mgc` | two packages: the headers, and the compiled rules database |
 | macOS | it is preinstalled | nothing |
 | Windows, vcpkg | `vcpkg install libmagic:x64-windows` | `$VCPKG_ROOT`, `$VCPKGRS_TRIPLET`, `$VCPKGRS_DYNAMIC=1` |
 
@@ -47,12 +47,20 @@ work by accident:
 - `$VCPKG_ROOT` must contain `.vcpkg-root` and an `installed/<triplet>` tree.
   A manifest-mode vcpkg installs into `<manifest>/vcpkg_installed/<triplet>`;
   the crate only looks under `$VCPKG_ROOT/installed/`.
-- The database is **not** found by `magic_load(cookie, NULL)` on Windows.
-  libmagic's `MAGIC` macro resolves to `/usr/share/misc/magic.mgc` and there is
-  no such path, so the call simply fails. The crate searches for it itself --
-  `$MAGIC` first, then the vcpkg layouts -- and panics with the list it tried if
-  it finds nothing, rather than running with no rules and reporting
-  `application/octet-stream` for all four files.
+- The database is **not** found by `magic_load(cookie, NULL)` on Windows, and not
+  reliably on Linux either. libmagic's `MAGIC` macro resolves to whatever its
+  build passed -- the man page documents the upstream value as
+  `/usr/local/share/misc/magic`, while Debian and Ubuntu ship the file in
+  `/usr/share/misc` -- so the compiled-in default is right on some machines and
+  wrong on others for reasons nothing on this side can see. The crate searches
+  `$MAGIC`, then the compiled-in default, then the paths distributions put it in,
+  then the vcpkg layouts, validating each with a real `magic_load`. It panics with
+  the list it tried if none of them work, rather than running with no rules and
+  reporting `application/octet-stream` for all four files.
+
+  `benchmarks.yml` also sets `$MAGIC` from a `find`, because the first run of that
+  workflow relied on the compiled-in default, did not find the database, and
+  panicked -- leaving a **green** job that had measured nothing.
 
 `filemagic`'s `vendored` feature looks like the obvious answer on Windows and is
 not: it builds libmagic from source with the `cc` crate, which does find MSVC's
@@ -91,10 +99,18 @@ report on purpose.
 limit, and adding one would defeat the purpose. A shared runner varies by a
 factor of two between jobs.
 
-## Two things the harness got wrong, and what they cost
+## Three things the harness got wrong, and what they cost
 
 Both were found by comparing this crate's output against Criterion's, and both
 are recorded here because the fix is not obvious from the code.
+
+**A green job that measured nothing.** The first run of `benchmarks.yml` had
+`continue-on-error: true` on the job, on the reasoning that a busy runner should
+not turn a pull request red over a measurement. It panicked in the database
+search, which skipped every step that produces a number, and the workflow
+reported success. The job no longer has it: there is no threshold here to fail,
+so the only steps that can fail are lint and test, and those should be red when
+they are red.
 
 **Cache pollution between libraries.** The first version timed library A over
 the whole corpus, then B, then C, rotating the order between passes. libmagic
@@ -118,6 +134,20 @@ library that produces a NaN sees its own NaN in its own row.
 
 `make bench-mutations` applies 21 changes that are each one of these, or a
 neighbour of one, and requires the tests to go red for each. All 21 are caught.
+
+Two of the twenty-one are housekeeping that turned out to matter more than it
+looks, and both are in the script because of how they failed:
+
+- A mutation's `Find` string had to match the file byte for byte, so two of them
+  went stale on a line-ending difference -- the code was fine and the newline was
+  not. The script now reads the line ending from the file and applies it to both
+  the search and the replacement. A mutation that reports itself stale is worse
+  than one that fails, because a stale mutation looks like a test that does not
+  exist for anything.
+- `cargo fmt` does not change a file's line ending, and `[System.IO.File]::WriteAllLines`
+  writes the platform's. So the line ending of a source file here depends on which
+  tool last touched it, and there is no way to write a `Find` down once and have
+  it stay correct.
 
 ## Layout
 

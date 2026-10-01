@@ -38,13 +38,18 @@ env:
 
 jobs:
     benchmarks:
-        # `continue-on-error` on the whole job, not on the steps, because a
-        # runner that is out of disk or a criterion that panics should not turn
-        # a pull request red over a measurement. The steps below are what must
-        # hold for the numbers to mean anything, and they are the steps whose
-        # failure is worth seeing as a failure.
         runs-on: ubuntu-latest
-        continue-on-error: true
+        # No `continue-on-error` here, and that is a change from the first
+        # version. It had it, on the reasoning that a busy runner should not turn
+        # a pull request red over a measurement -- and the consequence was that
+        # the first run panicked in the database search, skipped every step that
+        # produces a number, and reported **green**. A job that measures nothing
+        # and looks like it passed is worse than a red one, because the red tick
+        # next to it in the checks tab is the only thing anybody looks at.
+        #
+        # There is nothing here that can fail on a *number* anyway: no threshold
+        # exists to fail. The steps that can fail are lint and test, and those
+        # should be red when they are red.
         timeout-minutes: 45
 
         steps:
@@ -64,22 +69,33 @@ jobs:
 
         # libmagic, and nothing else in this file depends on it succeeding.
         #
-        # `libmagic-dev` for the headers, because `magic-sys` finds the library
-        # through `pkg-config` on Linux and there is no other route it will take.
-        # If the install fails the report still runs, with two rows instead of
-        # three and a line saying so -- which is the whole reason the comparison
-        # is behind a feature rather than a dependency.
+        # Two packages, not one. `libmagic-dev` is the headers, which is what
+        # `magic-sys` finds the library through -- `pkg-config` on Linux, and
+        # there is no other route its build script will take. `libmagic-mgc` is
+        # the compiled rules database, which is a *separate* package since Ubuntu
+        # 24.04, and without it `magic_load` succeeds and every buffer comes back
+        # `application/octet-stream` -- a libmagic with no rules, which is worse
+        # than no libmagic.
+        #
+        # `MAGIC` is then set from wherever the file actually landed, because
+        # libmagic's compiled-in default is `/usr/local/share/misc/magic` and
+        # Ubuntu ships it in `/usr/share/misc`. The first run of this workflow
+        # relied on that default, did not find it, and panicked. The crate searches
+        # both paths itself; this is belt and braces, and the `find` also makes
+        # the step's own log say where the file is when it is not where this
+        # comment says.
         - name: Install libmagic
           shell: bash
           run: |
             sudo apt-get update
-            sudo apt-get install -y libmagic-dev
-            # The database is a separate package from the library, and without
-            # it `magic_load` succeeds and every buffer is reported as
-            # `application/octet-stream`. That is a libmagic with no rules, and a
-            # table full of it is worse than no table.
-            ls -l /usr/share/misc/magic.mgc || \
-              sudo apt-get install -y libmagic-mgc
+            sudo apt-get install -y libmagic-dev libmagic-mgc
+            MAGIC_PATH="$(find /usr /opt -name 'magic.mgc' 2>/dev/null | head -1)"
+            if [ -z "$MAGIC_PATH" ]; then
+              echo "::warning::no magic.mgc found; the report will have two rows, not three"
+              exit 0
+            fi
+            echo "found the database at $MAGIC_PATH"
+            echo "MAGIC=$MAGIC_PATH" >> "$GITHUB_ENV"
           continue-on-error: true
 
         - name: Lint the benchmark crate

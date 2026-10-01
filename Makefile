@@ -184,20 +184,28 @@ examples:
 # timings. The alternative -- a `cargo bench` line written into the workflow --
 # is a second place for the benchmark invocation to live, which is the drift
 # `tests/ci_coverage.rs` exists to prevent.
+#
+# `--bench detect` is named rather than left off: without it `cargo bench` also
+# runs the crate's own `#[test]`s under the lib harness, which takes no
+# criterion options and rejects every one of them. So `make bench BENCH_ARGS=...`
+# failed on the first version of this target, with an error that named criterion's
+# options rather than the missing flag.
 BENCH_ARGS ?=
 
 bench:
-	@cargo bench --manifest-path benchmarks/Cargo.toml --features "$(BENCH_FEATURES)" $(BENCH_ARGS)
+	@cargo bench --manifest-path benchmarks/Cargo.toml --bench detect --features "$(BENCH_FEATURES)" $(BENCH_ARGS)
 	@$(MAKE) --no-print-directory bench-report
 
 # The report on its own, which is what CI publishes. Kept separate from `bench`
 # because this is the fast half -- no criterion, one pass each -- and it is the
-# half a person reads. Writes `summary.md` beside the crate's manifest as well as
-# to stdout, because a step summary wants a file.
+# half a person reads.
+#
+# One command, not a run followed by a `cat`: the binary prints the markdown and
+# writes the file in the same invocation, and `cat` is not on every machine that
+# has a C toolchain, which is exactly the set that runs this target.
 BENCH_SUMMARY ?= benchmarks/summary.md
 bench-report:
 	@cargo run --release --manifest-path benchmarks/Cargo.toml --features "$(BENCH_FEATURES)" --bin report -- $(BENCH_SUMMARY)
-	@cat $(BENCH_SUMMARY)
 
 # Proves the benchmark harness is not quietly flattering: each mutation is a way
 # the report could lie, applied in turn, and every test is expected to go red.

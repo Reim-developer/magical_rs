@@ -1,7 +1,26 @@
-// The repository's readme, three levels up from this file: `src/`, then the
-// crate, then `crates/`. It is the crate's documentation and it is checked in
-// as the same file, so there is no second copy of it to fall behind.
-#![doc = include_str!("../../../readme.md")]
+// The crate's own `readme.md`, one level up from `src/`.
+//
+// **This path is the packaged crate's path, not the repository's.** `Cargo.toml`
+// says `readme = "../../readme.md"`, and cargo honours it by *copying* the
+// repository's readme into the archive under the name `readme.md`, at the root of
+// the package. In the repository, where this file is three levels below the
+// readme, `../../../readme.md` is the path that works — and it is the path that
+// fails on `cargo publish`, which compiles the copied package rather than the
+// source tree:
+//
+//   error: couldn't read `src/../../../readme.md`: No such file or directory
+//
+// One level up resolves in both places, because inside the package `src/..` is the
+// package root where cargo put it, and inside the repository `src/..` is the crate
+// directory, which does not contain a `readme.md`.
+//
+// That asymmetry is the whole reason the crate carries a checked-in copy rather
+// than reaching upward, and `tests/packaging.rs` is what keeps the copy equal to
+// the root readme. Three levels up was correct for the repository and wrong for
+// the archive, and nothing in CI compiled the archive — `cargo build` never sees
+// the copied package, so 0.6.4's published docs built and the *next* version's
+// verify failed.
+#![doc = include_str!("../readme.md")]
 #![deny(clippy::pedantic, clippy::all, clippy::nursery, clippy::perf)]
 #![cfg_attr(not(feature = "std"), no_std)]
 

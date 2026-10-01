@@ -13,20 +13,34 @@
 //!   the entry matches nothing, no warning is printed, and the published crate
 //!   is missing the file.
 //!
-//! So `CHANGELOG.md` and `LICENSE` are copied into the crate rather than
-//! referenced, and this test is what makes the copies safe. The files at the
-//! repository root are the ones a human edits; if a copy ever differs, this
+//! So `CHANGELOG.md`, `LICENSE` and `readme.md` are copied into the crate rather
+//! than referenced, and this test is what makes the copies safe. The files at
+//! the repository root are the ones a human edits; if a copy ever differs, this
 //! fails and names both paths.
 //!
-//! `readme` is listed here too even though it is a reference rather than a
-//! copy, because it is the one that works and it stops looking like the other
-//! two.
+//! `readme.md` was the odd one out, and it is now a copy for the same reason as
+//! the other two rather than for a different reason. It used to be a reference:
+//! `readme = "../../readme.md"`, which cargo honours by copying the file into
+//! the archive as `readme.md` at the package root. That produces the right
+//! *archive* and the wrong *tree* — `src/lib.rs` reaches it as
+//! `include_str!("../../../readme.md")`, which resolves in this repository and
+//! not in the package. Every build and every test was green, because `cargo
+//! build` compiles the source tree; `cargo publish` compiles the archive, and
+//! failed at its verify step on 0.6.5 with
+//!
+//! ```text
+//! error: couldn't read `src/../../../readme.md`: No such file or directory
+//! ```
+//!
+//! That failure was after the version was tagged and the tag pushed, which is
+//! the worst moment for it. `the_documented_readme_path_exists_inside_the_package`
+//! is the test that would have caught it.
 
 use std::path::{Path, PathBuf};
 
 /// Files that live at the repository root and are copied into the package
 /// because cargo will not reach outside it for them.
-const COPIED: [&str; 2] = ["LICENSE", "CHANGELOG.md"];
+const COPIED: [&str; 3] = ["LICENSE", "CHANGELOG.md", "readme.md"];
 
 /// The repository root, found by walking up from this crate.
 ///
@@ -135,10 +149,108 @@ fn every_file_that_has_to_ship_is_listed_in_include() {
             "`include` does not name {name}: {listed:?}",
         );
     }
-    // And the readme, which is reached the other way but has to be reached.
+    // And the readme key has to name the *copy*, not the file at the repository
+    // root. Cargo honours a `readme` outside the package by copying it in under
+    // the name `readme.md`, so both spellings put a `readme.md` in the archive and
+    // only one of them puts it where `src/lib.rs` can reach it — the one inside the
+    // package. Pointing outside is what made `cargo publish` fail on 0.6.5 with
+    // `couldn't read src/../../../readme.md`, and it failed *after* the crate had
+    // been versioned and tagged, so the tag was already pushed when this surfaced.
     assert!(
-        text.contains("readme = \"../../readme.md\""),
-        "the manifest no longer points `readme` at the repository readme, so the published crate \
-         has no documentation of its own",
+        text.contains("readme = \"readme.md\""),
+        "the manifest points `readme` somewhere other than the checked-in copy. If it points at \
+         `../../readme.md`, cargo copies that file in as `readme.md` and `src/lib.rs` -- which \
+         reaches it as `../readme.md` -- is fine; but the copy is what makes that path true, so \
+         pointing outside while `include` also names the copy is two sources of truth for one file.",
+    );
+    assert!(
+        !text.contains("readme = \"../../readme.md\""),
+        "the manifest points `readme` at the repository root again. Cargo copies it into the \
+         archive as `readme.md` and the published crate still builds, but `src/lib.rs` reaching \
+         `../readme.md` now resolves to whatever is checked in -- so the two files have to be \
+         kept in sync by hand for no benefit. Name the copy.",
+    );
+}
+
+/// The path in `src/lib.rs` reaches the readme **inside the package**.
+///
+/// This is the test that would have caught the 0.6.5 publish failure, and it is
+/// here because nothing else did. Every build in CI compiles the source tree, where
+/// three levels up is the repository readme and the path works; `cargo publish`
+/// compiles the copied archive instead, where the readme is at the package root and
+/// the same path does not exist. So the source could be wrong for a whole release
+/// with a green build and a green test suite, and would only speak up at the last
+/// step before an upload.
+///
+/// Read rather than assumed, because the answer is a property of what `readme` in
+/// the manifest points at, and that property changed while the path did not.
+#[test]
+fn the_documented_readme_path_stays_inside_the_package() {
+    let lib = Path::new(env!("CARGO_MANIFEST_DIR")).join("src/lib.rs");
+    let text = std::fs::read_to_string(&lib)
+        .unwrap_or_else(|e| panic!("cannot read {}: {e}", lib.display()));
+
+    // The one `include_str!` that names a markdown file. There is only one, and
+    // this test says so rather than assuming it.
+    let needle = "include_str!(\"";
+    let start = text
+        .find(needle)
+        .unwrap_or_else(|| panic!("{} has no include_str!", lib.display()))
+        + needle.len();
+    let rest = &text[start..];
+    let end = rest.find('"').unwrap_or_else(|| {
+        panic!(
+            "the include_str! path in {} has no closing quote",
+            lib.display()
+        )
+    });
+    let declared = Path::new(&rest[..end]);
+
+    // **`..` is the whole question, and it is asked by counting them, not by
+    // resolving the path.** The first version of this test resolved `declared`
+    // against `CARGO_MANIFEST_DIR` and asserted the result existed -- which is
+    // the source tree, the one place the broken path *does* resolve. Three levels
+    // up from `crates/magical_rs/src` is the repository readme, it is right there,
+    // and the test passed on the exact code that could not be published.
+    //
+    // What `cargo publish` compiles is the archive, whose root is the package
+    // directory and nothing above it. A `..` segment inside the archive leaves the
+    // archive: `src/..` is the package root, `src/../..` is already outside it, and
+    // the file the compiler is looking for is not on disk anywhere. So the count
+    // is the property, and checking that the file exists in *this* tree is
+    // checking the one thing that was never broken.
+    let ups = declared
+        .components()
+        .filter(|c| matches!(c, std::path::Component::ParentDir))
+        .count();
+
+    assert_eq!(
+        ups,
+        1,
+        "`src/lib.rs` reaches the readme as `{}`, which climbs {ups} level(s) out of `src/`. \
+         Inside the published archive `src/..` is the package root and `src/../..` is outside the \
+         archive, where nothing exists -- so `cargo publish` fails at its verify step with \
+         `couldn't read src/{}` while every build in CI passes, because CI compiles the source \
+         tree where the repository readme really is three levels up. Exactly one `..` is correct.",
+        declared.display(),
+        declared.display(),
+    );
+
+    // And the one level it climbs to has to be a readme that is actually shipped,
+    // which is a separate question from the path being well-formed: a correct
+    // path to a file absent from `include` is still a publish failure.
+    let lands_on = declared
+        .components()
+        .rev()
+        .find(|c| !matches!(c, std::path::Component::CurDir))
+        .map(|c| c.as_os_str().to_string_lossy().into_owned())
+        .unwrap_or_default();
+    assert_eq!(
+        lands_on,
+        "readme.md",
+        "`src/lib.rs` reaches `{}` one level up, which is `src/..` -- the package root. Cargo puts \
+         the readme there under the name `readme.md`, whatever the key pointed at, so this names a \
+         file that will not be there.",
+        declared.display(),
     );
 }

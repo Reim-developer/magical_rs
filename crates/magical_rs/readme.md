@@ -29,10 +29,12 @@ out of this table — see [Benchmarks](#benchmarks).
 | 0 dependencies | not "few" — `cargo tree --edges normal` prints this crate and nothing else, and the lockfile holds exactly one package | `Cargo.lock`; there is nothing to opt out of |
 | 114 formats | pinned in every binding and every generated file | `tests/table_size.rs`, `tests/dataset.rs`, `bindings/nodejs/test/kinds.test.js` |
 | 0 WebAssembly imports | measured on the built artifact, not assumed | `bindings/nodejs/scripts/build.mjs` fails the build otherwise |
-| 17 exports, 44,616 bytes | measured at build time and printed | `bindings/nodejs/scripts/build.mjs` |
+| 17 exports, 45,222 bytes | measured at build time and printed | `bindings/nodejs/scripts/build.mjs` |
 | Works on `wasm32` | compiled **and run**, from Rust, with no binding | `examples/wasm_rust/`, run by `make examples` |
 | Works without `std` | built for `thumbv7em-none-eabi` | `make test-nostd` |
 | Detection answers what the linear scan answered | every fixture, every non-matching input, 4,096 pseudo-random buffers | `src/magical/dispatch.rs` |
+| `detected()` adds no matching | byte-identical to `detect_bytes` on every fixture and every buffer length from 0 to 40,000 | `bindings/python/tests/test_fluent.py` |
+| The Python wrapper reads a file once | counted on a stream, not inferred | `bindings/python/tests/test_fluent.py` |
 | An unrecognised file costs 6.4 ns, not 525 | measured before and after in one session, same harness | `src/magical/dispatch.rs` |
 | Every format's own rule matches itself | all 114 entries, from the table | `tests/signature_coverage.rs` |
 | No signature matches at an undeclared offset | all 114 entries | `tests/signature_coverage.rs` |
@@ -69,7 +71,7 @@ cannot be `image/png` in Rust and something else in Python.
 | | Crate | `PyPI` | `npm` |
 | --- | --- | --- | --- |
 | Rust | `magical_rs` 0.6.5 | — | — |
-| Python | — | `magical-py` 0.4.0 | — |
+| Python | - | `magical-py` 0.5.0 | - |
 | JavaScript / TypeScript | — | — | `@reim-developer/magical-js` 0.1.0 |
 
 [![PyPI](https://img.shields.io/pypi/v/magical-py)](https://pypi.org/project/magical-py/)
@@ -620,6 +622,10 @@ pip install magical-py
 | --- | --- | --- |
 | `detect(path)` | 1 | `FileKind \| None` from a path, with the header read for you |
 | `detect_bytes(data, *, max_bytes_read=None)` | 1 | The same from bytes you already have |
+| `detected(source, *, max_bytes_read=None)` | 1 | A `Detected`: the file first, for a scan. Reads lazily, once |
+| `Detected.kind` / `.mime` / `.extension` / `.description` / `.rule` | — | The same answers `detect` gives, reached without naming the kind first |
+| `Detected.matches(kind)` / `.matches_any(kinds)` | — | Whether one named format's own rule matches. Rust's `Detect::is`, renamed because `is` is a keyword here |
+| `Detected.within(n)` | 1 | Re-classify the same bytes in a smaller window. Rust's `detect_within` |
 | `bytes_read()` | 1 | 36,870 — the header size every format needs. Rust's `with_bytes_read()` |
 | `DEFAULT_MAX_BYTES_READ` | 1 | 2,048 — the crate's per-rule default, which is *not* the same number |
 | `read_header(source, limit=None)` | 1 | The first `limit` bytes, from a path or anything file-like |
@@ -704,21 +710,31 @@ rather than left to be discovered.
 | | Rust | Python | JavaScript |
 | --- | --- | --- | --- |
 | Unknown answer | `Option<FileKind>` | `FileKind \| None` | `FileKind \| null` |
-| The kind itself | an enum | an enum | a `string` union — the discriminants *are* the ABI |
+| The kind itself | an enum | an enum | a `string` union - the discriminants *are* the ABI |
 | Read size has a hard minimum | yes: ISO 9660 needs 36,870 bytes | same | same, and `readLimits()` reports it |
 | A rule set lives in | the caller's binary | the caller's objects | compiled into the module, leaked once |
 | Rule sets are mutable | no, `&'static` | the list is a `Sequence`, the caller owns it | no, `readonly`, and compiled on use |
-| "Is it this format?" | `Detect::is` | none — add it in a `Predicate` | `matches(kind, bytes)` |
-| `no_std` | yes, levels 1 and 2 | not applicable | not applicable — the module is `wasm32` |
+| Data comes first | `bytes.detect()`, behind `magical_fluent` | `detected(path).kind` | no - `detect(bytes)` is a function call |
+| "Is it this format?" | `Detect::is` | `Detected.matches`, and `FileKind.matches` the other way round | `matches(kind, bytes)` |
+| `no_std` | yes, levels 1 and 2 | not applicable | not applicable - the module is `wasm32` |
 
-The two rows that will surprise somebody:
+The three rows that will surprise somebody:
 
-**JavaScript has no `is_any`** and **Python has no `is` at all.** Both are one
-line on top of what exists — Python writes a `Predicate` that looks the kind up,
-JavaScript calls `matches` in a loop — and neither is in the binding because each
-is a wrapper over something the language already has. A binding that ships a
-one-line wrapper for every call site in Rust does not have parity, it has a bigger
-API to keep in step.
+**JavaScript has no `is_any`.** It is one line on top of what exists - call
+`matches` in a loop - and it is not in the binding because it is a wrapper over
+something the language already has. A binding that ships a one-line wrapper for
+every call site in Rust does not have parity, it has a bigger API to keep in step.
+
+**Python's "is this format" is called `matches`, not `is`, because `is` is a
+keyword.** `what.is(FileKind.Png)` is a `SyntaxError`. The name is not a loss
+either: `matches` is the inverse of the `FileKind.matches(data)` the binding
+already had, so `kind.matches(data)` and `data.matches(kind)` read as a pair.
+
+**Python has a fluent spelling and the other two do not.** `Detected` puts the
+file first, which is what a directory scan wants, because the answer is usually
+no and the file is one of a hundred. Rust gets it from `bytes.detect()` behind
+`magical_fluent`; JavaScript has no way to put the data first, because a
+primitive cannot carry a method that the module owns.
 
 **The rule-set lifetime differs**, and the reason is the boundary. In Rust and
 Python the rules are yours and cost nothing to keep. In JavaScript they cross into

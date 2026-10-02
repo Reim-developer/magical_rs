@@ -248,10 +248,14 @@ fn test_read_file_header() {
     let file_path = "Cargo.toml";
 
     assert!(read_file_header(file_path, DEFAULT_MAX_BYTES_READ).is_ok());
-    assert!(
-        !read_file_header(file_path, DEFAULT_MAX_BYTES_READ)
-            .unwrap()
-            .is_empty()
+    // `assert_ne!` against an empty array rather than `assert!(!..is_empty())`.
+    // Clippy 1.99's `assert_is_empty`, which `clippy::pedantic` denies, wants the
+    // comparison rather than the predicate: a bare `!x.is_empty()` prints no value
+    // when it fails, so the failure is a wall of `<[u8]>::len()` with nothing to
+    // identify which of a hundred bytes was unexpected.
+    assert_ne!(
+        read_file_header(file_path, DEFAULT_MAX_BYTES_READ).unwrap(),
+        [] as [u8; 0]
     );
 }
 

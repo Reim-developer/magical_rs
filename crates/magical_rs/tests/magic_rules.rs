@@ -180,8 +180,12 @@ fn a_defaulted_offset_is_zero_and_not_empty() {
     static RULES: &[MagicCustom<Kind>] = magic_rules![(Kind::Shoujo, b"Shoujo")];
 
     assert_eq!(RULES[0].offsets, &[DEFAULT_OFFSET]);
-    assert!(
-        !RULES[0].offsets.is_empty(),
+    // The length is asserted separately from the contents above because "not
+    // empty" and "equal to [0]" are different facts, and an empty slice matches no
+    // signature at all.
+    assert_eq!(
+        RULES[0].offsets.len(),
+        1,
         "an empty offsets slice matches no signature at all",
     );
     assert_eq!(
@@ -195,8 +199,8 @@ fn a_defaulted_offset_is_zero_and_not_empty() {
 fn a_predicate_rule_needs_no_signature() {
     static RULES: &[MagicCustom<Kind>] = magic_rules![(Kind::Predicate, via is_magical)];
 
-    assert!(RULES[0].signatures.is_empty());
-    assert!(RULES[0].offsets.is_empty());
+    assert_eq!(RULES[0].signatures, &[] as &[&[u8]]);
+    assert_eq!(RULES[0].offsets, &[] as &[usize]);
     assert_eq!(
         match_types_custom(b"MagicalGirl", RULES, Kind::Never),
         Kind::Predicate,
@@ -465,6 +469,6 @@ fn an_unsafe_predicate_rule_needs_no_signature() {
     static RULES: &[MagicCustom<Kind>] =
         magic_rules![(Kind::Predicate, unsafe via is_magical_girl)];
 
-    assert!(RULES[0].signatures.is_empty());
-    assert!(RULES[0].offsets.is_empty());
+    assert_eq!(RULES[0].signatures, &[] as &[&[u8]]);
+    assert_eq!(RULES[0].offsets, &[] as &[usize]);
 }

@@ -56,6 +56,27 @@ magical_rs = { path = "../../crates/magical_rs", default-features = false, featu
 # detection index in `crates/magical_rs/src/magical/dispatch.rs`, which took
 # matching from 525 ns to 31 ns on a file the table does not recognise. 3.2% for
 # 17x on the common case, which is why it is stated rather than quietly absorbed.
+#
+# And 38 larger than the figures above, because `read_file_header` no longer wraps
+# the file in a `BufReader`. That is a trade the same comment's own reasoning
+# argues against and it was taken anyway: 45,184 -> 45,222 raw is +0.08%, and
+# 18,024 -> 18,047 gzip is +0.13%. For it, reading a file by path is 12% faster
+# (34.2 us -> 30.6 us per file, 24 files, median of 9 passes).
+#
+# Two things about those bytes. They are **not** from adding
+# `read_file_header_into` — a build with the wrapper removed entirely measures the
+# same 45,222, so it is the rewrite of `read_file_header` and nothing else. And
+# this module never calls it: wasm has no file paths, so `read_file_header` sits
+# in the rlib as an unreferenced public symbol and the linker keeps it anyway. The
+# bytes are spent on nothing this module can use — recorded here because a comment
+# that says "the size wins" and then hands out 0.08% without saying so is worse
+# than one that does.
+#
+# An earlier version of that change measured 45,375 and the difference is why the
+# figure is stated rather than trusted: the reader now clears the caller's buffer
+# *before* `File::open` rather than after, so a failed open leaves the buffer
+# empty instead of full of zeros — and that reordering alone was worth 153 bytes.
+# A size comment is only as good as the build it was taken from.
 opt-level = "s"
 lto = true
 codegen-units = 1

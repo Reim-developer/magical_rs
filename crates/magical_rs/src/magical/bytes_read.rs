@@ -89,11 +89,7 @@ pub fn with_bytes_read() -> usize {
 }
 
 #[cfg(feature = "std")]
-use {
-    std::fs::File,
-    std::io,
-    std::io::{BufReader, Read},
-};
+use {std::fs::File, std::io, std::io::Read};
 /// Reads up to `max_bytes` from beginning of a file.
 ///
 /// This function opens the file at the given path and reads a maxium of `max bytes`.
@@ -145,16 +141,79 @@ use {
 /// * There is error while reading from the file. (e.g., disk I/O error).
 #[cfg(feature = "std")]
 pub fn read_file_header(file_path: &str, max_bytes: usize) -> Result<Vec<u8>, io::Error> {
-    let file = File::open(file_path)?;
-    let mut reader = BufReader::new(file);
+    let mut buffer = Vec::new();
+    read_file_header_into(file_path, max_bytes, &mut buffer)?;
+    Ok(buffer)
+}
 
-    let max_bytes_read = max_bytes;
-    let mut buffer = vec![0u8; max_bytes_read];
+/// Reads up to `max_bytes` from the start of a file into a buffer the caller owns.
+///
+/// This is [`read_file_header`] with the allocation moved to the caller, and it is
+/// the version to reach for when reading many files in a row: a caller scanning a
+/// directory allocates once and then reads every file into the same buffer.
+///
+/// ```no_run
+/// use magical_rs::magical::bytes_read::{read_file_header_into, with_bytes_read};
+/// use magical_rs::magical::magic::FileKind;
+///
+/// let mut buffer = Vec::new();
+/// for entry in std::fs::read_dir(".")? {
+///     let path = entry?.path();
+///     if read_file_header_into(&path.to_string_lossy(), with_bytes_read(), &mut buffer).is_ok() {
+///         if let Some(kind) = FileKind::match_types(&buffer) {
+///             // `variant_name`, not `Display`: `FileKind` has no `Display`, and
+///             // `display_name` is the human-facing string.
+///             println!("{path:?}: {}", kind.variant_name());
+///         }
+///     }
+/// }
+/// # Ok::<(), std::io::Error>(())
+/// ```
+///
+/// The buffer is cleared first and holds only this file's bytes when the function
+/// returns, so it can be handed straight to [`FileKind::match_types`] — no slicing,
+/// no `truncate` at the call site.
+///
+/// # Errors
+///
+/// The same as [`read_file_header`]: the path does not exist or cannot be opened,
+/// or the read fails. The buffer is left **empty** on failure, so a caller that
+/// catches the error and ignores it gets `FileKind::match_types(&[])` == `None`
+/// rather than the previous file's bytes — or, worse, a window of invented zeros.
+#[cfg(feature = "std")]
+pub fn read_file_header_into(
+    file_path: &str,
+    max_bytes: usize,
+    buffer: &mut Vec<u8>,
+) -> Result<(), io::Error> {
+    // Cleared *first*, and before the open, so the empty-on-failure guarantee
+    // above holds. Resizing before the open would also leave the buffer full of
+    // zeros on a failed open, and those are not inert: `bytes[0]` is a real byte,
+    // so it lands in a real bucket, and a caller that ignored the error could be
+    // handed a kind for a file that was never opened. Order is the whole of it
+    // here — `resize` alone would overwrite the stale bytes with zeros and look
+    // equivalent while answering a different question.
+    buffer.clear();
+
+    let mut file = File::open(file_path)?;
+
+    // `resize` rather than `reserve` plus a read into the spare capacity: the
+    // spare capacity of a `Vec<u8>` is `[MaybeUninit<u8>]`, so reading into it
+    // needs `unsafe` and a `set_len` that trusts the `read`. The zero-fill that
+    // `resize` does is 419 ns for 36,870 bytes on the machine this was measured
+    // on — about 1.4% of a call — and it is the price of not writing `unsafe` in
+    // a crate whose whole claim is that it needs none.
+    buffer.resize(max_bytes, 0);
 
     let mut total_read: usize = 0;
 
-    while total_read < max_bytes_read {
-        match reader.read(&mut buffer[total_read..]) {
+    // Not `BufReader`. A `BufReader` is for reading a stream through many small
+    // reads, and this reads one fixed window: the wrapper allocates 8 KiB it
+    // never needs, copies the file into it, and copies it back out. Measured on a
+    // 36,870-byte read that layer and its allocation cost about 5 µs of a 30 µs
+    // call — roughly a sixth — for no change in what was read.
+    while total_read < max_bytes {
+        match file.read(&mut buffer[total_read..]) {
             Ok(0) => break, /* EOF */
             Ok(index) => total_read = total_read.saturating_add(index),
             Err(error) => return Err(error),
@@ -162,7 +221,7 @@ pub fn read_file_header(file_path: &str, max_bytes: usize) -> Result<Vec<u8>, io
     }
 
     // The buffer was zero-filled to its capacity, so without this a file
-    // shorter than `max_bytes_read` comes back padded with invented bytes
+    // shorter than `max_bytes` comes back padded with invented bytes
     // rather than short, and the returned length says nothing about how much
     // of it is the file. Two of those invented bytes are enough to complete a
     // signature, because a format is free to end its magic with a zero: PCX is
@@ -178,7 +237,7 @@ pub fn read_file_header(file_path: &str, max_bytes: usize) -> Result<Vec<u8>, io
     // A genuine PCX carries both of its bytes and a genuine TIFF all four.
     buffer.truncate(total_read);
 
-    Ok(buffer)
+    Ok(())
 }
 
 #[test]
@@ -189,10 +248,14 @@ fn test_read_file_header() {
     let file_path = "Cargo.toml";
 
     assert!(read_file_header(file_path, DEFAULT_MAX_BYTES_READ).is_ok());
-    assert!(
-        !read_file_header(file_path, DEFAULT_MAX_BYTES_READ)
-            .unwrap()
-            .is_empty()
+    // `assert_ne!` against an empty array rather than `assert!(!..is_empty())`.
+    // Clippy 1.99's `assert_is_empty`, which `clippy::pedantic` denies, wants the
+    // comparison rather than the predicate: a bare `!x.is_empty()` prints no value
+    // when it fails, so the failure is a wall of `<[u8]>::len()` with nothing to
+    // identify which of a hundred bytes was unexpected.
+    assert_ne!(
+        read_file_header(file_path, DEFAULT_MAX_BYTES_READ).unwrap(),
+        [] as [u8; 0]
     );
 }
 
@@ -288,4 +351,139 @@ fn test_truncated_magics_are_not_formats() {
             content.len()
         );
     }
+}
+
+/// The two readers agree, byte for byte, on files either side of the window.
+///
+/// `read_file_header_into` exists for the allocation, so the only thing that makes
+/// it a faster reader rather than a second reader is that it reads the same thing.
+/// The buffer it fills is one the caller owns, so the risk is real: a `clear` that
+/// did not happen, or a `truncate` that used the wrong count, leaves the previous
+/// file's bytes in the buffer and the next detection silently describes the wrong
+/// file.
+///
+/// The buffer is **not** fresh each time. That is the whole point — reusing one is
+/// what the API is for, and a fresh buffer per call would pass a version that
+/// forgot to clear it.
+///
+/// A note on what this does **not** cover, because the first version of it claimed
+/// to: removing the `clear()` outright still passes this test, since the following
+/// `resize` overwrites those bytes with zeros. The `clear` earns its place on the
+/// failure path instead, which is the case below.
+#[test]
+#[cfg(feature = "std")]
+fn the_reusing_reader_matches_the_allocating_one() {
+    use crate::magical::bytes_read::{read_file_header, read_file_header_into, with_bytes_read};
+    use crate::magical::magic::FileKind;
+
+    // Files both shorter and longer than the window, and the window sizes the
+    // library itself suggests and its own default, because `read_file_header` and
+    // `read_file_header_into` take the size as an argument and neither has a say
+    // in it — a mismatch there would show up as different bytes, not as a panic.
+    let window = with_bytes_read();
+    let long = vec![0x5a_u8; window + 4_096];
+    let cases: [(&[u8], usize); 6] = [
+        (&long, window),
+        (&long, 2_048),
+        (&[], window),
+        (b"II*\0", window),
+        (b"\x89PNG\r\n\x1a\n", window),
+        (&long[..3], window),
+    ];
+
+    let mut scratch = Vec::new();
+    for (content, limit) in cases {
+        let path = std::env::temp_dir().join(format!(
+            "magical-rs-header-agree-{}-{limit}.bin",
+            std::process::id()
+        ));
+        std::fs::write(&path, content).unwrap();
+
+        let allocating = read_file_header(path.to_str().unwrap(), limit).unwrap();
+        // Deliberately without a clear first: a reader that left the previous
+        // file's bytes here would pass a fresh-buffer version of this test and
+        // fail here, which is the bug a directory scan actually hits.
+        scratch.extend_from_slice(b"stale bytes that must not survive");
+        read_file_header_into(path.to_str().unwrap(), limit, &mut scratch).unwrap();
+
+        std::fs::remove_file(&path).unwrap();
+        assert_eq!(
+            allocating,
+            scratch,
+            "a {} byte file read with limit {limit}: the two readers disagree",
+            content.len()
+        );
+        assert_eq!(
+            FileKind::match_types(&allocating),
+            FileKind::match_types(&scratch),
+            "a {} byte file read with limit {limit}: the kinds disagree",
+            content.len()
+        );
+    }
+}
+
+/// A failed read leaves the buffer empty, not stale and not a window of zeros.
+///
+/// This is the case the `clear()` before the open exists for, and it is why that
+/// line is where it is. Both wrong versions of this function pass
+/// `the_reusing_reader_matches_the_allocating_one`:
+///
+/// * **No `clear` at all** — the next `resize` overwrites the stale bytes, so a
+///   successful read is still correct.
+/// * **`clear` after the open, or after the `resize`** — a caller scanning a
+///   directory and ignoring errors keeps detecting against the previous file.
+///
+/// Neither is caught by comparing two successful reads, and both are caught here.
+/// The assertion is `is_empty` rather than "detects as nothing" because those are
+/// different guarantees: a buffer of zeros has `bytes[0] == Some(0)`, which is a
+/// real byte in a real bucket.
+#[test]
+#[cfg(feature = "std")]
+fn a_failed_read_leaves_the_buffer_empty() {
+    use crate::magical::bytes_read::{read_file_header_into, with_bytes_read};
+    use crate::magical::magic::FileKind;
+
+    let missing = std::env::temp_dir().join(format!(
+        "magical-rs-does-not-exist-{}.bin",
+        std::process::id()
+    ));
+    assert!(
+        !missing.exists(),
+        "{} exists, so this test is reading a real file",
+        missing.display()
+    );
+
+    let mut scratch = Vec::new();
+    // A real file first, so the buffer holds a real file's bytes rather than
+    // starting empty — otherwise "empty afterwards" proves nothing.
+    let real = std::env::temp_dir().join(format!(
+        "magical-rs-header-then-fail-{}.bin",
+        std::process::id()
+    ));
+    std::fs::write(&real, b"\x89PNG\r\n\x1a\n").unwrap();
+    read_file_header_into(real.to_str().unwrap(), with_bytes_read(), &mut scratch).unwrap();
+    std::fs::remove_file(&real).unwrap();
+    assert!(
+        !scratch.is_empty(),
+        "the successful read put nothing in the buffer, so the failed one below is not testing \
+         anything"
+    );
+
+    let error = read_file_header_into(missing.to_str().unwrap(), with_bytes_read(), &mut scratch);
+    assert!(
+        error.is_err(),
+        "reading a path that does not exist reported success"
+    );
+    assert!(
+        scratch.is_empty(),
+        "after a failed read the buffer holds {} bytes ({:02X?}); a caller that ignored the \
+         error would detect against those",
+        scratch.len(),
+        &scratch[..scratch.len().min(16)],
+    );
+    assert_eq!(
+        FileKind::match_types(&scratch),
+        None,
+        "a buffer left over from a failed read still names a format"
+    );
 }

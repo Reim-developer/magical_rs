@@ -1021,7 +1021,7 @@ mod tests {
         assert_eq!(rules_len(handle), 3);
         assert_eq!(match_all(handle, b"\x89PNG\r\n\x1a\n"), vec![0]);
         assert_eq!(match_all(handle, b"GIF89a"), vec![1]);
-        assert!(match_all(handle, b"neither").is_empty());
+        assert_eq!(match_all(handle, b"neither"), Vec::<u32>::new());
 
         // Two rules, both given the same signature. Both match, and `all` says
         // so, which is the only thing that separates it from returning the first
@@ -1088,7 +1088,7 @@ mod tests {
     fn a_closed_handle_reports_no_match_rather_than_trapping() {
         assert_eq!(match_rule(9_999, b"\x89PNG\r\n\x1a\n"), NO_MATCH);
         assert_eq!(rules_len(9_999), 0);
-        assert!(match_all(9_999, b"\x89PNG\r\n\x1a\n").is_empty());
+        assert_eq!(match_all(9_999, b"\x89PNG\r\n\x1a\n"), Vec::<u32>::new());
     }
 
     #[test]

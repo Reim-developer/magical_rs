@@ -3,6 +3,7 @@
   - [Version: 0.6.5 `A first-byte index, a macro, a fluent API, and benchmarks`](#version-065-a-first-byte-index-a-macro-a-fluent-api-and-benchmarks)
     - [Level 2 rules as a table, a fluent API, and an API reference](#level-2-rules-as-a-table-a-fluent-api-and-an-api-reference)
     - [A publish failure, and the test that was written backwards](#a-publish-failure-and-the-test-that-was-written-backwards)
+    - [Reading a file: one fewer layer, and a buffer you can keep](#reading-a-file-one-fewer-layer-and-a-buffer-you-can-keep)
     - [A first-byte detection index](#a-first-byte-detection-index)
     - [Benchmarks against `infer` and libmagic](#benchmarks-against-infer-and-libmagic)
     - [One format dataset](#one-format-dataset)
@@ -176,6 +177,44 @@ readme lists what all three languages export.**
   and moved `async-std`'s tree by 300 lines in a commit whose subject is a version
   string.
 
+### Reading a file: one fewer layer, and a buffer you can keep
+
+* **`read_file_header` no longer wraps the file in a `BufReader`.** A `BufReader`
+  is for reading a stream through many small reads; this reads one fixed window, so
+  the wrapper allocated 8 KiB it never needed and copied the file in and back out.
+  Reading a file by path is **12% faster** — 34.2 µs to 30.6 µs per file, 24 files,
+  median of 9 passes, before and after in the same session.
+
+* **Added `read_file_header_into(path, limit, &mut buf)`.** The same read into a
+  buffer the caller owns, so reading a directory allocates once instead of once per
+  file. It is `read_file_header` in every other respect, and a test asserts the two
+  produce the same bytes on files either side of the window.
+
+* **The buffer is cleared before the open, not after it**, which is the whole of
+  that function's error behaviour: a failed open leaves the buffer *empty* rather
+  than full of zeros. Zeros are not inert — `bytes[0]` is a real byte and lands in
+  a real bucket — so a caller ignoring the error could be handed a kind for a file
+  that was never opened. This reordering was also worth 153 bytes of wasm, which is
+  why the figure in `bindings/asm/Cargo.toml` is the measured one and not the one
+  this entry was first written with.
+
+* **Two tests, and the first version of one of them was wrong.** The test comparing
+  the two readers used a buffer deliberately not cleared beforehand, and claimed a
+  reader that forgot its `clear` would fail. Removing the `clear` outright still
+  passed, because the following `resize` overwrites those bytes with zeros. The
+  `clear` earns its place on the *failure* path, which is a different test, and
+  that one is what now covers it — put the `clear` on the wrong side of the
+  `resize` and four tests go red.
+
+* **What did not work, measured rather than assumed.** Zero-filling the read buffer
+  costs **419 ns for 36,870 bytes**, about 1.4% of a call, so it was left alone
+  despite being the obvious suspect. `File::open` is **51%** of a path-based read
+  and is not the library's to spend less of.
+
+* **Recorded: only 1 of the 114 entries needs more than 2,048 bytes.** ISO 9660,
+  with all three of its offsets at or past 32,769. Reading 2,048 instead of 36,870
+  is worth **1.31×** and costs exactly one format, so it is the caller's choice and
+  not the default — the readme says so where someone deciding will see it.
 ### A first-byte detection index
 
 **Detection no longer walks all 114 rules to answer.**

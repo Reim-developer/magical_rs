@@ -170,10 +170,10 @@ against `thumbv7em-none-eabi`.
 
 **WebAssembly.** The 114-entry table is data, so it is close to incompressible
 already and there is little left to optimise: a module exporting this crate at
-`opt-level = "s"` measures **32,847 bytes with 4 exports** -
+`opt-level = "s"` measures **33,156 bytes with 4 exports** -
 [`examples/wasm_rust`](examples/wasm_rust) builds exactly that and asserts the
 answer for nine headers - and the npm binding's, which adds the encoded table, level
-2 rules and a released ABI, measures **44,616 bytes with 17 exports**. Both declare
+2 rules and a released ABI, measures **45,222 bytes with 17 exports**. Both declare
 **zero imports**, which is what removes the glue file; `make examples` runs the
 first and `bindings/nodejs/scripts/build.mjs` fails the build if either claim goes
 false.
@@ -1031,8 +1031,10 @@ than through a `memcmp` call, because a signature of eight bytes or fewer fits i
 a register. That case is 6.4 ns, measured against 28.8 ns for the index alone in
 the same session with the same harness; GIF at position 36 is 8.9 ns rather than
 15.4; and PNG is 6.0 rather than 5.8, which is the 2-4% the other cases paid for
-it. Both changes are zero bytes - the binding is 45,184 raw and 18,024 gzipped
-before and after, on a clean rebuild. The index answers exactly what the walk
+it. Both changes are zero bytes - the binding measured 45,184 raw and 18,024 gzipped
+before and after them, on a clean rebuild. (A later change, removing a `BufReader`
+from the file reader, added 38 bytes; `bindings/asm/Cargo.toml` says so.) The index
+answers exactly what the walk
 answered, for every input; that is not established by the tests agreeing with the
 old code on the cases they happened to try, it is established by construction and
 then checked by differential tests against a separately written linear scan over

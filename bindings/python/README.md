@@ -73,6 +73,55 @@ except FileNotFoundError:
     kind = None
 ```
 
+### Scanning a directory: `detected`
+
+`detect` puts the function first, which is right for a question asked once and
+thrown away. A scan asks about every file and mostly the answer is no, so
+`detected` puts the file first — the spelling the Rust crate's `magical_fluent`
+feature gives:
+
+```python
+from magical_py import FileKind, detected
+
+for path in directory.iterdir():
+    what = detected(path)
+    if what.matches_any(FileKind.Png, FileKind.GIF, FileKind.Jpg):
+        ...
+```
+
+Nothing is read until a method needs an answer, and the bytes are read once
+however many methods you call — which matters for a socket or a pipe, since those
+have their bytes only once. The object answers the same questions `detect` does,
+plus two it does not:
+
+```python
+what = detected(path)
+
+what.kind                       # FileKind.Png | None, as detect()
+bool(what)                      # True when something matched
+what.mime                       # 'image/png', or None
+what.extension                  # 'png', or None
+what.description                # 'PNG', or 'no match'
+what.rule.signatures            # the bytes the winning rule compares
+what.window                     # the window in force, 36_870 by default
+
+what.matches(FileKind.Png)      # would PNG's own rule match these bytes?
+what.matches_any([Png, GIF])    # would any of these?
+what.within(2048).kind          # re-classify the same bytes in a smaller window
+```
+
+Two things are worth knowing about it.
+
+**`matches` is not `kind is kind`.** It asks whether that one format's own rule
+matches, ignoring the order the table is tried in. `Ktx` is why: its signature is
+five bytes and `Ktx2`'s is twelve, so a KTX2 file *is* a KTX to any single rule —
+and is only ever reported as KTX2 because `Ktx2` sits earlier in the table. Both
+answers are correct and they differ, so both are available.
+
+**It is named `matches`, not `is`.** `is` is a keyword in Python, so
+`what.is(FileKind.Png)` does not parse. `matches` is also the inverse of the
+`FileKind.matches(data)` that already existed, so the two read as a pair.
+
 ## What it looks like
 
 Each member carries its display name as its `__doc__`, which is the attribute

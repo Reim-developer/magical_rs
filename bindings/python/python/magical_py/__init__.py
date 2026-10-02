@@ -25,6 +25,23 @@ read only as far as they need, and ``max_bytes_read`` says how far that is,
 which is what tells a ``None`` meaning "not that" apart from one meaning "not
 within the window you named".
 
+**Scanning a directory, read the other way round.** :func:`detect` puts the
+function first because a question asked once should read that way. A scan asks
+about every file, and mostly the answer is no, so the fluent spelling from the
+crate's ``magical_fluent`` feature is here too — :func:`detected`, which returns
+a :class:`Detected`:
+
+    >>> from magical_py import FileKind, detected
+    >>> for path in directory.iterdir():
+    ...     if detected(path).matches_any(FileKind.Png, FileKind.Gif, FileKind.Jpg):
+    ...         ...
+
+Nothing is read until a method needs an answer, and the bytes are read once
+however many methods are called. :meth:`~magical_py.Detected.matches` asks about
+one named format rather than about whatever the table reached first, which is the
+difference ``Ktx`` and ``Ktx2`` make visible. No matching is added: every method
+is a named call to something above.
+
 The crate has five detection levels. :func:`detect` and :func:`detect_bytes`
 are level 1, the built-in table. The other four are custom rules, and three of
 them have a Python counterpart:
@@ -54,6 +71,7 @@ import os
 from typing import Final, Protocol
 
 from . import _magical_rs
+from ._fluent import Detected, detected
 from ._kinds import FileKind, Signature
 from ._levels import (
     AsyncDynMagic,
@@ -81,6 +99,7 @@ __all__ = [
     "DEFAULT_MAX_BYTES_READ",
     "AsyncDynMagic",
     "AsyncPredicate",
+    "Detected",
     "DynMagicCustom",
     "FileKind",
     "MagicCustom",
@@ -92,6 +111,7 @@ __all__ = [
     "describe",
     "detect",
     "detect_bytes",
+    "detected",
     "match_async_dyn_types",
     "match_async_dyn_types_all",
     "match_dyn_types",

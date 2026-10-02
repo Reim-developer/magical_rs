@@ -7,6 +7,7 @@
     - [A first-byte detection index](#a-first-byte-detection-index)
     - [Benchmarks against `infer` and libmagic](#benchmarks-against-infer-and-libmagic)
     - [One format dataset](#one-format-dataset)
+  - [magical-py: Version 0.5.0](#magical-py-version-050)
   - [magical-py: Version 0.4.0](#magical-py-version-040)
   - [magical-py: Version 0.3.0](#magical-py-version-030)
   - [magical-py: Version 0.2.0](#magical-py-version-020)
@@ -391,6 +392,81 @@ is not a permutation of `0..113`.
   byte-identical apart from the crate name that appears in its panic strings:
   43,212 bytes raw, 17 exports, 0 imports.
 
+## `magical-py`: Version 0.5.0
+**What has been changed:**
+
+`detect` puts the function first and the file second, which is the right shape for
+a question asked once and thrown away. It is the wrong shape for the case this
+release adds: a scan that asks about every file in a directory, where the answer is
+usually no and the file is one of a hundred.
+
+* **Added `detected(source, *, max_bytes_read=None)`, returning a `Detected`.** The
+  file comes first, which is the spelling the crate's own `magical_fluent` feature
+  gives Rust as `bytes.detect()`. Python cannot put a method on `bytes` — it is a
+  built-in type — so `Detected` is the wrapper standing in for it:
+
+  ```python
+  from magical_py import FileKind, detected
+
+  for path in directory.iterdir():
+      if detected(path).matches_any(FileKind.Png, FileKind.GIF, FileKind.Jpg):
+          ...
+  ```
+
+  It accepts a path, anything open for binary reading, or bytes, so it is a
+  spelling of `detect` and `detect_bytes` between them rather than a decision about
+  where the bytes come from.
+
+* **No matching is added.** Every method is a named call to something the binding
+  already had: `detect_bytes`, `FileKind.matches`, `FileKind.rule`. `Detected` is a
+  spelling, not a detection level, and `tests/test_fluent.py` asserts it is
+  byte-identical to `detect_bytes` on every fixture the crate ships and on every
+  buffer length from 0 to 40,000.
+
+* **The bytes are read once, on first use, and kept.** Nothing is read by the
+  constructor, so building a `Detected` is free and a caller who only passes it on
+  never touches the disk. A path is opened exactly once however many methods are
+  called, and a stream is read exactly once — which matters because a socket or a
+  pipe has its bytes only once. `test_the_bytes_are_read_once_however_many_methods_are_called`
+  counts the reads on a stream rather than inferring it.
+
+* **`matches` and `matches_any`, which are `Detect::is` and `Detect::is_any`.** They
+  ask whether one named format's own rule matches, ignoring the order the table is
+  tried in, which is not the same question as `kind is kind`. `Ktx` is the case
+  that makes the difference visible: its signature is five bytes and `Ktx2`'s is
+  twelve, so a KTX2 file *is* a KTX to any single rule and is only ever reported as
+  KTX2 because `Ktx2` sits earlier in the table. Both answers are correct and they
+  differ.
+
+* **Named `matches`, not `is`, because `is` is a keyword in Python.** The first
+  version of this was called `is` and did not parse. The new name is not a loss:
+  `matches` is the inverse of the `FileKind.matches(data)` the binding already had,
+  so `kind.matches(data)` and `data.matches(kind)` read as a pair.
+
+* **`matches_any` takes varargs or one iterable.** `matches_any(Png, GIF)` and
+  `matches_any([png, gif])` are both correct, because a caller holding a list should
+  not have to splat it and a caller holding two literals should not have to bracket
+  them.
+
+* **`within(n)` re-classifies the same bytes and returns `self`.** A window is a
+  claim about how much of the file was read, so lowering it makes every format whose
+  own magic sits past that point unable to match. It does not read again, because it
+  does not have to: the bytes already in hand are a superset of a narrower window.
+  `window` reports the window actually in force, because `bytes_read()` is 36,870
+  and `DEFAULT_MAX_BYTES_READ` is 2,048 and both are called "default".
+
+* **The metadata properties answer for no match too.** `mime` and `extension` are
+  `None`, `rule` is `None`, and `description` is the string `"no match"`, so a
+  caller printing a result does not have to branch four times. `bool(detected(path))`
+  is `True` exactly when something matched.
+
+This reverses a documented decision. The 0.6.5 readme said, in a table of what is
+deliberately not the same across the three languages: *"Python has no `is` at all —
+both are one line on top of what exists, and neither is in the binding because each
+is a wrapper over something the language already has."* That reasoning was sound
+about a bare module-level `is(data, kind)` function and does not reach a wrapper
+that is also the thing a scan is written with. The readme now says what the three
+languages actually offer and why JavaScript still has no `is_any`.
 ## `magical-py`: Version 0.4.0
 **What has been changed:**
 

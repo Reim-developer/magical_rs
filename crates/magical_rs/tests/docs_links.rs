@@ -91,10 +91,11 @@ fn pages() -> Vec<PathBuf> {
 /// hyphen, then spaces become hyphens. Repeated headings get `-1`, `-2` and so on,
 /// which is why this returns a set rather than one slug per heading.
 ///
-/// The underscore is kept because GitHub keeps it, and that is not a detail: the
-/// readme's heading `Why \`magical_fluent\` is the one flag that is not about a
-/// level` anchors at `#why-magical_fluent-is-the-one-flag-that-is-not-about-a-level`,
-/// and a slugger that drops the underscore rejects a link GitHub resolves.
+/// The underscore is kept because GitHub keeps it, and that is not a detail. The
+/// readme has a heading that reads "Why `magical_fluent` is the one flag that is not
+/// about a level", and its anchor is
+/// `#why-magical_fluent-is-the-one-flag-that-is-not-about-a-level` — underscore and
+/// all. A slugger that drops the underscore rejects a link GitHub resolves.
 fn anchors_in(text: &str) -> BTreeSet<String> {
     let mut found = BTreeSet::new();
 

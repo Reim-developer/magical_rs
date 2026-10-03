@@ -94,7 +94,7 @@ use magical_rs::magical::dispatch::first_match;
 use magical_rs::magical::magic::FileKind;
 use magical_rs::magical::signatures::SIGNATURE_KIND;
 
-let mut iso = [0u8; 40_000];
+let mut iso = vec![0u8; 40_000];
 iso[32_769..32_774].copy_from_slice(b"CD001");
 
 assert_eq!(first_match(&iso, 36_870).map(|i| SIGNATURE_KIND[i].kind),

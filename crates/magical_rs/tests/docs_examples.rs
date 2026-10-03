@@ -69,7 +69,10 @@ fn concepts_three_orders_that_do_not_agree() {
 /// docs/concepts.md — "The read window"
 #[test]
 fn concepts_narrowing_the_window_drops_only_iso() {
-    let mut iso = [0_u8; 40_000];
+    // A `Vec`, not `[u8; 40_000]`: a 40 KiB array is a local, and a local that size is
+    // a stack frame clippy refuses to let a test quietly ask for. The page says the
+    // same thing for the same reason.
+    let mut iso = vec![0_u8; 40_000];
     iso[32_769..32_774].copy_from_slice(b"CD001");
 
     assert_eq!(FileKind::match_types(&iso), Some(FileKind::ISO));
@@ -168,14 +171,13 @@ fn getting_started_identifies_a_real_file() -> std::io::Result<()> {
 /// docs/getting-started.md — "The data-first spelling, for scanning a directory"
 #[test]
 #[cfg(feature = "magical_fluent")]
-fn getting_started_the_fluent_spelling() -> std::io::Result<()> {
+fn getting_started_the_fluent_spelling() {
     use magical_rs::magical::fluent::Detect;
 
     assert_eq!(b"GIF89a".detect(), Some(FileKind::GIF));
     assert!(b"GIF89a".is(FileKind::GIF));
     assert!(b"GIF89a".is_any([FileKind::Png, FileKind::GIF]));
     assert!(b"GIF89a".detect().is_some());
-    Ok(())
 }
 
 /// docs/detection-levels.md — "Level 1"

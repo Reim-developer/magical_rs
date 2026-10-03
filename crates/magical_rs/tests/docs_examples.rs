@@ -12,18 +12,15 @@
 //! direction: that this file does not drift from the pages it claims to cover.
 
 use magical_rs::magic_rules;
-use magical_rs::magical::bytes_read::{
-    DEFAULT_MAX_BYTES_READ, with_bytes_read,
-};
+use magical_rs::magical::bytes_read::{DEFAULT_MAX_BYTES_READ, with_bytes_read};
 use magical_rs::magical::magic::FileKind;
 use magical_rs::magical::magic_custom::{MagicCustom, match_types_custom};
 
-// `read_file_header_into` is `#[cfg(feature = "std")]`, so it is imported inside the
-// two tests that read files rather than here — an unconditional import of it fails
-// to compile the whole file under `--no-default-features`, which takes the 13
-// examples that need no filesystem with it. The pages mark these calls the same
-// way, so the gate here is the documentation being checked rather than a
-// workaround for it.
+// `read_file_header_into` is `#[cfg(feature = "std")]`, so its import is gated too —
+// an ungated one fails to compile this whole file under `--no-default-features`, and
+// takes the thirteen examples that need no filesystem with it. The pages mark these
+// calls the same way, so the gate here is the documentation being checked rather than
+// a workaround for it.
 #[cfg(feature = "std")]
 use magical_rs::magical::bytes_read::read_file_header_into;
 

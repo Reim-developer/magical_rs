@@ -91,7 +91,7 @@ would mean wrapping every string.
 | `allKinds()` | `FileKind[]` | All 114, in the crate's own enum order — **not** the order detection walks. See [Concepts](../concepts.md#three-orders-exist-and-the-two-that-matter-are-not-the-same-sequence) |
 | `isFileKind(value)` | `boolean` | A type guard, for a name from a config file or query string |
 | `describe(kind)` | `Signature` | One format's entry |
-| `signatureTable()` | `Signature[]` | All 114. **Not in detection order — see below** |
+| `signatureTable()` | `Signature[]` | All 114, in detection order. Walking it and stopping at the first match reproduces `detectBytes` |
 | `Signature.kind` | `FileKind` | Narrowed to the literal, from `describe("Png")` |
 | `Signature.signatures` | `Uint8Array[]` | The bytes compared |
 | `Signature.offsets` | `number[]` | Where they are compared |
@@ -119,53 +119,38 @@ function parse(input: string): FileKind | null {
 }
 ```
 
-### `signatureTable()` is not in detection order, unlike Python's
+### Walking `signatureTable()` reproduces detection
 
-This is the one place this binding and the Python one disagree about something
-other than a spelling, so it is worth stating exactly rather than leaving you to
-find it.
+`signatureTable()` is in **detection order** — the order `detectBytes` walks — so
+walking it and stopping at the first rule that matches gives the same answer. That
+is what makes it worth the order being stated, and it is checked rather than assumed:
+`test/kinds.test.js` tries every `(signature, offset)` pair of every format and
+asserts the walk agrees with `detectBytes` on all 143 that produce an answer.
 
-**Detection order** is the order `dispatch::first_match` walks: `ScriptExecute` at
-17 and `RAR` at 18, `Ktx2` at 52 and `Ktx` at 53. **The order `signatureTable()`
-returns** is the enum order: `RAR` at 17 and `ScriptExecute` at 18, `Ktx` at 62 and
-`Ktx2` at 63. `allKinds()` returns that same enum order, so the two agree with each
-other and differ from detection.
-
-`magical_py.signature_table()` **is** in detection order, and its docstring says so.
-
-Each row is internally consistent — row 17 is `RAR`'s rule with `RAR`'s bytes — and
-`describe()` is correct for every kind, because it looks a row up by discriminant
-rather than by position. So the defect is confined to the order of the list.
-
-**So walking `signatureTable()` and stopping at the first match does not reproduce
-`detectBytes`.** For most inputs it agrees, which is what makes it a trap rather than
-an obvious breakage. It disagrees wherever the two orders differ, and a KTX2 file is
-the clean case:
+`Ktx2` is the case that makes the order matter. Its magic is
+`ab 4b 54 58 20 32 30 bb 0d 0a 1a 0a`, and `Ktx`'s is `ab 4b 54 58 20` — a
+byte-for-byte prefix. Ask `Ktx` first and every KTX2 file is reported as KTX1:
 
 ```ts
 import { detectBytes, matches, signatureTable } from "@reim-developer/magical-js";
 
-// The 12-byte magic from the format table: KTX1's 5-byte magic, then "20".
 const ktx2 = new Uint8Array([0xAB, 0x4B, 0x54, 0x58, 0x20, 0x32, 0x30, 0xBB, 0x0D, 0x0A, 0x1A, 0x0A]);
 
-detectBytes(ktx2);                                    // "Ktx2"  — correct
-matches("Ktx2", ktx2);                                // true
-matches("Ktx", ktx2);                                 // true   — its magic is a prefix
+matches("Ktx2", ktx2);   // true
+matches("Ktx", ktx2);    // true — its magic is a prefix, so both rules match
 
-// But the list puts Ktx first, so this walk answers "Ktx":
-signatureTable().find((row) => matches(row.kind, ktx2))?.kind;   // "Ktx"  — wrong
+detectBytes(ktx2);                              // "Ktx2"
+signatureTable().find((r) => matches(r.kind, ktx2))?.kind;   // "Ktx2"
 ```
 
-If you need the table in the order detection asks it, sort it yourself with the two
-numbers above, or — better — ask `detectBytes` and then `describe()` the answer, which
-is both shorter and correct:
+`Qcow2` over `Qcow` (`51 46 49 fb` over `51 46 49`) is the other one. These two are
+the whole blast radius of the order: every other format has a magic that nothing
+shorter also matches.
 
-```ts
-const kind = detectBytes(bytes);
-if (kind !== null) {
-  const rule = describe(kind);   // the rule that actually won
-}
-```
+**`signatureTable()` is not `allKinds()`.** The first is the detection order; the
+second is the `FileKind` declaration order, which is what `_kinds.js` is generated
+as and what `describe()` is keyed by. Both are 114 long and both are stable, so
+using one where the other belongs compiles, runs, and answers a different question.
 
 ## Asking "is it this format?"
 

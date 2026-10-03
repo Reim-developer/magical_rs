@@ -206,15 +206,102 @@ test("describe() returns copies, so a caller cannot corrupt the table", () => {
   assert.deepEqual([...second.signatures[0]], [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
 });
 
-test("signatureTable() is in declaration order, one row per format", () => {
+test("signatureTable() is in detection order, one row per format", () => {
   const table = api.signatureTable();
+
+  // One row per format, and the same set of formats — asserted as a set rather
+  // than as a sequence, because the sequence is the thing under test elsewhere.
   assert.equal(table.length, 114);
   assert.deepEqual(
-    table.map((rule) => rule.kind),
-    [...FILE_KIND_NAMES],
+    [...table.map((rule) => rule.kind)].sort(),
+    [...FILE_KIND_NAMES].sort(),
   );
+
+  // A fresh array every call, so a caller's `sort()` is their own business.
   table.reverse();
-  assert.equal(api.signatureTable()[0].kind, FILE_KIND_NAMES[0]);
+  assert.notDeepEqual(
+    api.signatureTable().map((rule) => rule.kind),
+    table.map((rule) => rule.kind),
+  );
+});
+
+test("walking signatureTable() reproduces detectBytes", () => {
+  // The order is only worth anything if it is the order detection walks, so this
+  // checks the property rather than a copied list of names. A copied list would
+  // pass just as happily if the table and the list were wrong in the same way,
+  // which is exactly how this went unnoticed: the previous test asserted that
+  // `signatureTable()` was in *declaration* order, and it was, and that was the
+  // bug. See issue #24.
+  //
+  // Every `(signature, offset)` pair of every format is tried, so this is not a
+  // sample. `detectBytes` declines `ScriptExecute`'s own bytes, because its
+  // predicate needs more of the line than the two it carries; that is one form out
+  // of 144 and it is skipped rather than counted as agreement.
+  const table = api.signatureTable();
+
+  let tried = 0;
+  let declined = 0;
+  for (const kind of api.allKinds()) {
+    const rule = api.describe(kind);
+    for (const signature of rule.signatures) {
+      for (const offset of rule.offsets.length ? rule.offsets : [0]) {
+        const bytes = new Uint8Array(api.neededBytes());
+        bytes.set(signature, offset);
+
+        const detected = api.detectBytes(bytes);
+        if (detected === null) {
+          declined += 1;
+          continue;
+        }
+
+        const walked = table.find((row) => api.matches(row.kind, bytes))?.kind;
+        assert.equal(
+          walked,
+          detected,
+          `${kind}'s own bytes are detected as ${detected} but the table walk says ${walked}`,
+        );
+        tried += 1;
+      }
+    }
+  }
+
+  assert.equal(tried + declined, 144, "every canonical form in the table was exercised");
+  assert.ok(tried >= 143, `only ${tried} forms produced an answer to compare`);
+});
+
+test("the formats whose magic shadows another's are ordered the way detection orders them", () => {
+  // Three pairs, and the reason each is ordered the way it is. These are facts
+  // about the formats rather than about this table, which is what makes them safe
+  // to hard-code where a copy of the whole 114 would not be.
+  const at = new Map(api.signatureTable().map((row, i) => [row.kind, i]));
+
+  // `Ktx`'s magic is a byte-for-byte prefix of `Ktx2`'s, and `Qcow`'s of `Qcow2`'s,
+  // so asking the shorter one first would make the longer one undetectable. These
+  // are the two formats where getting the order wrong produces a wrong answer, and
+  // they are the reason the walk above is checked rather than assumed.
+  assert.ok(at.get("Ktx2") < at.get("Ktx"), `Ktx2 at ${at.get("Ktx2")}, Ktx at ${at.get("Ktx")}`);
+  assert.ok(at.get("Qcow2") < at.get("Qcow"), `Qcow2 at ${at.get("Qcow2")}, Qcow at ${at.get("Qcow")}`);
+
+  // `ScriptExecute` and `RAR` do not shadow each other — `#!` and `Rar!` cannot
+  // both match — but the shebang rule is asked first so that `#!AMR`, which is the
+  // literal magic of AMR audio, is not claimed by the script rule before its own
+  // predicate has had a chance to decline it.
+  assert.ok(
+    at.get("ScriptExecute") < at.get("RAR"),
+    `ScriptExecute at ${at.get("ScriptExecute")}, RAR at ${at.get("RAR")}`,
+  );
+});
+
+test("signatureTable() is not allKinds(), and allKinds() is the declaration order", () => {
+  // The two lists are both 114 long and both stable, so confusing them compiles,
+  // runs, and answers a different question. `allKinds()` is the enum's order and
+  // should stay that way: it is what `_kinds.js` is generated as, and it is what
+  // `describe()` and `FILE_KIND_INDICES` are keyed by.
+  const table = api.signatureTable().map((row) => row.kind);
+
+  assert.notDeepEqual(table, [...FILE_KIND_NAMES]);
+  assert.deepEqual(api.allKinds(), [...FILE_KIND_NAMES]);
+  assert.equal(new Set(table).size, 114, "the table lists each format exactly once");
 });
 
 test("an unknown format name is rejected, and the message says which", () => {

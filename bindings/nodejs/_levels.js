@@ -23,6 +23,7 @@ import {
   DEFAULT_MAX_BYTES_READ,
   bytesRead,
   indexOfKind,
+  signatureAtPosition,
   signatureForIndex,
   tableLength,
 } from "./_signatures.js";
@@ -69,7 +70,18 @@ export function describe(kind) {
 }
 
 /**
- * Every rule in the table, in the crate's order.
+ * Every rule in the table, in detection order.
+ *
+ * That is the order `detectBytes` walks, so walking this array and stopping at the
+ * first rule that matches reproduces `detectBytes` exactly — which is what makes it
+ * worth the order being stated rather than assumed. It was the enum order instead
+ * until issue #24, and the two differ for 71 of the 114 entries, by up to 55 places.
+ * For `Ktx2` and `Qcow2` — the two whose magic shadows a shorter neighbour's — the
+ * walk answered `Ktx` and `Qcow`.
+ *
+ * Not the same as `allKinds()`, which is the `FileKind` declaration order. Both are
+ * 114 long and both are stable, so treating one as the other compiles, runs, and
+ * answers a different question.
  *
  * A fresh array of fresh objects every call. `BUFFER` uses this to build its own
  * values, so handing out the internal ones would let a caller's `sort()` reorder
@@ -77,7 +89,7 @@ export function describe(kind) {
  */
 export function signatureTable() {
   const out = new Array(tableLength());
-  for (let i = 0; i < tableLength(); i++) out[i] = signatureForIndex(i);
+  for (let i = 0; i < tableLength(); i++) out[i] = signatureAtPosition(i);
   return out;
 }
 

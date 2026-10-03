@@ -132,15 +132,24 @@ function decode() {
     tarOffsets: r.offsets(),
   };
   const count = r.u32();
-  // Indexed by the discriminant each entry *carries*, not by where it sits in the
-  // blob. Those are not the same thing, which is the whole reason `kind_index` is
-  // in the encoding at all: `SIGNATURE_KIND` is ordered for the detection loop's
-  // benefit and 71 of its 114 entries are not in declaration order — measured, not
-  // assumed, because `ScriptExecute` (18) sits at position 17 and `RAR` (17) at
-  // position 18, the two shadowing entries swapped. Indexing by position would
-  // therefore attribute every rule to the wrong format, and for that pair it would
-  // silently swap which one `detectBytes` reports first.
-  const table = new Array(count);
+  // Two orderings, kept separately, because they are two orderings.
+  //
+  // `byDiscriminant` is indexed by the discriminant each entry *carries*, which is
+  // what makes `describe()` correct: 71 of the 114 entries are not in declaration
+  // order, measured rather than assumed, because `ScriptExecute` (18) sits at
+  // position 17 and `RAR` (17) at position 18. Indexing by position would attribute
+  // every rule to the wrong format.
+  //
+  // `byPosition` is indexed by where the entry sits in the blob, and the blob is
+  // written by iterating `SIGNATURE_KIND`, so this one *is* the detection order.
+  //
+  // Keeping only the first and then rebuilding a list by walking it is what left
+  // `signatureTable()`'s rows in enum order while its docstring claimed the
+  // crate's order. The two differ by up to 55 places, and for the two formats whose
+  // magic shadows another's — `Ktx2` and `Qcow2` — walking that list answers `Ktx`
+  // and `Qcow` where `detectBytes` answers `Ktx2` and `Qcow2`. See issue #24.
+  const byDiscriminant = new Array(count);
+  const byPosition = new Array(count);
   for (let position = 0; position < count; position++) {
     const kind = r.u32();
     const flags = r.u32();
@@ -158,13 +167,14 @@ function decode() {
           `only ${count} formats. The module and _kinds.js are from different builds.`,
       );
     }
-    if (table[kind] !== undefined) {
+    if (byDiscriminant[kind] !== undefined) {
       throw new Error(
         `@reim-developer/magical-js: two table entries both claim discriminant ${kind}. Every format ` +
           "must appear exactly once, or one of them is invisible.",
       );
     }
-    table[kind] = {
+    byPosition[position] = kind;
+    byDiscriminant[kind] = {
       usesPredicate: (flags & 1) !== 0,
       maxBytesRead,
       offsets,
@@ -172,7 +182,7 @@ function decode() {
     };
   }
 
-  const missing = table.indexOf(undefined);
+  const missing = byDiscriminant.indexOf(undefined);
   if (missing !== -1) {
     throw new Error(
       `@reim-developer/magical-js: no table entry claims discriminant ${missing} (${
@@ -192,10 +202,10 @@ function decode() {
     );
   }
 
-  return { limits, table };
+  return { limits, byDiscriminant, byPosition };
 }
 
-const { limits, table } = decode();
+const { limits, byDiscriminant, byPosition } = decode();
 
 /** The default header size, matching the crate's `DEFAULT_MAX_BYTES_READ`. */
 export const DEFAULT_MAX_BYTES_READ = limits.defaultMaxBytesRead;
@@ -252,7 +262,38 @@ export function indexOfKind(kind) {
 }
 
 /**
- * One format's detection rule, ready to hand out.
+ * The public shape of one rule, built from a decoded entry.
+ *
+ * Shared by the two lookups below so that `describe` and `signatureTable` cannot
+ * drift apart in what a row contains — they differ only in which row they reach,
+ * never in how it is shaped.
+ */
+function row(discriminant) {
+  const entry = byDiscriminant[discriminant];
+  const name = FILE_KIND_NAMES[discriminant];
+  if (entry === undefined || name === undefined) {
+    throw new RangeError(
+      `@reim-developer/magical-js: the table reports a rule for discriminant ${discriminant}, which is not ` +
+        `a file kind. The module and _kinds.js are from different builds; run \`npm run gen\`.`,
+    );
+  }
+  return {
+    kind: name,
+    // Every array is copied, because the decoded table is shared by every caller and
+    // a `sort()` on a returned `offsets` would reorder it for everybody.
+    signatures: entry.signatures.map((signature) => new Uint8Array(signature)),
+    offsets: [...entry.offsets],
+    maxBytesRead: entry.maxBytesRead,
+    usesPredicate: entry.usesPredicate,
+  };
+}
+
+/**
+ * One format's detection rule, looked up by discriminant.
+ *
+ * This is what `describe()` wants: a format named, and the rule that names it. It
+ * says nothing about position, and must not — 71 of the 114 entries sit at a
+ * position that is not their discriminant.
  *
  * `signatures` is empty exactly when the format is decided by a function rather
  * than by bytes, which is what `usesPredicate` says. The two are not the same
@@ -261,29 +302,30 @@ export function indexOfKind(kind) {
  * blanks the signature of every predicate entry, and this one does not — the bytes
  * are there, and hiding them would make the table a worse description of how the
  * crate actually matches.
- *
- * Every array is copied, because the decoded table is shared by every caller and a
- * `sort()` on a returned `offsets` would reorder it for everybody.
  */
 export function signatureForIndex(index) {
-  const entry = table[index];
-  const name = FILE_KIND_NAMES[index];
-  if (name === undefined) {
+  return row(index);
+}
+
+/**
+ * One format's detection rule, looked up by position in the detection order.
+ *
+ * This is what `signatureTable()` wants. It is a different lookup from
+ * `signatureForIndex` and the difference is the whole point: `byPosition` is the
+ * order `detectBytes` walks, and `byDiscriminant` is the enum's.
+ */
+export function signatureAtPosition(position) {
+  const discriminant = byPosition[position];
+  if (discriminant === undefined) {
     throw new RangeError(
-      `@reim-developer/magical-js: the table reports a rule for discriminant ${index}, which is not a ` +
-        `file kind. The module and _kinds.js are from different builds; run \`npm run gen\`.`,
+      `@reim-developer/magical-js: no rule at detection position ${position}. There are ` +
+        `${byPosition.length}; \`signatureTable()\` returns all of them.`,
     );
   }
-  return {
-    kind: name,
-    signatures: entry.signatures.map((signature) => new Uint8Array(signature)),
-    offsets: [...entry.offsets],
-    maxBytesRead: entry.maxBytesRead,
-    usesPredicate: entry.usesPredicate,
-  };
+  return row(discriminant);
 }
 
 /** How many entries the table has. Not part of the public API. */
 export function tableLength() {
-  return table.length;
+  return byPosition.length;
 }

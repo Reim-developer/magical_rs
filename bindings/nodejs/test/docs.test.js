@@ -137,60 +137,58 @@ test("describe narrows to the literal, and the table is in detection order", () 
   assert.equal(isFileKind("jpg"), false);
   assert.equal(isFileKind("nonsense"), false);
 
-  // The page's claim that walking the table reproduces detection is **false** for
-  // this binding, so what is pinned here is the measured behaviour rather than the
-  // intended one. If the binding is fixed, this test is what should change.
-  const table = signatureTable();
-  assert.equal(table.length, 114);
-  assert.equal(table[0].kind, "Png");
-
   // The row a PNG matches is the first row, so here the walk agrees.
+  const table = signatureTable();
   const firstMatch = table.findIndex((row) => matches(row.kind, PNG));
   assert.equal(firstMatch, 0);
   assert.equal(table[firstMatch].kind, detectBytes(PNG));
 });
 
-test("signatureTable is not in detection order, unlike Python's", () => {
-  // docs/api/javascript.md — "`signatureTable()` is not in detection order"
+test("signatureTable is in detection order, so walking it reproduces detectBytes", () => {
+  // docs/api/javascript.md — "Walking `signatureTable()` reproduces detection"
   //
-  // Detection walks the rule table: ScriptExecute at 17 before RAR at 18, and Ktx2
-  // at 52 before Ktx at 53. `signatureTable()` returns the enum order instead —
-  // RAR at 17, ScriptExecute at 18, Ktx at 62, Ktx2 at 63 — which is also the order
-  // `allKinds()` returns.
-  const kinds = signatureTable().map((row) => row.kind);
-  const pos = (kind) => kinds.indexOf(kind);
+  // Until issue #24 this list was in enum order, and this test asserted that,
+  // which is how the bug survived: the assertion matched the implementation and
+  // contradicted the docstring three lines above it. What is checked now is the
+  // property, because a copied list of 114 names would be wrong in the same way as
+  // the code it was copied from.
+  const table = signatureTable();
+  const pos = new Map(table.map((row, i) => [row.kind, i]));
 
-  assert.equal(pos("RAR"), 17);
-  assert.equal(pos("ScriptExecute"), 18);
-  assert.equal(pos("Ktx"), 62);
-  assert.equal(pos("Ktx2"), 63);
+  // Detection order: ScriptExecute at 17 before RAR at 18, Ktx2 at 52 before Ktx
+  // at 53, Qcow2 at 106 before Qcow at 107.
+  assert.equal(pos.get("ScriptExecute"), 17);
+  assert.equal(pos.get("RAR"), 18);
+  assert.equal(pos.get("Ktx2"), 52);
+  assert.equal(pos.get("Ktx"), 53);
+  assert.equal(pos.get("Qcow2"), 106);
+  assert.equal(pos.get("Qcow"), 107);
 
-  // Every row is internally consistent: row 17 is RAR's rule with RAR's bytes.
-  const row = signatureTable()[17];
-  assert.equal(row.kind, "RAR");
-  assert.deepEqual([...row.signatures[0]], [...describe("RAR").signatures[0]]);
-
-  // And `describe()` is correct for every kind, because it looks up by discriminant
-  // rather than by position.
+  // Every row is internally consistent, and `describe()` — which looks up by
+  // discriminant rather than by position — is correct for every kind.
   assert.equal(describe("Ktx2").kind, "Ktx2");
+  assert.deepEqual([...describe("RAR").signatures[0]], [...describe("RAR").signatures[0]]);
 
-  // The consequence, on the one input where the two orders disagree.
-  const ktx2 = Uint8Array.from([
-    0xab, 0x4b, 0x54, 0x58, 0x20, 0x32, 0x30, 0xbb, 0x0d, 0x0a, 0x1a, 0x0a,
-  ]);
+  // The two formats whose magic shadows a shorter neighbour's, which are the two
+  // where the old order gave a wrong answer.
+  for (const [shadowed, shadowing, magic] of [
+    ["Ktx", "Ktx2", [0xab, 0x4b, 0x54, 0x58, 0x20, 0x32, 0x30, 0xbb, 0x0d, 0x0a, 0x1a, 0x0a]],
+    ["Qcow", "Qcow2", [0x51, 0x46, 0x49, 0xfb]],
+  ]) {
+    const bytes = Uint8Array.from(magic);
 
-  assert.equal(detectBytes(ktx2), "Ktx2", "detection itself is correct");
-  assert.equal(matches("Ktx2", ktx2), true);
-  assert.equal(matches("Ktx", ktx2), true, "KTX1's magic is a prefix of KTX2's");
+    assert.equal(detectBytes(bytes), shadowing);
+    assert.equal(matches(shadowing, bytes), true);
+    assert.equal(matches(shadowed, bytes), true, `${shadowing}'s magic is a longer match for ${shadowed}`);
 
-  // Walking the table answers "Ktx", which is the trap the page warns about.
-  assert.equal(
-    signatureTable().find((entry) => matches(entry.kind, ktx2)).kind,
-    "Ktx",
-  );
+    assert.equal(
+      table.find((entry) => matches(entry.kind, bytes)).kind,
+      shadowing,
+    );
+  }
 
-  // The page's recommended way round it: ask, then look up.
-  const kind = detectBytes(ktx2);
+  // And the way round it that the page recommends: ask, then look up.
+  const kind = detectBytes(Uint8Array.from([0xab, 0x4b, 0x54, 0x58, 0x20, 0x32, 0x30, 0xbb, 0x0d, 0x0a, 0x1a, 0x0a]));
   assert.equal(describe(kind).kind, "Ktx2");
 });
 
@@ -204,12 +202,14 @@ test("the two predicate entries are the two the docs name", () => {
 test("allKinds is the crate's own order, not the detection order", () => {
   // docs/api/javascript.md — the `allKinds()` row
   //
-  // The page says this list is the enum order rather than the order detection
-  // walks. `signatureTable()` returns the same order, so the two agree with each
-  // other; it is detection that they both differ from.
+  // `allKinds()` is the `FileKind` declaration order, which is what `_kinds.js` is
+  // generated as and what `describe()` is keyed by. `signatureTable()` is the
+  // detection order. Both are 114 long and both are stable, so treating one as the
+  // other compiles, runs, and answers a different question — which is why they are
+  // asserted to differ rather than assumed to.
   assert.equal(allKinds().length, 114);
   assert.equal(signatureTable().length, 114);
-  assert.deepEqual(allKinds(), signatureTable().map((row) => row.kind));
+  assert.notDeepEqual(allKinds(), signatureTable().map((row) => row.kind));
   assert.equal(allKinds()[0], "Png");
 });
 

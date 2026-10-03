@@ -114,18 +114,12 @@ authoritative list of formats and it is sorted alphabetically, so
 [Concepts](concepts.md#three-orders-exist-and-the-two-that-matter-are-not-the-same-sequence)
 has the measured numbers.
 
-### `signatureTable()` disagrees with `signature_table()`
-
-Python's `signature_table()` returns the 114 rules **in detection order** and says so
-in its docstring. JavaScript's `signatureTable()` returns them in the enum order.
-Each row is correct and `describe()` is correct for every kind, so the only
-difference is the position of the rows — but that is enough to make "walk the list
-and stop at the first match" answer `Ktx` for a KTX2 file in JavaScript while Rust
-and Python answer `Ktx2`.
-
-`detectBytes` is not affected; it reads the compiled table rather than the list. The
-worked example, with the measurements, is in
-[the JavaScript reference](api/javascript.md#signaturetable-is-not-in-detection-order-unlike-pythons).
+The two *introspection* calls agree, and that is the useful part: Rust's
+`SIGNATURE_KIND`, Python's `signature_table()` and JavaScript's `signatureTable()`
+all report the rules in **detection order**, so "walk the list and stop at the first
+match" reproduces detection in all three. `allKinds()` / `ALL_KINDS` do not, and
+should not — they are the declaration order, which is what the enum's discriminants
+and `describe()` are keyed by.
 
 ## Porting notes
 

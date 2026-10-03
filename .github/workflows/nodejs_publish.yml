@@ -118,10 +118,25 @@ jobs:
               # is configured (a local publish would otherwise fail with
               # "Automatic provenance generation not supported").
               registry-url: "https://registry.npmjs.org"
+              # No dependency cache, and deliberately no input saying so.
+              #
               # npm's documentation is explicit that release builds do not use the
               # dependency cache: a stale tarball in a cache is a class of bug that
               # reproduces nowhere except in the one run that matters.
-              cache: false
+              #
+              # The obvious way to write that down is `cache: false`, and it is
+              # wrong on this action. `cache` is not a boolean any more — it is the
+              # *name* of a package manager, accepting npm, yarn or pnpm, and
+              # `setup-node` throws `Caching for 'false' is not supported` when it
+              # is handed the string "false". The key that does turn automatic
+              # caching off arrived later, as `package-manager-cache`, and the
+              # version pinned above does not have it.
+              #
+              # So it is off by omission, which is also why it is worth saying: this
+              # `package.json` declares no `packageManager` and no
+              # `devEngines.packageManager`, and that is what keeps automatic npm
+              # caching from turning itself on. Adding either field would start a
+              # cache on the release job without anything here noticing.
 
         - name: Check the npm version can publish without a token
           shell: bash

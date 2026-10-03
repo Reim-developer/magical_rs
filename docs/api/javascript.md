@@ -1,0 +1,243 @@
+# JavaScript API reference
+
+`@reim-developer/magical-js`, for JavaScript and TypeScript. For what the calls
+*mean* rather than what they are called, read [Concepts](../concepts.md) first.
+
+## Install
+
+```bash
+npm install @reim-developer/magical-js
+```
+
+The module is a single `.wasm` with **zero imports**, so there is no glue file and no
+import object. Everything is synchronous.
+
+## The public surface
+
+```ts
+import {
+  // level 1
+  detectPath, detectBytes, readHeader, neededBytes, DEFAULT_MAX_BYTES_READ,
+  readLimits,
+  // the answer type
+  FileKind, isFileKind, allKinds,
+  // metadata
+  displayName, mime, extension,
+  // the table
+  describe, signatureTable,
+  // asking
+  matches,
+  // level 2
+  matchTypes, matchAllTypes, releaseRules,
+} from "@reim-developer/magical-js";
+```
+
+`FileKind` is a TypeScript **string union** — the discriminants *are* the ABI. That
+is the one place this binding cannot match the other two, and it is deliberate: a
+union gives a caller `"Png"` narrowed to the literal `"Png"`, where an enum object
+would not narrow at all across a `.wasm` boundary.
+
+## Level 1
+
+| Call | Returns | Notes |
+| --- | --- | --- |
+| `detectPath(path, options?)` | `FileKind \| null` | Synchronous, not a `Promise` |
+| `detectBytes(bytes, options?)` | `FileKind \| null` | For bytes you already have |
+| `readHeader(path, options?)` | `Uint8Array` | The header itself, if you want to keep it |
+| `neededBytes()` | `number` | 36,870 — the window that reaches every format |
+| `DEFAULT_MAX_BYTES_READ` | `number` | 2,048 — what one rule usually declares. **Not the same number** |
+| `readLimits()` | an object | The smallest window that finds each format |
+
+`readLimits()` returns a plain frozen object rather than a named type — the
+declaration inlines the fields, so there is nothing to import. They are
+`defaultMaxBytesRead`, `bytesRead`, `defaultOffset`, `isoMaxBytesRead`,
+`tarMaxBytesRead`, `isoOffsets` and `tarOffsets`. Python's `read_limits()` returns
+a `ReadLimits` class with the snake_case spelling of the same seven; Rust holds them
+as `pub const`.
+
+```ts
+import { detectPath, detectBytes, neededBytes } from "@reim-developer/magical-js";
+
+detectPath("photo.jpg");          // "Jpg"
+detectBytes(new Uint8Array([0x47, 0x49, 0x46, 0x38, 0x39, 0x61]));   // "GIF"
+detectPath("notes.txt");          // null
+neededBytes();                    // 36870
+```
+
+`options` is `{ maxBytesRead?: number }` on the detection calls and
+`{ maxBytes?: number }` on `readHeader`. Naming the window is what tells "no rule
+matched" apart from "no rule *that fits the window you named* matched" — see
+[Concepts](../concepts.md#none-means-one-thing-except-when-it-does-not).
+
+A `null` is one thing here, and it is the same thing it is in the other two: **no
+rule matched.** There is no "unknown format" variant, because all 114 are real
+formats and a variant carrying one would be claiming knowledge the table does not
+have.
+
+## Metadata
+
+| Call | Returns | Example |
+| --- | --- | --- |
+| `displayName(kind)` | `string` | `"JPEG"` |
+| `mime(kind)` | `string \| null` | `"image/jpeg"` |
+| `extension(kind)` | `string \| null` | `"jpg"` |
+
+Each is a free function rather than a method because a string union cannot carry
+methods in a way that survives crossing the wasm boundary, and pretending otherwise
+would mean wrapping every string.
+
+| Call | Returns | Notes |
+| --- | --- | --- |
+| `allKinds()` | `FileKind[]` | All 114, in the crate's own enum order — **not** the order detection walks. See [Concepts](../concepts.md#three-orders-exist-and-the-two-that-matter-are-not-the-same-sequence) |
+| `isFileKind(value)` | `boolean` | A type guard, for a name from a config file or query string |
+| `describe(kind)` | `Signature` | One format's entry |
+| `signatureTable()` | `Signature[]` | All 114. **Not in detection order — see below** |
+| `Signature.kind` | `FileKind` | Narrowed to the literal, from `describe("Png")` |
+| `Signature.signatures` | `Uint8Array[]` | The bytes compared |
+| `Signature.offsets` | `number[]` | Where they are compared |
+| `Signature.maxBytesRead` | `number` | What this entry declares |
+| `Signature.usesPredicate` | `boolean` | Whether this entry reads structure instead of a fixed prefix |
+
+**`offsets` is a list of positions, not a pairing with `signatures`.** Any
+signature matching at any of the offsets is enough — the same rule the Python
+binding follows, and the same reason a length mismatch between the two is not an
+error. `usesPredicate` is the flag for the entries that cannot be expressed as bytes
+at all: `ScriptExecute` and `WEBP` are the two, and they are compiled into the
+module rather than compared from `signatures`.
+
+```ts
+import { describe, isFileKind } from "@reim-developer/magical-js";
+
+const rule = describe("Png");
+rule.kind;                        // "Png", typed as the literal
+rule.signatures[0];               // Uint8Array [137, 80, 78, 71, 13, 10, 26, 10]
+rule.offsets;                     // [0]
+
+// A name from somewhere you do not control.
+function parse(input: string): FileKind | null {
+  return isFileKind(input) ? input : null;
+}
+```
+
+### `signatureTable()` is not in detection order, unlike Python's
+
+This is the one place this binding and the Python one disagree about something
+other than a spelling, so it is worth stating exactly rather than leaving you to
+find it.
+
+**Detection order** is the order `dispatch::first_match` walks: `ScriptExecute` at
+17 and `RAR` at 18, `Ktx2` at 52 and `Ktx` at 53. **The order `signatureTable()`
+returns** is the enum order: `RAR` at 17 and `ScriptExecute` at 18, `Ktx` at 62 and
+`Ktx2` at 63. `allKinds()` returns that same enum order, so the two agree with each
+other and differ from detection.
+
+`magical_py.signature_table()` **is** in detection order, and its docstring says so.
+
+Each row is internally consistent — row 17 is `RAR`'s rule with `RAR`'s bytes — and
+`describe()` is correct for every kind, because it looks a row up by discriminant
+rather than by position. So the defect is confined to the order of the list.
+
+**So walking `signatureTable()` and stopping at the first match does not reproduce
+`detectBytes`.** For most inputs it agrees, which is what makes it a trap rather than
+an obvious breakage. It disagrees wherever the two orders differ, and a KTX2 file is
+the clean case:
+
+```ts
+import { detectBytes, matches, signatureTable } from "@reim-developer/magical-js";
+
+// The 12-byte magic from the format table: KTX1's 5-byte magic, then "20".
+const ktx2 = new Uint8Array([0xAB, 0x4B, 0x54, 0x58, 0x20, 0x32, 0x30, 0xBB, 0x0D, 0x0A, 0x1A, 0x0A]);
+
+detectBytes(ktx2);                                    // "Ktx2"  — correct
+matches("Ktx2", ktx2);                                // true
+matches("Ktx", ktx2);                                 // true   — its magic is a prefix
+
+// But the list puts Ktx first, so this walk answers "Ktx":
+signatureTable().find((row) => matches(row.kind, ktx2))?.kind;   // "Ktx"  — wrong
+```
+
+If you need the table in the order detection asks it, sort it yourself with the two
+numbers above, or — better — ask `detectBytes` and then `describe()` the answer, which
+is both shorter and correct:
+
+```ts
+const kind = detectBytes(bytes);
+if (kind !== null) {
+  const rule = describe(kind);   // the rule that actually won
+}
+```
+
+## Asking "is it this format?"
+
+| Call | Returns | Notes |
+| --- | --- | --- |
+| `matches(kind, bytes)` | `boolean` | Ignoring table order — the same question as Rust's `Detect::is` |
+
+**There is no `isAny`.** It is one line over `matches` — a loop — and it is not in
+the binding because it would be a wrapper over something the language already has.
+A binding that ships a one-line wrapper for every call site in Rust does not have
+parity, it has a bigger API to keep in step.
+
+```ts
+import { matches } from "@reim-developer/magical-js";
+
+matches("Png", bytes);   // true
+```
+
+## Level 2 — custom rules
+
+```ts
+import { matchTypes, releaseRules } from "@reim-developer/magical-js";
+
+// `const` type parameter: the answer is the union of the kinds you declared.
+const rules = [
+  { kind: "Png", signatures: [PNG_BYTES], offsets: [0] },
+  { kind: "GIF", signatures: [GIF_BYTES], offsets: [0] },
+] as const;
+
+const found = matchTypes(rules, bytes);   // "Png" | "GIF" | null
+if (found === "Jpg") { }                  // error: "Jpg" is a real format, just not one of these two
+```
+
+| Call | Returns | Notes |
+| --- | --- | --- |
+| `matchTypes(rules, bytes)` | `K \| null` | The first rule that matches, typed as the union you declared |
+| `matchAllTypes(rules, bytes)` | `K[]` | Every rule that matches |
+| `releaseRules(rules)` | `boolean` | Drops the compiled handle. `false` if there was nothing to release |
+
+The generics here are the point of this binding: the answer is typed as the kinds
+*you* declared, not as all 114. Neither that nor `describe("Png").kind` narrowing
+to a literal is expressible in JSDoc, and neither is worth giving up for a `.wasm`
+that loads with no glue.
+
+A rule set is a `readonly` array of plain objects, so it can live in a JSON file,
+cross a message, or be built at run time. It is compiled into the module's linear
+memory on first use.
+
+### `releaseRules` is about handles, not memory
+
+The compiled copy is **leaked once, deliberately**, so the `MagicCustom` values
+inside the module can hold a reference to it. `releaseRules` drops the *handle*; it
+does not return the memory, and the name implies something stronger than it does.
+
+A caller who builds rule sets once at startup never needs it. A caller building
+them in a loop should call it when done with one, and should understand that the
+wasm-side allocation is not returned to the allocator — so the honest advice is to
+build fewer, larger rule sets rather than many small ones.
+
+## Types
+
+`index.d.ts` is hand-written and is where the generics live. The package ships no
+`.d.ts` generated from JSDoc, because the parts worth typing cannot be expressed in
+JSDoc at all.
+
+## Notes
+
+**Everything is synchronous, deliberately.** The detection calls return their answer
+rather than a `Promise`. Making them `async` would buy nothing but an `await`, and
+the alternative — a real async API — means crossing a `.wasm` boundary per call,
+which is the one cost this binding's single-threaded synchronous design avoids.
+
+**The kind is a string, not an enum.** See the top of this page for why, and
+[Across the three languages](../across-languages.md) for what that costs a caller
+porting from the other two.

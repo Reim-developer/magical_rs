@@ -72,7 +72,7 @@ cannot be `image/png` in Rust and something else in Python.
 | --- | --- | --- | --- |
 | Rust | `magical_rs` 0.6.5 | — | — |
 | Python | - | `magical-py` 0.5.0 | - |
-| JavaScript / TypeScript | — | — | `@reim-developer/magical-js` 0.1.0 |
+| JavaScript / TypeScript | - | - | `@reim-developer/magical-js` 0.1.1 |
 
 [![PyPI](https://img.shields.io/pypi/v/magical-py)](https://pypi.org/project/magical-py/)
 [![PyPI downloads/month](https://img.shields.io/pypi/dm/magical-py)](https://pypi.org/project/magical-py/)

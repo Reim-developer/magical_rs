@@ -72,7 +72,7 @@ cannot be `image/png` in Rust and something else in Python.
 | --- | --- | --- | --- |
 | Rust | `magical_rs` 0.6.5 | — | — |
 | Python | - | `magical-py` 0.5.0 | - |
-| JavaScript / TypeScript | — | — | `@reim-developer/magical-js` 0.1.0 |
+| JavaScript / TypeScript | - | - | `@reim-developer/magical-js` 0.1.1 |
 
 [![PyPI](https://img.shields.io/pypi/v/magical-py)](https://pypi.org/project/magical-py/)
 [![PyPI downloads/month](https://img.shields.io/pypi/dm/magical-py)](https://pypi.org/project/magical-py/)
@@ -127,6 +127,24 @@ if (found === "Jpg") { }                   // error: "Jpg" is a real format, jus
 
 The module declares no imports, so there is no glue file and no toolchain, and
 `detectBytes` is synchronous end to end. See [`bindings/nodejs`](bindings/nodejs).
+
+## Documentation
+
+The reference lives in [`docs/`](docs/), not here. This readme is the landing page:
+what the library claims, what checks each claim, and the formats it detects.
+
+| Page | What is in it |
+| --- | --- |
+| [Getting started](docs/getting-started.md) | Install, and identify one file in all three languages |
+| [Concepts](docs/concepts.md) | Table order, the read window, and what a `None` does and does not mean |
+| [Detection levels](docs/detection-levels.md) | Levels 1 to 5, and why each binding stops where it does |
+| [Rust API](docs/api/rust.md) · [Python API](docs/api/python.md) · [JavaScript API](docs/api/javascript.md) | The full reference for each |
+| [Across the three languages](docs/across-languages.md) | The six differences that would change your code while porting |
+
+Every Rust example in `docs/` is compiled and run by
+`crates/magical_rs/tests/docs_examples.rs`, and
+[`docs/README.md`](docs/README.md) says which parts of those pages are held to
+something and which are not.
 
 ## Quick start
 
@@ -561,187 +579,26 @@ caller makes where the decision is visible.
 
 ## API reference
 
-Everything the three of them export, in one place, so you can find it without
-reading the source. Each entry says what it does and which level it belongs to.
+It is three pages, one per language, because a table with three languages in the
+same columns is a table nobody reads a row of:
 
-Nothing here is generated, and the readme does not claim to be complete against
-the compiler. What *is* checked is the part that can be: `tests/readme_examples.rs`
-compiles every Rust example on this page, and
+| | |
+| --- | --- |
+| [`docs/api/rust.md`](docs/api/rust.md) | Every module, level 1 and 2 in full, levels 3 to 5 by pointer, and the feature flags |
+| [`docs/api/python.md`](docs/api/python.md) | The whole public surface, `Detected`, the metadata, and the error each call raises |
+| [`docs/api/javascript.md`](docs/api/javascript.md) | The `FileKind` string union, the rule-set generics, and the synchronous design |
+
+What differs between them, and what that costs while porting, is
+[Across the three languages](docs/across-languages.md).
+
+Nothing here is generated, and the readme does not claim to be complete against the
+compiler. What *is* checked is the part that can be: every Rust example in
+`docs/` is compiled and run by `tests/docs_examples.rs`, and
 `crates/magical_rs/tests/dataset.rs` holds the format names in the table below
 against `SIGNATURE_KIND` and against `formats.json` in both directions. A function
-added to a binding without a row here is a documentation gap, not a broken build —
-which is the honest thing to say about it rather than implying a check that does
-not exist.
-
-### `magical_rs`
-
-```toml
-[dependencies]
-magical_rs = "0.6"
-```
-
-| Call | Level | What it does |
-| --- | --- | --- |
-| `FileKind::match_types(&[u8])` | 1 | `Option<FileKind>` from the built-in table. First match in `SIGNATURE_KIND` order |
-| `FileKind::match_with_max_read_rule(&[u8], usize)` | 1 | The same, restricted to rules whose own `max_bytes_read` fits the window. **`no_std` only** |
-| `FileKind::match_with_custom_max_read(&[u8], usize)` | 1 | The same, with no per-rule filter but a minimum buffer length. **`no_std` only** |
-| `read_file_header(path, limit)` | 1 | The `std` path: read the first `limit` bytes of a file. `read_file_header` is `#[cfg(feature = "std")]` |
-| `with_bytes_read()` | 1 | The crate's own default window: 36,870 bytes, which is what ISO 9660 needs |
-| `FileKind::display_name()` | — | `'static str`, e.g. `"JPEG image"` |
-| `FileKind::mime()` | — | `Option<&'static str>`, e.g. `Some("image/jpeg")`. `None` where there is no verified type |
-| `FileKind::extension()` | — | `Option<&'static str>`, e.g. `Some("jpg")` |
-| `FileKind::variant_name()` | — | The token the other two languages use, e.g. `"Jpg"` |
-| `FileKind::from_name(&str)` | — | The reverse of `variant_name`, and what the bindings' name lookup is |
-| `kinds_meta::ALL_KINDS` | — | All 114, in table order. The order is the ABI every binding indexes by |
-| `magic_rules![ .. ]` | 2 | A `&'static [MagicCustom<K>]` from a rule table. Not gated |
-| `magic_custom!( .. )` | 2 | One `MagicCustom` from named fields. The older spelling; still public |
-| `match_types_custom(&[u8], rules, fallback)` | 2 | The kind of the first rule that matches, or the fallback |
-| `any_matches!` / `all_matches!` / `with_fn_matches!` | 2 | Sugar for the `CustomMatchRules` variants |
-| `Detect::detect` and friends | 1, 2 | `bytes.detect()`. Behind `magical_fluent` |
-| `dispatch::first_match(&[u8], usize)` | 1 | The index the three functions above share, for a caller who wants it directly |
-| `dispatch::probes_for(&[u8])` | 1 | How many table entries an input causes to be tried. For tests and benchmarks |
-| `DynMagicCustom::new` / `match_dyn_types*` | 3 | Runtime rules. Behind `magical_dyn` |
-| `AsyncDynMagic::new` | 4 | Async rules. Behind `magical_async_dyn` |
-| `CustomMatchRules::AllMatchesUnsafe` and friends | 5 | Raw-pointer rules. Behind `unsafe_context` |
-
-Two of the level 1 entry points exist only without `std`, and that is not an
-oversight — the `std` build has a faster path for the same question, and the
-bindings call `dispatch::first_match` rather than depending on either. The
-`no_std` restriction on `match_with_max_read_rule` and
-`match_with_custom_max_read` is the reason
-[`bindings/asm`](https://github.com/Reim-developer/magical_rs/tree/master/bindings/asm)
-used to carry its own copy of that scan; it does not any more.
-
-### `magical-py`
-
-```bash
-pip install magical-py
-```
-
-| Call | Level | What it does |
-| --- | --- | --- |
-| `detect(path)` | 1 | `FileKind \| None` from a path, with the header read for you |
-| `detect_bytes(data, *, max_bytes_read=None)` | 1 | The same from bytes you already have |
-| `detected(source, *, max_bytes_read=None)` | 1 | A `Detected`: the file first, for a scan. Reads lazily, once |
-| `Detected.kind` / `.mime` / `.extension` / `.description` / `.rule` | — | The same answers `detect` gives, reached without naming the kind first |
-| `Detected.matches(kind)` / `.matches_any(kinds)` | — | Whether one named format's own rule matches. Rust's `Detect::is`, renamed because `is` is a keyword here |
-| `Detected.within(n)` | 1 | Re-classify the same bytes in a smaller window. Rust's `detect_within` |
-| `bytes_read()` | 1 | 36,870 — the header size every format needs. Rust's `with_bytes_read()` |
-| `DEFAULT_MAX_BYTES_READ` | 1 | 2,048 — the crate's per-rule default, which is *not* the same number |
-| `read_header(source, limit=None)` | 1 | The first `limit` bytes, from a path or anything file-like |
-| `version()` | — | The extension module's version, so a caller can branch on it |
-| `FileKind.description` / `.mime` / `.extension` | — | The same three metadata calls, as properties. `None` means "none registered", never "unknown" |
-| `FileKind` | — | A real `enum` of 114 members. Not a string to parse |
-| `describe(kind)` | — | A `Signature`: the offsets, the bytes, and the read size for one format |
-| `signature_table()` | — | All 114, in table order. A tuple, so it cannot be mutated |
-| `read_limits()` | — | A `ReadLimits`: the smallest window that finds each format, and the crate's default |
-| `MagicCustom` / `MatchRules` / `Predicate` | 2 | Rule sets, the same order-is-the-answer rule as Rust |
-| `match_types_custom` | 2 | The kind of the first rule that matches, or your fallback |
-| `match_types_custom_all` | 2 | Every rule that matches, not just the first |
-| `DynMagicCustom` / `match_dyn_types` / `match_dyn_types_all` | 3 | Runtime rules |
-| `AsyncDynMagic` / `AsyncPredicate` / `match_async_dyn_types*` | 4 | Async rules |
-
-`detect` is deliberately blocking. It reads a header and compares bytes, and a
-file read is a file read — making it `async` would mean either an executor this
-crate does not have or a thread this crate should not start. For many files, read
-them yourself and use `detect_bytes`. Level 4 is the async one, and it takes
-*predicates*, not paths: the coroutine is yours, so a caller reads the file
-wherever it likes.
-
-### `@reim-developer/magical-js`
-
-```bash
-npm install @reim-developer/magical-js
-```
-
-| Call | Level | What it does |
-| --- | --- | --- |
-| `detectPath(path, options?)` | 1 | `FileKind \| null` from a path. Synchronous, not a `Promise` |
-| `detectBytes(bytes, options?)` | 1 | The same from bytes you already have |
-| `readHeader(path, options?)` | 1 | The header itself, if you want to keep it |
-| `neededBytes()` | 1 | 36,870 — the header size every format needs to be distinguishable. Rust's `with_bytes_read()` |
-| `DEFAULT_MAX_BYTES_READ` | 1 | 2,048 — the crate's per-rule default, which is *not* the same number. A caller who wants a narrow window wants this one |
-| `readLimits()` | 1 | The smallest window that finds each format, and the default |
-| `displayName(kind)` | — | e.g. `"JPEG image"` |
-| `mime(kind)` | — | `string \| null` |
-| `extension(kind)` | — | `string \| null` |
-| `allKinds()` | — | All 114 tokens, in table order |
-| `isFileKind(value)` | — | A type guard, for a name from a config file or a query string |
-| `describe(kind)` | — | A `Signature` for one format |
-| `signatureTable()` | — | All 114, in table order |
-| `matches(kind, bytes)` | 1 | Is it *this* format, ignoring table order — the same question as Rust's `Detect::is` |
-| `matchTypes(rules, bytes)` | 2 | The first rule that matches, with the answer typed as the union of the kinds *you* declared |
-| `matchAllTypes(rules, bytes)` | 2 | Every rule that matches |
-| `releaseRules(rules)` | 2 | Drops the compiled rule set's handle. `false` if there was nothing to release, so "already released" and "never compiled" are distinguishable | |
-
-`matchTypes` is the piece worth understanding before using:
-
-```ts
-import { matchTypes } from "@reim-developer/magical-js";
-
-// `const` type parameter: the answer is the union of the kinds you declared.
-const rules = [
-  { kind: "Png", signatures: [PNG_BYTES], offsets: [0] },
-  { kind: "GIF", signatures: [GIF_BYTES], offsets: [0] },
-] as const;
-
-const found = matchTypes(rules, bytes);   // "Png" | "GIF" | null
-if (found === "Jpg") { }                  // error: "Jpg" is a real format, just not one of these two
-```
-
-A rule set is a `readonly` array of plain objects, so it can be written in a JSON
-file, sent over a message, or built at run time. It is compiled into the module's
-linear memory on first use.
-
-`releaseRules` drops the *handle*, not the memory: the compiled copy is leaked
-once, deliberately, so the `MagicCustom` values inside the module can hold a
-reference to it. That is a documented trade in `bindings/asm/src/lib.rs` and it is
-repeated here because the function's name implies something stronger than it does.
-A caller who builds rule sets once at startup never needs it. A caller building
-them in a loop should call it when done with one, and should understand that the
-wasm-side allocation is not returned to the allocator — the honest advice is to
-build fewer, larger rule sets rather than many small ones.
-
-### What is deliberately not the same across the three
-
-Parity is a goal, not an accident, and the places where it is not are listed here
-rather than left to be discovered.
-
-| | Rust | Python | JavaScript |
-| --- | --- | --- | --- |
-| Unknown answer | `Option<FileKind>` | `FileKind \| None` | `FileKind \| null` |
-| The kind itself | an enum | an enum | a `string` union - the discriminants *are* the ABI |
-| Read size has a hard minimum | yes: ISO 9660 needs 36,870 bytes | same | same, and `readLimits()` reports it |
-| A rule set lives in | the caller's binary | the caller's objects | compiled into the module, leaked once |
-| Rule sets are mutable | no, `&'static` | the list is a `Sequence`, the caller owns it | no, `readonly`, and compiled on use |
-| Data comes first | `bytes.detect()`, behind `magical_fluent` | `detected(path).kind` | no - `detect(bytes)` is a function call |
-| "Is it this format?" | `Detect::is` | `Detected.matches`, and `FileKind.matches` the other way round | `matches(kind, bytes)` |
-| `no_std` | yes, levels 1 and 2 | not applicable | not applicable - the module is `wasm32` |
-
-The three rows that will surprise somebody:
-
-**JavaScript has no `is_any`.** It is one line on top of what exists - call
-`matches` in a loop - and it is not in the binding because it is a wrapper over
-something the language already has. A binding that ships a one-line wrapper for
-every call site in Rust does not have parity, it has a bigger API to keep in step.
-
-**Python's "is this format" is called `matches`, not `is`, because `is` is a
-keyword.** `what.is(FileKind.Png)` is a `SyntaxError`. The name is not a loss
-either: `matches` is the inverse of the `FileKind.matches(data)` the binding
-already had, so `kind.matches(data)` and `data.matches(kind)` read as a pair.
-
-**Python has a fluent spelling and the other two do not.** `Detected` puts the
-file first, which is what a directory scan wants, because the answer is usually
-no and the file is one of a hundred. Rust gets it from `bytes.detect()` behind
-`magical_fluent`; JavaScript has no way to put the data first, because a
-primitive cannot carry a method that the module owns.
-
-**The rule-set lifetime differs**, and the reason is the boundary. In Rust and
-Python the rules are yours and cost nothing to keep. In JavaScript they cross into
-a module whose address space you do not own, so a loop that compiles a fresh rule
-set per file grows that module's heap per file. `releaseRules` bounds the handles;
-it does not return the memory.
-
+added to a binding without a row in `docs/` is a documentation gap, not a broken
+build — which is the honest thing to say about it rather than implying a check that
+does not exist.
 ## Feature flags
 
 | Flag | Default | Effect |

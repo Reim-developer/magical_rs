@@ -7,6 +7,7 @@
     - [A first-byte detection index](#a-first-byte-detection-index)
     - [Benchmarks against `infer` and libmagic](#benchmarks-against-infer-and-libmagic)
     - [One format dataset](#one-format-dataset)
+  - [`@reim-developer/magical-js`: Version 0.1.1](#reim-developermagical-js-version-011)
   - [magical-py: Version 0.5.0](#magical-py-version-050)
   - [magical-py: Version 0.4.0](#magical-py-version-040)
   - [magical-py: Version 0.3.0](#magical-py-version-030)
@@ -391,6 +392,67 @@ is not a permutation of `0..113`.
   `tests/lint_level.rs` follows the crate to its new path. The built module is
   byte-identical apart from the crate name that appears in its panic strings:
   43,212 bytes raw, 17 exports, 0 imports.
+
+## `@reim-developer/magical-js`: Version 0.1.1
+**What has been changed:**
+
+One fix, and a documentation tree.
+
+* **`signatureTable()` is now in detection order.** It was in the `FileKind`
+  declaration order while its own docstring claimed "the crate's order", and the
+  two are not the same sequence: **71 of the 114 rows** sat at a different position,
+  by up to 55 places. See [#24](https://github.com/Reim-developer/magical_rs/issues/24).
+
+  The table blob is written by iterating `SIGNATURE_KIND`, so a position in the blob
+  already *is* the detection order and every entry carries its discriminant beside
+  it. The decoder indexed by discriminant — correctly, and on purpose, since 71 of
+  the entries are not in declaration order and indexing by position would attribute
+  every rule to the wrong format — and discarded the position order doing it.
+  `signatureTable()` then rebuilt its result by walking `0..114`, which reads that as
+  "the rule at position *i*".
+
+  **What was not broken:** `detectBytes`, `detectPath`, `describe()`, `matches()`, and
+  every row's own data. No wrong detection result, no crash, nothing memory-unsafe.
+
+  **What was:** two formats whose magic is a byte-for-byte prefix of a shorter
+  neighbour's, so for those the order decides the answer:
+
+  ```text
+  Ktx    ab 4b 54 58 20
+  Ktx2   ab 4b 54 58 20 32 30 bb 0d 0a 1a 0a      walking the old list answered "Ktx"
+  Qcow   51 46 49
+  Qcow2  51 46 49 fb                               walking the old list answered "Qcow"
+  ```
+
+  And the pattern the docs recommend. "Walk the table and stop at the first match"
+  reproduces detection in Rust and in Python; in JavaScript it answered `Ktx` and
+  `Qcow` for the two files above. It agreed on all 142 other canonical forms, which
+  is what makes it a trap rather than an obvious breakage — a caller gets a
+  plausible answer and no signal that anything went wrong. A caller who built a
+  custom rule set from these rows also inherited **93 inverted priorities** out of
+  6,441 pairs.
+
+  The fix keeps both orderings: one for `describe()`, one for `signatureTable()`. The
+  `.wasm` is byte-identical, which is why this is a patch and not a minor.
+
+* **`signatureTable()` is now checked against `detectBytes`, not against a list.**
+  The test that let this through asserted that `signatureTable()` was in declaration
+  order — which it was, so it passed, and it contradicted the docstring three lines
+  above it. What `kinds.test.js` checks now is the property: every
+  `(signature, offset)` pair of every format, walked and compared against
+  `detectBytes`, all 143 that produce an answer agreeing. A copied list of 114 names
+  would be wrong in the same way as the code it was copied from.
+
+* **A `docs/` tree for the repository**, at `docs/` rather than inside a readme that
+  had reached 1,271 lines. Eight pages: an index, getting started, the concepts
+  behind an answer, the five detection levels, one page per binding, and what differs
+  across the three. Every Rust, Python and JavaScript example in it is compiled or run
+  by a test, and every relative link is resolved by one.
+
+  Writing those pages is what found two inaccuracies in the readme that are now
+  measured and pinned by tests rather than restated: `kinds_meta::ALL_KINDS` is
+  sorted by variant name rather than in table order, and `displayName("Jpg")` is
+  `"JPEG"` rather than `"JPEG image"`.
 
 ## `magical-py`: Version 0.5.0
 **What has been changed:**

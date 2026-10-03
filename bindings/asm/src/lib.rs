@@ -263,12 +263,20 @@ fn build_blob() -> Vec<u8> {
     for magic in SIGNATURE_KIND {
         // The discriminant is stored per entry rather than implied by position,
         // because position and discriminant are not the same thing. Measured: 71 of
-        // these 114 entries are not in declaration order, and the two that shadow
-        // each other are swapped — `ScriptExecute` (18) sits at position 17, `RAR`
-        // (17) at position 18. A decoder that indexed by position would attribute
-        // every rule to the wrong format, and for that pair it would quietly report
-        // the wrong winner. `SIGNATURE_KIND`'s order is the detection loop's
-        // business; this encoding deliberately does not inherit it.
+        // these 114 entries are not in declaration order. A decoder that indexed by
+        // position would attribute every rule to the wrong format.
+        //
+        // Position is preserved as well, by writing the entries in this order: a
+        // position in the blob is the detection order, and that is the only order in
+        // which "walk the list and stop at the first match" answers what
+        // `dispatch::first_match` answers. Two pairs are worth naming, and they are
+        // not the same kind of reason. `ScriptExecute` (18) at position 17 and `RAR`
+        // (17) at 18 are swapped so the shebang rule is asked before one that would
+        // otherwise claim `#!AMR` as a script - their magic cannot both match, so
+        // shadowing is not why. The pairs where shadowing *is* why are `Ktx2` (52)
+        // before `Ktx` (53) and `Qcow2` (106) before `Qcow` (107): the shorter magic
+        // is a byte-for-byte prefix of the longer one, so asking it first would make
+        // the longer format undetectable.
         push_u32(&mut out, narrow(magic.kind as usize));
         // One flag today, in bit 0. A wider field is here so a second flag is an
         // additive change rather than a layout break for a decoder already

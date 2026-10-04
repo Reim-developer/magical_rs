@@ -187,6 +187,20 @@ export interface DetectOptions {
   readonly maxBytesRead?: number;
 }
 
+/**
+ * Anything `detected()` accepts as a source: a path, bytes already in memory, or
+ * an object with a synchronous `read(size)`.
+ *
+ * The third shape is for a caller holding a stream it wants read once. It must be
+ * *synchronous*: everything in this package is, because the module is instantiated
+ * from bytes on disk while the package loads and there is nothing to await.
+ */
+export type DetectSource =
+  | string
+  | Uint8Array
+  | ArrayBuffer
+  | { read(size: number): Uint8Array };
+
 export interface ReadHeaderOptions {
   /** Bytes to read from the front of the file. Defaults to `neededBytes()`. */
   readonly maxBytes?: number;
@@ -227,6 +241,113 @@ export declare function readHeader(
   path: string,
   options?: ReadHeaderOptions,
 ): Uint8Array;
+
+/**
+ * A file's format and the questions about it, with the file written first.
+ *
+ * The data-first spelling of `detectBytes` and `detectPath`, for a scan that asks
+ * about every file in a directory: there the subject reads better first and the
+ * answer is usually "no".
+ *
+ * ```ts
+ * for (const path of directory) {
+ *   if (detected(path).isAny("Png", "GIF", "Jpg")) { ... }
+ * }
+ * ```
+ *
+ * Adds no matching. Every member is a named call to something this package already
+ * exported, and the answers are the ones those give.
+ *
+ * **Nothing is read until a member needs an answer**, so building one is free and
+ * passing it on never touches the disk. After that the bytes are read once, however
+ * many members are read off the result.
+ *
+ * **`matched`, not truthiness.** A JavaScript object is always truthy, so
+ * `if (detected(path))` is always true and there is no hook to change that — this is
+ * the one thing `magical_py`'s `bool(detected(path))` does that JavaScript cannot.
+ */
+export declare class Detected {
+  /**
+   * Public, because a class has to have one and JavaScript cannot make it private.
+   *
+   * `detected(source, options)` is the spelling to use, and this behaves
+   * identically — the internal state is `#private` either way, so neither can be
+   * reached from outside. `magical_py.Detected.__init__` is public for the same
+   * reason.
+   */
+  constructor(source: DetectSource, options?: DetectOptions);
+
+  /**
+   * The format, or `null` if the table does not recognise these bytes.
+   *
+   * The same answer as `detectBytes`, and cached: asking twice reads nothing twice.
+   */
+  get kind(): FileKind | null;
+
+  /**
+   * Whether anything matched at all.
+   *
+   * An object is always truthy, so this is the way to ask — see the class comment.
+   */
+  get matched(): boolean;
+
+  /** The window in force, in bytes. Defaults to `neededBytes()`, not to `DEFAULT_MAX_BYTES_READ`. */
+  get window(): number;
+
+  /** What `kind` compares, or `null` when nothing matched. */
+  get rule(): Signature | null;
+
+  /** The media type of `kind`, or `null` if there is none. */
+  get mime(): string | null;
+
+  /** The conventional extension of `kind`, or `null`. */
+  get extension(): string | null;
+
+  /** The human-readable name of `kind`, or `"no match"`. */
+  get displayName(): string;
+
+  /**
+   * Whether these bytes are *this one format*, ignoring every other rule.
+   *
+   * Not the same question as `.kind === kind`: `Ktx`'s magic is a byte-for-byte
+   * prefix of `Ktx2`'s, so a KTX2 file is reported as `Ktx2` and is still "yes, it is
+   * Ktx" here. Same answer as the free `matches(kind, data)`.
+   */
+  is(kind: FileKind): boolean;
+
+  /**
+   * Whether these bytes are any of `kinds`, one lookup per format.
+   *
+   * Accepts varargs or a single iterable, so `isAny("Png", "GIF")` and
+   * `isAny(["Png", "GIF"])` are both correct. An empty list is `false`.
+   */
+  isAny(...kinds: (FileKind | Iterable<FileKind>)[]): boolean;
+
+  /**
+   * Classify the same bytes in a different window, and return this.
+   *
+   * Returns this so it chains. It does not read again — narrowing always works,
+   * because the bytes in hand are a superset — but widening cannot reach bytes a
+   * first read did not fetch, which for a path or a readable object is real.
+   */
+  within(maxBytesRead: number): this;
+}
+
+/**
+ * Return a `Detected` over `source`.
+ *
+ * Nothing is read here: the read happens on the first member that needs an answer.
+ *
+ * @throws {RangeError} if `maxBytesRead` is not a non-negative safe integer.
+ * @throws {TypeError} on first use, if `source` is none of the accepted shapes —
+ *   the message names them, rather than failing on a missing `read`.
+ * @throws the Node `errno` error, if `source` is a path that cannot be read. A path
+ *   that is missing is not a file whose format is unknown.
+ */
+export declare function detected(
+  source: DetectSource,
+  options?: DetectOptions,
+): Detected;
 
 /**
  * Whether this one format's rule matches, ignoring the rest of the table.

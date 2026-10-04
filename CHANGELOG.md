@@ -7,7 +7,8 @@
     - [A first-byte detection index](#a-first-byte-detection-index)
     - [Benchmarks against `infer` and libmagic](#benchmarks-against-infer-and-libmagic)
     - [One format dataset](#one-format-dataset)
-  - [`@reim-developer/magical-js`: Version 0.1.1](#reim-developermagical-js-version-011)
+  - [`@reim-developer/magical-js`: Version 0.1.2](#reim-developermagical-js-version-012)
+    - [`@reim-developer/magical-js`: Version 0.1.1](#reim-developermagical-js-version-011)
   - [magical-py: Version 0.5.0](#magical-py-version-050)
   - [magical-py: Version 0.4.0](#magical-py-version-040)
   - [magical-py: Version 0.3.0](#magical-py-version-030)
@@ -453,6 +454,44 @@ One fix, and a documentation tree.
   measured and pinned by tests rather than restated: `kinds_meta::ALL_KINDS` is
   sorted by variant name rather than in table order, and `displayName("Jpg")` is
   `"JPEG"` rather than `"JPEG image"`.
+
+## `@reim-developer/magical-js`: Version 0.1.2
+
+**What has been changed:**
+
+* **`detected(source)` and `Detected`, putting the file first for a scan.** The
+  shape Rust's `magical_fluent` and `magical_py.detected` already have:
+
+  ```js
+  import { detected } from "@reim-developer/magical-js";
+
+  for (const path of directory) {
+    if (detected(path).isAny("Png", "GIF", "Jpg")) { ... }
+  }
+  ```
+
+  `source` is a path, bytes already in memory, or an object with a synchronous
+  `read(size)`. Members: `kind`, `matched`, `is`, `isAny`, `within`, `window`,
+  `rule`, `mime`, `extension`, `displayName`.
+
+* **It adds no matching.** Every member is a named call to something the binding
+  already exported — `detectBytes`, `matches`, `describe`, `readHeader` — and the
+  answers are the ones those give. `test/fluent.test.js` asserts `kind` is
+  *equal* to `detectBytes` on every canonical form rather than merely agreeing on a
+  fixture.
+
+* **Nothing is read until a member needs an answer**, and after that the bytes are
+  read once however many members are read off the result. Both are counted on a
+  reader that records every size asked for, not inferred: seven members, one read.
+
+* **Three things JavaScript cannot copy from Python, each documented rather than
+  faked.** `bool(detected(path))` works in Python because `__bool__` returns the
+  answer; an object is always truthy, so `matched` is a member and
+  `if (detected(path))` is always true. There is no `toString`, because a JavaScript
+  one is called by template literals without the caller asking and would turn
+  `console.log(`${d}`)` into a disk read. And `is` is spelled `is`, where Python has
+  to spell it `matches`, because this package already exports a free `matches` taking
+  the arguments the other way round.
 
 ## `magical-py`: Version 0.5.0
 **What has been changed:**

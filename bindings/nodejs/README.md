@@ -108,7 +108,7 @@ The crate offers five levels of API. Two are reachable from JavaScript.
 
 | Level | What it is | Here |
 | --- | --- | --- |
-| 1 | `detect`, `from_path`, `from_buffer` | Yes — `detectBytes`, `detectPath` |
+| 1 | `detect`, `from_path`, `from_buffer` | Yes - `detectBytes`, `detectPath`, `detected` |
 | 2 | Build your own rules at runtime | Yes — `matchTypes`, `matchAllTypes` |
 | 3 | Bring your own `WithFn` | **No** |
 | 4 | Custom match rules with a function | **No** |
@@ -147,6 +147,54 @@ buffer is long enough for its signature** — this is the crate's
 `match_with_max_read_rule`, and it is the one option here that changes answers
 rather than just their cost. In `detectPath` it also decides how much is read off
 disk, so a small window is a small read.
+
+### The file first
+
+`detectPath` puts the function first, which is right for a question asked once. A
+scan asks about every file and the answer is usually no, so there the file goes first:
+
+```js
+import { detected } from "@reim-developer/magical-js";
+
+for (const path of directory) {
+  if (detected(path).isAny("Png", "GIF", "Jpg")) { ... }
+}
+```
+
+```js
+detected(source, options?)   // Detected — nothing read yet
+
+d.kind                       // FileKind | null
+d.matched                    // boolean
+d.is(kind)                   // boolean — this one format, ignoring table order
+d.isAny(...kinds)             // boolean — varargs or one iterable
+d.within(maxBytesRead)       // this, so it chains
+d.window                     // number
+d.rule                       // Signature | null
+d.mime, d.extension          // string | null
+d.displayName                // string — "no match" when nothing matched
+```
+
+`source` is a path, bytes already in memory, or an object with a synchronous
+`read(size)`.
+
+**Nothing is read until a member needs an answer**, so building one is free and
+passing it on never touches the disk. After that the bytes are read once, however
+many members you read off it.
+
+`is()` is not the same question as `d.kind === kind`. `Ktx`'s magic is a
+byte-for-byte prefix of `Ktx2`'s, so a KTX2 file is reported as `Ktx2` and is still
+"yes, it is Ktx" to `is()`. Same answer as `matches(kind, data)`, which is the
+call when you already have the kind.
+
+**Use `matched`, not truthiness.** A JavaScript object is always truthy, so
+`if (detected(path))` is always true and there is no hook to make it otherwise.
+`magical_py` can write `bool(detected(path))` because Python has `__bool__`; this is
+the one thing it cannot copy.
+
+**There is no `toString`**, on purpose. A JavaScript `toString` is called by template
+literals and string concatenation without the caller asking, so one that reported
+what it found would turn `console.log(`${d}`)` into a disk read. Print a member.
 
 ### Introspection
 

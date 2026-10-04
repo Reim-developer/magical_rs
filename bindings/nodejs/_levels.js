@@ -111,10 +111,13 @@ export function neededBytes() {
  * Integer-only, because a fractional read size would be silently floored somewhere
  * deeper and a negative one would compare oddly against every rule's real size.
  *
+ * Exported rather than kept private because `_fluent.js` validates a window through
+ * it too, and two copies of this message would be two things to keep in step.
+ *
  * @param {unknown} value
  * @param {string} name
  */
-function checkSize(value, name) {
+export function checkSize(value, name) {
   if (value === undefined || value === null) return undefined;
   if (typeof value !== "number" || !Number.isSafeInteger(value) || value < 0) {
     throw new RangeError(`@reim-developer/magical-js: ${name} must be a non-negative safe integer, got ${value}`);
@@ -386,7 +389,7 @@ export function releaseRules(rules) {
  *
  * The result type is the union of the `kind` literals you declared, which is what
  * the `const` type parameter buys: with a literal array the answer is
- * `"Png" | "Gif" | null` rather than `string | null`, so the compiler checks the
+ * `"Png" | "GIF" | null` rather than `string | null`, so the compiler checks the
  * branch you wrote for it.
  *
  * @template {readonly { readonly kind: string }[]} R

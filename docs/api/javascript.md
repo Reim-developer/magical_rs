@@ -19,6 +19,8 @@ import {
   // level 1
   detectPath, detectBytes, readHeader, neededBytes, DEFAULT_MAX_BYTES_READ,
   readLimits,
+  // level 1, data first
+  detected, Detected,
   // the answer type
   FileKind, isFileKind, allKinds,
   // metadata
@@ -157,17 +159,92 @@ using one where the other belongs compiles, runs, and answers a different questi
 | Call | Returns | Notes |
 | --- | --- | --- |
 | `matches(kind, bytes)` | `boolean` | Ignoring table order — the same question as Rust's `Detect::is` |
-
-**There is no `isAny`.** It is one line over `matches` — a loop — and it is not in
-the binding because it would be a wrapper over something the language already has.
-A binding that ships a one-line wrapper for every call site in Rust does not have
-parity, it has a bigger API to keep in step.
+| `detected(src).is(kind)` | `boolean` | The same question with the bytes first |
 
 ```ts
 import { matches } from "@reim-developer/magical-js";
 
 matches("Png", bytes);   // true
 ```
+
+**There is no free `isAny`,** and there is a method. `isAny` over a kind and some
+bytes is a loop over `matches`, which the language already has, so shipping it as a
+function would be one more name to keep in step. On a [`Detected`](#detected) it is
+not a wrapper over anything the caller can see — the bytes are already read and kept,
+so it is a loop that does no I/O.
+
+The deliberate part is the *name*. `detected(p).is(k)` could have been spelled
+`matches(k)` to pair with the free `matches(kind, data)`, and is not, because one
+name for two things with opposite argument orders is a trap rather than a pair.
+
+```ts
+import { detected } from "@reim-developer/magical-js";
+
+detected(src).is("Png");              // true
+detected(src).isAny("Png", "GIF");    // varargs
+detected(src).isAny(["Png", "GIF"]);  // or one iterable
+detected(src).isAny();                // false
+```
+
+A single `FileKind` is a **string**, and a string is iterable as characters — so the
+one-argument case has to recognise it before treating it as a collection, or
+`isAny("Png")` would test `"P"`, `"n"` and `"g"` and find nothing.
+
+## `Detected`
+
+The data-first spelling of `detectBytes` and `detectPath`, for a scan that asks about
+every file in a directory: there the subject reads better first and the answer is
+usually no.
+
+```ts
+import { detected } from "@reim-developer/magical-js";
+
+for (const path of directory) {
+  if (detected(path).isAny("Png", "GIF", "Jpg")) { ... }
+}
+```
+
+`source` is a **path**, **bytes already in memory** (`Uint8Array`, `ArrayBuffer` or a
+Node `Buffer`, which is a `Uint8Array`), or **anything with a synchronous
+`read(size)`** — the third for a caller holding a stream it wants read once.
+
+| Member | Returns | Notes |
+| --- | --- | --- |
+| `kind` | `FileKind \| null` | Same answer as `detectBytes`, cached |
+| `matched` | `boolean` | Whether anything matched. **Use this, not truthiness** |
+| `is(kind)` | `boolean` | One named format, ignoring table order |
+| `isAny(...kinds)` | `boolean` | Varargs or one iterable. Empty is `false` |
+| `within(maxBytesRead)` | `this` | Re-classifies in another window. Chains |
+| `window` | `number` | The window in force, 36,870 by default |
+| `rule` | `Signature \| null` | What `kind` compares |
+| `mime` / `extension` | `string \| null` | |
+| `displayName` | `string` | `"no match"` when nothing matched |
+
+**Nothing is read until a member needs an answer.** Building one is free, and passing
+it on never touches the disk. After that the bytes are read once, however many members
+you read off it — which matters for a stream, because a pipe has its bytes once.
+
+**`matched`, not truthiness.** A JavaScript object is always truthy, so
+`if (detected(path))` is always true and there is no hook the language offers to
+change it. `magical_py` writes `bool(detected(path))` because Python has `__bool__`;
+this is the one thing it cannot copy, and it is why `matched` is a member rather than
+something to reach for.
+
+**There is no `toString` and no `Symbol.toPrimitive`.** Python's `__repr__` reads the
+file, which is right — a repr printing the same thing for every input would be the one
+thing a repr must not do. A JavaScript `toString` is not explicit: template literals
+and string concatenation call it without the caller asking, so `console.log(`${d}`)`
+would read a file as a side effect of logging it. Print a member instead.
+
+`within` re-classifies what was read; it cannot reach bytes a first read did not
+fetch. Narrowing always works, because what is in hand is a superset. Widening works
+too, but only as far as the read went — and for **bytes already in memory** there is
+no such limit, because the whole buffer was in hand before `detected` was called.
+
+The internal cache is `#private`, not `_underscore`. The read-once promise is the
+class's central guarantee and a naming convention does not enforce it: a caller who
+reached in and set the cached bytes would not get a wrong answer *from* a member, they
+would get a wrong answer *instead of* one, with nothing to say so.
 
 ## Level 2 — custom rules
 

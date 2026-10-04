@@ -35,6 +35,8 @@ out of this table — see [Benchmarks](#benchmarks).
 | Detection answers what the linear scan answered | every fixture, every non-matching input, 4,096 pseudo-random buffers | `src/magical/dispatch.rs` |
 | `detected()` adds no matching | byte-identical to `detect_bytes` on every fixture and every buffer length from 0 to 40,000 | `bindings/python/tests/test_fluent.py` |
 | The Python wrapper reads a file once | counted on a stream, not inferred | `bindings/python/tests/test_fluent.py` |
+| `detected()` in JavaScript is the same spelling | equal to `detectBytes` on every canonical form, and to the free `matches` | `bindings/nodejs/test/fluent.test.js` |
+| The JavaScript wrapper reads a file once | counted on a reader that records every size asked for | `bindings/nodejs/test/fluent.test.js` |
 | An unrecognised file costs 6.4 ns, not 525 | measured before and after in one session, same harness | `src/magical/dispatch.rs` |
 | Every format's own rule matches itself | all 114 entries, from the table | `tests/signature_coverage.rs` |
 | No signature matches at an undeclared offset | all 114 entries | `tests/signature_coverage.rs` |

@@ -1,6 +1,6 @@
 {
   "name": "@reim-developer/magical-js",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "JavaScript and TypeScript bindings for magical_rs, a zero-dependency file type detection library.",
   "keywords": [
     "file-type",
@@ -30,6 +30,7 @@
     "_kinds.d.ts",
     "_levels.js",
     "_meta.js",
+    "_fluent.js",
     "_signatures.js",
     "_wasm.js",
     "magical_js.wasm",

@@ -21,10 +21,10 @@ function source(name) {
 /**
  * Every value `index.d.ts` promises at runtime.
  *
- * Two forms count: `export declare function|const`, for what the file defines, and
- * `export { name } from "..."`, for what it re-exports — which is how `FileKind`
- * reaches the surface, so a scan missing the second form would report a name that
- * is both declared and missing.
+ * Two forms count: `export declare function|class|const`, for what the file defines,
+ * and `export { name } from "..."`, for what it re-exports — which is how `FileKind`
+ * reaches the surface, so a scan missing the second form would report a name that is
+ * both declared and missing.
  *
  * A regex rather than the compiler, because this test runs under plain Node with
  * no TypeScript installed, and a package that needs a compiler to check its own
@@ -35,7 +35,7 @@ function source(name) {
 function declaredValues(text) {
   const code = stripComments(text);
   const names = new Set();
-  for (const match of code.matchAll(/^export declare (?:function|const) (\w+)/gm)) {
+  for (const match of code.matchAll(/^export declare (?:function|class|const) (\w+)/gm)) {
     names.add(match[1]);
   }
   // `FileKind` is the one re-export, and it is written `export { FileKind };`
@@ -81,25 +81,43 @@ test("the declaration file's types are all defined, and all of them are public",
   // interface it referred to was deleted, which a hand-written file can do and a
   // generated one cannot.
   const code = stripComments(source("index.d.ts"));
+  // `export declare class` counts here as well as `type` and `interface`: a class is
+  // both a value and a type, so `detected(path).kind` is written in a signature and
+  // `Detected` is named in one. Leaving it out would make the class look like a
+  // dangling reference the moment anything mentioned it.
   const declaredTypes = new Set(
-    [...code.matchAll(/^export (?:type|interface) (\w+)/gm)].map((match) => match[1]),
+    [
+      ...code.matchAll(/^export (?:type|interface) (\w+)/gm),
+      ...code.matchAll(/^export declare class (\w+)/gm),
+    ].map((match) => match[1]),
   );
-  // Five: `Signature`, `DetectOptions`, `ReadHeaderOptions`, `MatchRule`,
-  // `MatchRules`, plus the re-exported `FileKind`. Stated so that deleting one is a
-  // deliberate edit rather than a quiet loss.
+  // Six types plus the class: `Signature`, `DetectOptions`, `DetectSource`,
+  // `ReadHeaderOptions`, `MatchRule`, `MatchRules`, `Detected`, and the re-exported
+  // `FileKind`. Stated so that deleting one is a deliberate edit rather than a quiet
+  // loss.
   assert.deepEqual(
     [...declaredTypes].sort(),
-    ["DetectOptions", "MatchRule", "MatchRules", "ReadHeaderOptions", "Signature"],
+    [
+      "DetectOptions",
+      "DetectSource",
+      "Detected",
+      "MatchRule",
+      "MatchRules",
+      "ReadHeaderOptions",
+      "Signature",
+    ],
   );
 
-  // Every type named in a signature is one of those five, or an imported builtin.
+  // Every type named in a signature is one of those, or an imported builtin.
   // PascalCase only, so `DEFAULT_MAX_BYTES_READ` — a value, not a type — is not
   // swept up by the scan looking for dangling references.
   const used = new Set(
     [...code.matchAll(/\b([A-Z][a-z]\w*)\b/g)].map((match) => match[1]),
   );
   for (const name of used) {
-    if (["FileKind", "Uint8Array", "ArrayBuffer", "Promise"].includes(name)) continue;
+    // `Iterable` is here because `isAny` takes one as well as varargs, which is what
+    // lets a caller holding an array pass it without spreading it.
+    if (["FileKind", "Uint8Array", "ArrayBuffer", "Iterable", "Promise"].includes(name)) continue;
     assert.ok(
       declaredTypes.has(name),
       `index.d.ts mentions ${name}, which it does not declare and does not import`,
@@ -131,7 +149,7 @@ test("the barrel is a barrel, and the internals stay internal", async () => {
 
   // The internals really are importable by path inside the package — which is
   // what the tests do — but not from outside it, since `exports` is a closed map.
-  const internals = ["./_wasm.js", "./_levels.js", "./_signatures.js", "./_kinds.js"];
+  const internals = ["./_wasm.js", "./_levels.js", "./_signatures.js", "./_kinds.js", "./_fluent.js"];
   for (const name of internals) {
     assert.ok(
       !Object.prototype.hasOwnProperty.call(pkg.exports, name),
@@ -145,6 +163,10 @@ test("the compiled module is inside the files the package ships", () => {
   // published package imports fine locally and throws at install time everywhere
   // else — with a message about a missing file, which is a bad first impression
   // and a worse bug report.
+  //
+  // Every module `index.js` imports belongs here for the same reason, and a new one
+  // that is forgotten fails exactly the same way: the barrel resolves it at import
+  // time, so `import "@reim-developer/magical-js"` throws before a single call.
   const pkg = JSON.parse(source("package.json"));
   for (const required of [
     "index.js",
@@ -152,11 +174,24 @@ test("the compiled module is inside the files the package ships", () => {
     "_kinds.js",
     "_kinds.d.ts",
     "_levels.js",
+    "_meta.js",
+    "_fluent.js",
     "_signatures.js",
     "_wasm.js",
     "magical_js.wasm",
   ]) {
     assert.ok(pkg.files.includes(required), `package.json files is missing ${required}`);
+  }
+
+  // The other direction, which is the one that actually catches a new module: every
+  // file the barrel imports has to be shipped. Reading the import list rather than
+  // restating it means adding a module and forgetting `files` is a failing test
+  // rather than a published package that throws on import.
+  for (const match of source("index.js").matchAll(/from "\.\/([^"]+)"/g)) {
+    assert.ok(
+      pkg.files.includes(match[1]),
+      `index.js imports ./${match[1]}, which package.json files does not ship`,
+    );
   }
 });
 

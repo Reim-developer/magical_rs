@@ -233,11 +233,11 @@ test("matchTypes answers with the union of the kinds declared", () => {
 
   const rules = [
     { kind: "Png", signatures: [PNG_BYTES], offsets: [0] },
-    { kind: "Gif", signatures: [GIF_BYTES], offsets: [0] },
+    { kind: "GIF", signatures: [GIF_BYTES], offsets: [0] },
   ];
 
   assert.equal(matchTypes(rules, PNG), "Png");
-  assert.equal(matchTypes(rules, GIF), "Gif");
+  assert.equal(matchTypes(rules, GIF), "GIF");
   assert.equal(matchTypes(rules, NOISE), null);
 
   // Every match, not just the first.

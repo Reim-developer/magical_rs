@@ -119,8 +119,21 @@ fn scan(paths: &[std::path::PathBuf]) {
 The flag is because it puts a method on `[u8]` — a name on a type the caller does
 not own. Turning it off leaves no trait, no type and no module behind.
 
-**JavaScript** cannot: a primitive cannot carry a method the module owns, so
-`detectBytes(bytes)` stays a function call.
+**JavaScript** has the same problem for the same reason, and the same answer: a
+`Uint8Array` is a built-in, so `bytes.detect()` is not available. The wrapper stands
+in for it, as it does in Python:
+
+```js
+import { detected } from "@reim-developer/magical-js";
+
+for (const path of directory) {
+  if (detected(path).isAny("Png", "GIF", "Jpg")) { ... }
+}
+```
+
+One thing the JavaScript wrapper cannot copy is Python's `bool(detected(path))`. An
+object is always truthy, so `if (detected(path))` is always true and there is no hook
+to make it otherwise — hence `matched`.
 
 ## Bytes you already have
 

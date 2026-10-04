@@ -15,10 +15,11 @@ the ones that would change your code.
 | The kind itself | an enum | an enum | a `string` union — the discriminants *are* the ABI |
 | Detection call | `FileKind::match_types` | `detect` / `detect_bytes` | `detectPath` / `detectBytes` |
 | Data comes first | `bytes.detect()`, behind a flag | `detected(path).kind` | not possible — see below |
-| "Is it this format?" | `Detect::is` | `Detected.matches`, or `FileKind.matches` the other way round | `matches(kind, bytes)` |
-| "Any of these?" | `Detect::is_any` | `Detected.matches_any` | not present — a loop over `matches` |
-| Narrow the window | `match_with_max_read_rule` | `max_bytes_read=` on every call | `options.maxBytesRead` |
-| Report the window | `with_bytes_read()` | `bytes_read()` | `neededBytes()` |
+| "Is it this format?" | `Detect::is` | `Detected.matches`, or `FileKind.matches` the other way round | `Detected.is`, or `matches(kind, bytes)` |
+| "Any of these?" | `Detect::is_any` | `Detected.matches_any` | `Detected.isAny` |
+| Did anything match? | `.detect().is_some()` | `bool(detected(path))` | `detected(path).matched` — see below |
+| Narrow the window | `match_with_max_read_rule` | `max_bytes_read=` on every call | `options.maxBytesRead`, or `.within()` |
+| Report the window | `with_bytes_read()` | `bytes_read()` | `neededBytes()`, or `.window` |
 | The per-rule default | `DEFAULT_MAX_BYTES_READ` | `DEFAULT_MAX_BYTES_READ` | `DEFAULT_MAX_BYTES_READ` |
 | A rule set lives in | the caller's binary | the caller's objects | compiled into the module, leaked once |
 | Rule sets are mutable | no, `&'static` | the list is yours | no, `readonly`, compiled on use |
@@ -28,33 +29,45 @@ the ones that would change your code.
 
 ## The six that will surprise somebody
 
-### JavaScript cannot put the data first
+### Python's "is this format" is `matches`, and JavaScript's is `is`
 
-Python's `detected(path).kind` and Rust's `bytes.detect()` both read as *the thing
-you have, asked about*. JavaScript cannot offer that: `detectBytes` stays a function
-call, because a primitive cannot carry a method the module owns, and wrapping every
-value in an object to get one would be a cost on every call for a syntax benefit.
+`is` is a keyword in Python, so `what.is(FileKind.Png)` is a `SyntaxError` and the
+method is spelled `matches`. JavaScript has no such problem, so it spells it `is` —
+which is Rust's name and the one the vocabulary comes from.
 
-This is the one parity gap that is a property of the language rather than a
-decision, and it is the reason the fluent spelling exists in two of the three.
-
-### Python's "is this format" is `matches`, not `is`
-
-`is` is a keyword, so `what.is(FileKind.Png)` is a `SyntaxError`. The name is not a
-loss — `matches` is the inverse of the `FileKind.matches(data)` the binding already
-had, so the two read as a pair:
+Neither is a loss, and Python's is not even a compromise: `matches` is the inverse of
+the `FileKind.matches(data)` that binding already had, so the two read as a pair.
 
 ```python
 kind.matches(data)    # kind first, has always existed
 data.matches(kind)    # data first, on a `Detected`
 ```
 
-### JavaScript has no `isAny`
+JavaScript could have taken the same pair — and deliberately did not, because it
+*already* exports a free function called `matches(kind, data)` taking the arguments
+the other way round. A method reading `detected(p).matches(k)` beside a function
+reading `matches(k, d)` would be one name for two things with opposite argument
+orders. `is` and `isAny` cannot be confused with either.
 
-One line over `matches`. It is not in the binding because it would be a wrapper
-over something the language already has, and a binding that ships a one-line
-wrapper for every call site in Rust does not have parity — it has a bigger API to
-keep in step.
+### JavaScript cannot ask whether anything matched
+
+`bool(detected(path))` works in Python because `__bool__` returns the answer. A
+JavaScript object is always truthy, so `if (detected(path))` is always true and
+there is no hook the language offers to change it. `matched` is the stand-in, and it
+is a member rather than something to reach for:
+
+```js
+if (detected(path).matched) { ... }   // correct
+if (detected(path)) { ... }           // always true, whatever the file is
+```
+
+### JavaScript has no `toString` on its wrapper, on purpose
+
+Python's `__repr__` reads the file, which is right: a repr that printed the same
+thing for every input would be the one thing a repr must not do. A JavaScript
+`toString` is not explicit — template literals and string concatenation call it
+without the caller asking — so `console.log(`${d}`)` would read a file as a side
+effect of logging it. Print a member instead.
 
 ### The rule-set lifetime differs, and the boundary is the reason
 
